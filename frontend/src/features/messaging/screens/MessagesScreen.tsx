@@ -1,0 +1,2184 @@
+/**
+ * TANDER MessagesScreen
+ * Translated from Figma design: ChatsScreen.tsx
+ *
+ * Design matches exactly:
+ * - "Chats" header (text-3xl font-bold)
+ * - Search bar (rounded-full, gray-50 bg)
+ * - NEW MATCHES section with ORANGE badge and ORANGE gradient avatars
+ * - Conversations with TEAL gradient avatars
+ * - Unread indicator (orange dot)
+ * - LANDSCAPE: Split-view with conversation list left, chat/empty state right
+ *
+ * UI/UX Audit Fixes Applied:
+ * - Touch targets minimum 44pt
+ * - FlatList optimizations (getItemLayout, initialNumToRender, etc.)
+ * - Full accessibility labels
+ * - WCAG AA color contrast (gray[600] instead of gray[500])
+ * - Loading, error, and empty states
+ * - Memoized components and callbacks
+ * - Platform-specific touch feedback and shadows
+ * - Responsive landscape handling
+ */
+
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  StatusBar,
+  TextInput,
+  ScrollView,
+  Animated,
+  Keyboard,
+  Platform,
+  ActivityIndicator,
+  Image,
+  AppState,
+  AppStateStatus,
+  AccessibilityInfo,
+} from 'react-native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import { colors } from '@shared/styles/colors';
+import { useResponsive } from '@shared/hooks/useResponsive';
+import type { MessagesStackParamList, CallType } from '@navigation/types';
+import { useConversations, useNewMatches, useChat } from '../hooks';
+import { stompService } from '@services/websocket';
+import type { Conversation, NewMatch } from '../hooks';
+
+// ============================================================================
+// NAVIGATION TYPE
+// ============================================================================
+type MessagesNavigationProp = NativeStackNavigationProp<MessagesStackParamList>;
+
+// ============================================================================
+// TYPES (for embedded chat)
+// ============================================================================
+interface ChatMessage {
+  id: string;
+  text: string;
+  sender: 'me' | 'them';
+  time: string;
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  timestamp: number;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const CONVERSATION_ITEM_HEIGHT = 89; // paddingVertical: 16 * 2 + avatar 56 + border 1
+const MESSAGE_ITEM_HEIGHT = 80; // Approximate height for chat messages
+
+// ============================================================================
+// NEW MATCH AVATAR COMPONENT
+// ============================================================================
+interface NewMatchAvatarProps {
+  match: NewMatch;
+  onPress: () => void;
+}
+
+const NewMatchAvatar: React.FC<NewMatchAvatarProps> = React.memo(({ match, onPress }) => {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      style={styles.matchAvatarContainer}
+      accessible={true}
+      accessibilityLabel={`Chat with ${match.name}${match.online ? ', online' : ''}${match.hasNotification ? ', new notification' : ''}`}
+      accessibilityRole="button"
+      accessibilityHint="Double tap to open chat"
+    >
+      {/* Avatar Circle - ORANGE gradient per Figma */}
+      <View style={styles.matchAvatarWrapper}>
+        {match.avatarUrl ? (
+          <Image
+            source={{ uri: match.avatarUrl }}
+            style={styles.matchAvatarImage}
+          />
+        ) : (
+          <LinearGradient
+            colors={[colors.orange[400], colors.orange[500]]}
+            style={styles.matchAvatar}
+          >
+            <Text style={styles.matchAvatarText}>{match.avatar}</Text>
+          </LinearGradient>
+        )}
+
+        {/* Online Indicator - bottom right */}
+        {match.online && (
+          <View style={styles.matchOnlineDot} />
+        )}
+
+        {/* Heart Notification Badge - top right */}
+        {match.hasNotification && (
+          <View style={styles.matchHeartBadge}>
+            <Feather name="heart" size={12} color={colors.white} />
+          </View>
+        )}
+      </View>
+
+      {/* Name - ✅ FIX: Add truncation for long names */}
+      <Text style={styles.matchName} numberOfLines={1} ellipsizeMode="tail">
+        {match.name}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+NewMatchAvatar.displayName = 'NewMatchAvatar';
+
+// ============================================================================
+// CONVERSATION ROW COMPONENT
+// ============================================================================
+interface ConversationRowProps {
+  conversation: Conversation;
+  onPress: () => void;
+  isSelected?: boolean;
+}
+
+const ConversationRow: React.FC<ConversationRowProps> = React.memo(({ conversation, onPress, isSelected }) => {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      style={[
+        styles.conversationRow,
+        isSelected && styles.conversationRowSelected,
+      ]}
+      accessible={true}
+      accessibilityLabel={`Chat with ${conversation.name}, ${conversation.time} ago${conversation.unread ? ', unread message' : ''}`}
+      accessibilityRole="button"
+      accessibilityHint="Double tap to open conversation"
+    >
+      {/* Avatar - TEAL gradient per Figma */}
+      <View style={styles.conversationAvatarWrapper}>
+        {conversation.avatarUrl ? (
+          <Image
+            source={{ uri: conversation.avatarUrl }}
+            style={styles.conversationAvatarImage}
+          />
+        ) : (
+          <LinearGradient
+            colors={[colors.teal[400], colors.teal[500]]}
+            style={styles.conversationAvatar}
+          >
+            <Text style={styles.conversationAvatarText}>{conversation.avatar}</Text>
+          </LinearGradient>
+        )}
+
+        {/* Online Indicator - bottom right */}
+        {conversation.online && (
+          <View style={styles.conversationOnlineDot} />
+        )}
+      </View>
+
+      {/* Content */}
+      <View style={styles.conversationContent}>
+        <View style={styles.conversationTopRow}>
+          <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="tail">
+            {conversation.name}
+          </Text>
+          <Text style={styles.conversationTime}>{conversation.time}</Text>
+        </View>
+        <Text
+          style={[
+            styles.conversationMessage,
+            conversation.unread && styles.conversationMessageUnread,
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {conversation.message}
+        </Text>
+      </View>
+
+      {/* Unread Indicator - orange dot */}
+      {conversation.unread && (
+        <View style={styles.unreadDot} />
+      )}
+    </TouchableOpacity>
+  );
+});
+
+ConversationRow.displayName = 'ConversationRow';
+
+// ============================================================================
+// LOADING STATE COMPONENT
+// ============================================================================
+const LoadingState: React.FC = () => (
+  <View style={styles.loadingState}>
+    <ActivityIndicator size="large" color={colors.orange[500]} />
+    <Text style={styles.loadingStateText}>Loading conversations...</Text>
+  </View>
+);
+
+// ============================================================================
+// ERROR STATE COMPONENT
+// ============================================================================
+interface ErrorStateProps {
+  onRetry: () => void;
+}
+
+const ErrorState: React.FC<ErrorStateProps> = ({ onRetry }) => (
+  <View style={styles.errorState}>
+    <Feather name="alert-circle" size={48} color={colors.orange[500]} />
+    <Text style={styles.errorStateTitle}>Unable to load messages</Text>
+    <Text style={styles.errorStateSubtitle}>Please check your connection and try again</Text>
+    <TouchableOpacity
+      onPress={onRetry}
+      style={styles.retryButton}
+      accessible={true}
+      accessibilityLabel="Retry loading messages"
+      accessibilityRole="button"
+    >
+      <Text style={styles.retryButtonText}>Try Again</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// ============================================================================
+// NO CONVERSATIONS STATE COMPONENT
+// ============================================================================
+const NoConversationsState: React.FC = () => (
+  <View style={styles.noConversationsState}>
+    <LinearGradient
+      colors={[colors.orange[200], colors.teal[200]]}
+      style={styles.noConversationsCircle}
+    >
+      <Feather name="message-square" size={48} color={colors.orange[600]} />
+    </LinearGradient>
+    <Text style={styles.noConversationsTitle}>No conversations yet</Text>
+    <Text style={styles.noConversationsSubtitle}>
+      Start matching with people to begin chatting!
+    </Text>
+  </View>
+);
+
+// ============================================================================
+// NO SEARCH RESULTS STATE COMPONENT
+// ============================================================================
+interface NoSearchResultsStateProps {
+  searchQuery: string;
+  onClearSearch: () => void;
+}
+
+const NoSearchResultsState: React.FC<NoSearchResultsStateProps> = ({ searchQuery, onClearSearch }) => (
+  <View style={styles.noSearchResultsState}>
+    <Feather name="search" size={48} color={colors.gray[300]} />
+    <Text style={styles.noSearchResultsTitle}>No results found</Text>
+    <Text style={styles.noSearchResultsSubtitle}>
+      No conversations or matches found for "{searchQuery}"
+    </Text>
+    <TouchableOpacity
+      onPress={onClearSearch}
+      style={styles.clearSearchButton}
+      accessible={true}
+      accessibilityLabel="Clear search"
+      accessibilityRole="button"
+    >
+      <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// ============================================================================
+// NETWORK STATUS BANNER COMPONENT
+// ============================================================================
+interface NetworkStatusBannerProps {
+  isConnected: boolean;
+}
+
+const NetworkStatusBanner: React.FC<NetworkStatusBannerProps> = ({ isConnected }) => {
+  if (isConnected) return null;
+
+  return (
+    <View style={styles.networkBanner}>
+      <Feather name="wifi-off" size={16} color={colors.white} />
+      <Text style={styles.networkBannerText}>
+        No connection - Messages may be delayed
+      </Text>
+    </View>
+  );
+};
+
+// ============================================================================
+// EMPTY STATE COMPONENT - For landscape right panel
+// ============================================================================
+const EmptyState: React.FC = () => {
+  return (
+    <View style={styles.emptyState}>
+      {/* Gradient Circle with Message Icon */}
+      <LinearGradient
+        colors={[colors.teal[200], colors.orange[200]]}
+        style={styles.emptyStateCircle}
+      >
+        <Feather name="message-circle" size={48} color={colors.teal[600]} />
+      </LinearGradient>
+
+      <Text style={styles.emptyStateTitle}>Select a conversation</Text>
+      <Text style={styles.emptyStateSubtitle}>
+        Choose from your existing conversations or start a new one
+      </Text>
+    </View>
+  );
+};
+
+// ============================================================================
+// EMBEDDED CHAT COMPONENT - For landscape right panel
+// ============================================================================
+interface EmbeddedChatProps {
+  conversation: Conversation | NewMatch;
+  isNewMatch?: boolean;
+  onClose: () => void;
+}
+
+const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, onClose: _onClose }) => {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<MessagesNavigationProp>();
+  const { isLandscape, isTablet, wp } = useResponsive();
+  const flatListRef = useRef<FlatList>(null);
+  const [inputText, setInputText] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSending, setIsSending] = useState(false); // Debounce for send button
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+  const sendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Accessibility: Reduced motion preference
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const checkReduceMotion = async () => {
+      const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
+      setReduceMotion(isReduceMotionEnabled);
+    };
+    checkReduceMotion();
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (isEnabled) => setReduceMotion(isEnabled)
+    );
+
+    return () => subscription?.remove();
+  }, []);
+
+  // ✅ Visibility-based read marking
+  const isFocused = useIsFocused();
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+
+  const userName = conversation.name;
+  const userAvatar = conversation.avatar;
+  const userAvatarUrl = conversation.avatarUrl;
+
+  // Get proper IDs based on conversation type
+  const conversationId = isNewMatch
+    ? undefined // New match - no conversation yet
+    : (conversation as Conversation).id;
+
+  const otherUserId = isNewMatch
+    ? (conversation as NewMatch).userId
+    : (conversation as Conversation).otherUserId;
+
+  // Use the real chat hook - get real-time online/typing status
+  const {
+    messages: chatMessages,
+    isLoading: chatLoading,
+    isConnected,
+    isOtherUserTyping,
+    isOtherUserOnline,
+    sendMessage,
+    sendTypingIndicator,
+    markAsRead,
+  } = useChat({
+    conversationId: conversationId || `new-${(conversation as NewMatch).matchId}`,
+    otherUserId: otherUserId || 0,
+  });
+
+  // Track app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setAppState(nextAppState);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Check if there are unread messages from the other user
+  const hasUnreadMessages = useMemo(() => {
+    return chatMessages.some((msg) => msg.sender === 'them');
+  }, [chatMessages]);
+
+  // ✅ Mark messages as read when embedded chat is visible and app is active
+  useEffect(() => {
+    if (isFocused && appState === 'active' && hasUnreadMessages && !chatLoading) {
+      console.log('[EmbeddedChat] Marking messages as read - screen focused and app active');
+      markAsRead();
+    }
+  }, [isFocused, appState, hasUnreadMessages, chatLoading, markAsRead]);
+
+  // Detect phone landscape for compact styling
+  const isPhoneLandscape = isLandscape && !isTablet;
+
+  // Convert messages to display format
+  const messages: ChatMessage[] = chatMessages.map((msg) => ({
+    id: msg.id,
+    text: msg.text,
+    sender: msg.sender,
+    time: msg.time,
+    status: msg.status,
+    timestamp: msg.timestamp,
+  }));
+
+  // Responsive max width for chat bubbles - use wp() for landscape pixel-based calculation
+  // In landscape mode, screen is wider so messages should be narrower percentage-wise
+  const chatBubbleMaxWidth = isLandscape
+    ? (isTablet ? wp(45) : wp(50))   // Narrower in landscape for better alignment (pixel values)
+    : (isTablet ? '60%' : '75%');    // Standard widths in portrait (percentage works well)
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (sendTimeoutRef.current) {
+        clearTimeout(sendTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Keyboard handling
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      if (reduceMotion) {
+        keyboardHeight.setValue(e.endCoordinates.height);
+      } else {
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? e.duration : 200,
+          useNativeDriver: false,
+        }).start();
+      }
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: !reduceMotion }), 100);
+    });
+
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      if (reduceMotion) {
+        keyboardHeight.setValue(0);
+      } else {
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: false,
+        }).start();
+      }
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [keyboardHeight, reduceMotion]);
+
+  // Scroll to bottom on mount
+  useEffect(() => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+  }, []);
+
+  // Typing indicator handler
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTextChange = useCallback((text: string) => {
+    setInputText(text);
+
+    if (text.length > 0) {
+      sendTypingIndicator(true);
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        sendTypingIndicator(false);
+      }, 2000);
+    } else {
+      sendTypingIndicator(false);
+    }
+  }, [sendTypingIndicator]);
+
+  const handleSendMessage = useCallback(() => {
+    if (!inputText.trim() || isSending) return;
+
+    // Debounce: prevent rapid double-taps (senior-friendly)
+    setIsSending(true);
+    sendMessage(inputText.trim());
+    setInputText('');
+    sendTypingIndicator(false);
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Re-enable send after 500ms
+    sendTimeoutRef.current = setTimeout(() => {
+      setIsSending(false);
+    }, 500);
+
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  }, [inputText, sendMessage, sendTypingIndicator, isSending]);
+
+  const handleSendLike = useCallback(() => {
+    if (isSending) return;
+    setIsSending(true);
+    sendMessage('👍');
+    sendTimeoutRef.current = setTimeout(() => {
+      setIsSending(false);
+    }, 500);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  }, [sendMessage, isSending]);
+
+  const handleAudioCall = useCallback(() => {
+    navigation.navigate('Call', {
+      conversationId: conversationId || '',
+      userId: otherUserId || 0,
+      userName,
+      userPhoto: userAvatarUrl || undefined,
+      callType: 'AUDIO' as CallType,
+      isIncoming: false,
+    });
+  }, [navigation, conversationId, otherUserId, userName, userAvatarUrl]);
+
+  const handleVideoCall = useCallback(() => {
+    navigation.navigate('Call', {
+      conversationId: conversationId || '',
+      userId: otherUserId || 0,
+      userName,
+      userPhoto: userAvatarUrl || undefined,
+      callType: 'VIDEO' as CallType,
+      isIncoming: false,
+    });
+  }, [navigation, conversationId, otherUserId, userName, userAvatarUrl]);
+
+  const handleViewProfile = useCallback(() => {
+    setShowInfo(false);
+    navigation.navigate('ProfileDetail', {
+      userId: otherUserId?.toString() || '',
+      userName: conversation.name,
+      userPhoto: userAvatarUrl || undefined,
+    });
+  }, [navigation, otherUserId, conversation.name, userAvatarUrl]);
+
+  // Status indicator for own messages - Enhanced with clear visual distinction
+  // ✅ Updated: Double checkmarks for delivered/read with status text
+  const getStatusIcon = useCallback((msgStatus?: string) => {
+    // Get status with fallback to 'sent'
+    const status = msgStatus || 'sent';
+
+    switch (status) {
+      case 'sending':
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Feather name="clock" size={14} color={colors.gray[500]} />
+            <Text style={{ fontSize: 13, color: colors.gray[500] }}>Sending...</Text>
+          </View>
+        );
+      case 'sent':
+        // Single checkmark - Message reached server
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Feather name="check" size={14} color={colors.gray[500]} />
+            <Text style={{ fontSize: 13, color: colors.gray[500] }}>Sent</Text>
+          </View>
+        );
+      case 'delivered':
+        // Double checkmark (gray) - Message delivered to recipient
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ flexDirection: 'row' }}>
+              <Feather name="check" size={14} color={colors.gray[600]} />
+              <Feather name="check" size={14} color={colors.gray[600]} style={{ marginLeft: -8 }} />
+            </View>
+            <Text style={{ fontSize: 13, color: colors.gray[600] }}>Delivered</Text>
+          </View>
+        );
+      case 'read':
+        // Double checkmark (teal) - Message seen by recipient
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ flexDirection: 'row' }}>
+              <Feather name="check" size={14} color={colors.teal[500]} />
+              <Feather name="check" size={14} color={colors.teal[500]} style={{ marginLeft: -8 }} />
+            </View>
+            <Text style={{ fontSize: 13, color: colors.teal[500], fontWeight: '600' }}>Seen</Text>
+          </View>
+        );
+      case 'failed':
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Feather name="alert-circle" size={14} color={colors.red[500]} />
+            <Text style={{ fontSize: 13, color: colors.red[500] }}>Failed</Text>
+          </View>
+        );
+      default:
+        // Fallback - show as sent
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Feather name="check" size={14} color={colors.gray[500]} />
+            <Text style={{ fontSize: 13, color: colors.gray[500] }}>Sent</Text>
+          </View>
+        );
+    }
+  }, []);
+
+  // Memoized render message with status indicators
+  const renderMessage = useCallback(({ item }: { item: ChatMessage }) => {
+    const isOwn = item.sender === 'me';
+
+    return (
+      <View style={[styles.chatMessageRow, isOwn && styles.chatMessageRowOwn]}>
+        <View style={[styles.chatMessageContent, { maxWidth: chatBubbleMaxWidth }]}>
+          {isOwn ? (
+            <LinearGradient
+              colors={[colors.orange[500], colors.orange[600]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.chatBubbleOwn}
+            >
+              <Text style={styles.chatBubbleTextOwn}>{item.text}</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.chatBubbleOther}>
+              <Text style={styles.chatBubbleTextOther}>{item.text}</Text>
+            </View>
+          )}
+          <View style={[styles.chatTimeRow, isOwn && styles.chatTimeRowOwn]}>
+            <Text style={[styles.chatTimeText, isOwn && styles.chatTimeTextOwn]}>
+              {item.time}
+            </Text>
+            {isOwn && <View style={styles.chatStatusIcon}>{getStatusIcon(item.status)}</View>}
+          </View>
+        </View>
+      </View>
+    );
+  }, [chatBubbleMaxWidth, getStatusIcon]);
+
+  // FlatList getItemLayout for optimization
+  const getMessageItemLayout = useCallback((
+    _data: ArrayLike<ChatMessage> | null | undefined,
+    index: number
+  ) => ({
+    length: MESSAGE_ITEM_HEIGHT,
+    offset: MESSAGE_ITEM_HEIGHT * index,
+    index,
+  }), []);
+
+  return (
+    <View style={styles.embeddedChat}>
+      {/* Header - Compact in landscape, with typing indicator */}
+      <View style={[
+        styles.chatHeader,
+        isLandscape && styles.chatHeaderLandscape,
+        isPhoneLandscape && styles.chatHeaderPhoneLandscape,
+      ]}>
+        <View style={styles.chatHeaderLeft}>
+          <View style={styles.chatHeaderAvatarWrapper}>
+            {userAvatarUrl ? (
+              <Image
+                source={{ uri: userAvatarUrl }}
+                style={styles.chatHeaderAvatarImage}
+              />
+            ) : (
+              <LinearGradient
+                colors={[colors.teal[400], colors.teal[500]]}
+                style={styles.chatHeaderAvatar}
+              >
+                <Text style={styles.chatHeaderAvatarText}>{userAvatar}</Text>
+              </LinearGradient>
+            )}
+            {/* Show real-time online status from useChat hook */}
+            {isOtherUserOnline && <View style={styles.chatHeaderOnlineDot} />}
+          </View>
+          {/* Name container with flex shrink for proper truncation */}
+          <View style={styles.chatHeaderNameContainer}>
+            <Text style={styles.chatHeaderName} numberOfLines={1} ellipsizeMode="tail">
+              {userName}
+            </Text>
+            {/* Real-time status: Typing > Active now > Offline */}
+            <Text style={styles.chatHeaderStatus} numberOfLines={1}>
+              {isOtherUserTyping ? 'Typing...' : isOtherUserOnline ? 'Active now' : 'Offline'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.chatHeaderActions}>
+          <TouchableOpacity
+            onPress={handleAudioCall}
+            style={[
+              styles.chatHeaderActionButton,
+              !isConnected && styles.chatHeaderActionButtonDisabled,
+            ]}
+            accessible={true}
+            accessibilityLabel={isConnected ? `Voice call ${userName}` : `Voice call ${userName} (unavailable when offline)`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isConnected }}
+          >
+            <Feather name="phone" size={20} color={isConnected ? colors.teal[500] : colors.gray[400]} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleVideoCall}
+            style={[
+              styles.chatHeaderActionButton,
+              !isConnected && styles.chatHeaderActionButtonDisabled,
+            ]}
+            accessible={true}
+            accessibilityLabel={isConnected ? `Video call ${userName}` : `Video call ${userName} (unavailable when offline)`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isConnected }}
+          >
+            <Feather name="video" size={20} color={isConnected ? colors.teal[500] : colors.gray[400]} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowInfo(true)}
+            style={styles.chatHeaderActionButton}
+            accessible={true}
+            accessibilityLabel={`View ${userName}'s profile and options`}
+            accessibilityRole="button"
+          >
+            <Feather name="info" size={20} color={colors.gray[600]} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Info Panel - Tablet-specific constrained width styling */}
+      {showInfo && (
+        <View style={[
+          styles.infoPanel,
+          isTablet && styles.infoPanelTablet,
+          isTablet && { width: Math.min(wp(50), 400) },
+          isPhoneLandscape && { paddingLeft: insets.left, paddingRight: insets.right },
+        ]}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Close Button */}
+            <TouchableOpacity
+              onPress={() => setShowInfo(false)}
+              style={styles.infoPanelCloseButton}
+              accessible={true}
+              accessibilityLabel="Close info panel"
+              accessibilityRole="button"
+            >
+              <Feather name="arrow-left" size={20} color={colors.gray[700]} />
+            </TouchableOpacity>
+
+            {/* Profile Info */}
+            <View style={styles.infoPanelProfileSection}>
+              <View style={styles.infoPanelAvatarWrapper}>
+                {userAvatarUrl ? (
+                  <Image
+                    source={{ uri: userAvatarUrl }}
+                    style={styles.infoPanelAvatarImage}
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={[colors.teal[400], colors.teal[500]]}
+                    style={styles.infoPanelAvatar}
+                  >
+                    <Text style={styles.infoPanelAvatarText}>{userAvatar}</Text>
+                  </LinearGradient>
+                )}
+                {/* Use real-time online status */}
+                {isOtherUserOnline && <View style={styles.infoPanelOnlineDot} />}
+              </View>
+              <Text style={styles.infoPanelName}>{userName}</Text>
+              <View style={styles.infoPanelEncryption}>
+                <Feather name="lock" size={14} color={colors.gray[600]} />
+                <Text style={styles.infoPanelEncryptionText}>End-to-end encrypted</Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.infoPanelActions}>
+              <TouchableOpacity
+                onPress={handleViewProfile}
+                style={styles.infoPanelActionButton}
+                accessible={true}
+                accessibilityLabel={`View ${userName}'s full profile`}
+                accessibilityRole="button"
+              >
+                <LinearGradient
+                  colors={[colors.orange[500], colors.teal[500]]}
+                  style={styles.infoPanelActionIcon}
+                >
+                  <Feather name="user" size={20} color={colors.white} />
+                </LinearGradient>
+                <Text style={styles.infoPanelActionText}>Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setIsMuted(!isMuted)}
+                style={styles.infoPanelActionButton}
+                accessible={true}
+                accessibilityLabel={isMuted ? 'Unmute notifications' : 'Mute notifications'}
+                accessibilityRole="button"
+              >
+                <View style={styles.infoPanelActionIconGray}>
+                  <Feather name={isMuted ? 'bell-off' : 'bell'} size={20} color={colors.gray[700]} />
+                </View>
+                <Text style={styles.infoPanelActionText}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.infoPanelActionButton}
+                accessible={true}
+                accessibilityLabel="Search messages in this conversation"
+                accessibilityRole="button"
+              >
+                <View style={styles.infoPanelActionIconGray}>
+                  <Feather name="search" size={20} color={colors.gray[700]} />
+                </View>
+                <Text style={styles.infoPanelActionText}>Search</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Media & Files */}
+            <TouchableOpacity
+              style={styles.infoPanelMenuItem}
+              accessible={true}
+              accessibilityLabel="View shared media and files"
+              accessibilityRole="button"
+            >
+              <View style={styles.infoPanelMenuLeft}>
+                <Feather name="image" size={20} color={colors.gray[600]} />
+                <Text style={styles.infoPanelMenuText}>Media & files</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color={colors.gray[400]} />
+            </TouchableOpacity>
+
+            {/* Privacy & Support */}
+            <TouchableOpacity
+              style={[styles.infoPanelMenuItem, styles.infoPanelMenuItemBorder]}
+              accessible={true}
+              accessibilityLabel="Privacy and support options"
+              accessibilityRole="button"
+            >
+              <Text style={styles.infoPanelMenuText}>Privacy & support</Text>
+              <Feather name="chevron-right" size={20} color={colors.gray[400]} />
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Messages */}
+      <Animated.View style={[styles.chatMessagesContainer, { paddingBottom: keyboardHeight }]}>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={item => item.id}
+          getItemLayout={getMessageItemLayout}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          contentContainerStyle={styles.chatMessagesList}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+          }}
+        />
+
+        {/* Input Area - Compact in landscape, with proper safe area and disabled states */}
+        <View style={[
+          styles.chatInputContainer,
+          isPhoneLandscape && styles.chatInputContainerLandscape,
+          { paddingBottom: isPhoneLandscape ? Math.max(insets.bottom, 6) : Math.max(insets.bottom, 12) }
+        ]}>
+          <TouchableOpacity
+            style={styles.chatEmojiButton}
+            accessible={true}
+            accessibilityLabel="Open emoji picker"
+            accessibilityRole="button"
+          >
+            <Feather name="smile" size={20} color={colors.teal[500]} />
+          </TouchableOpacity>
+
+          <View style={styles.chatInputWrapper}>
+            <TextInput
+              style={styles.chatTextInput}
+              value={inputText}
+              onChangeText={handleTextChange}
+              placeholder="Aa"
+              placeholderTextColor={colors.gray[400]}
+              multiline
+              maxLength={1000}
+              onSubmitEditing={handleSendMessage}
+              accessible={true}
+              accessibilityLabel="Message input"
+              accessibilityHint="Type your message here"
+              returnKeyType="send"
+            />
+          </View>
+
+          {inputText.trim() ? (
+            <TouchableOpacity
+              onPress={handleSendMessage}
+              disabled={isSending}
+              style={[
+                styles.chatSendButtonWrapper,
+                isSending && styles.chatSendButtonDisabled,
+              ]}
+              accessible={true}
+              accessibilityLabel="Send message"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSending }}
+            >
+              <LinearGradient
+                colors={isSending ? [colors.gray[400], colors.gray[500]] : [colors.orange[500], colors.teal[500]]}
+                style={styles.chatSendButton}
+              >
+                <Feather name="send" size={20} color={colors.white} />
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleSendLike}
+              disabled={isSending}
+              style={[styles.chatLikeButton, isSending && styles.chatLikeButtonDisabled]}
+              accessible={true}
+              accessibilityLabel="Send thumbs up"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSending }}
+            >
+              <Feather name="thumbs-up" size={20} color={isSending ? colors.gray[400] : colors.teal[500]} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+export const MessagesScreen: React.FC = () => {
+  const navigation = useNavigation<MessagesNavigationProp>();
+  const insets = useSafeAreaInsets();
+  const { isLandscape, isTablet, width } = useResponsive();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedNewMatch, setSelectedNewMatch] = useState<NewMatch | null>(null);
+  const [isNetworkConnected, setIsNetworkConnected] = useState(true);
+
+  // ✅ FIX: Small device detection for responsive adjustments
+  const isSmallDevice = width <= 375;
+  // ✅ FIX: Only show split view on tablets in landscape (not phones)
+  const showSplitView = isLandscape && isTablet;
+
+  // Network status monitoring
+  useEffect(() => {
+    setIsNetworkConnected(stompService.isConnectedToServer());
+    const unsubscribe = stompService.onConnectionChange((connected) => {
+      setIsNetworkConnected(connected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real data hooks
+  const {
+    conversations,
+    isLoading: conversationsLoading,
+    error: conversationsError,
+    refresh: refreshConversations,
+  } = useConversations();
+
+  const {
+    newMatches,
+    isLoading: matchesLoading,
+    error: matchesError,
+    refresh: refreshMatches,
+  } = useNewMatches();
+
+  // Combined loading/error state
+  const isLoading = conversationsLoading || matchesLoading;
+  const error = conversationsError || matchesError;
+
+  // ✅ FIX: Responsive padding - smaller on small devices
+  const horizontalPadding = isTablet ? 32 : (isSmallDevice ? 16 : 24);
+
+  // Filter conversations by search query
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const query = searchQuery.toLowerCase();
+    return conversations.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.message.toLowerCase().includes(query)
+    );
+  }, [conversations, searchQuery]);
+
+  // Filter new matches by search query
+  const filteredNewMatches = useMemo(() => {
+    if (!searchQuery.trim()) return newMatches;
+    const query = searchQuery.toLowerCase();
+    return newMatches.filter((m) => m.name.toLowerCase().includes(query));
+  }, [newMatches, searchQuery]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refreshConversations(), refreshMatches()]);
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshConversations, refreshMatches]);
+
+  const handleRetry = useCallback(() => {
+    handleRefresh();
+  }, [handleRefresh]);
+
+  const handleConversationPress = useCallback((conversation: Conversation) => {
+    // ✅ FIX: Only use split view on tablets, not small phones in landscape
+    if (showSplitView) {
+      setSelectedConversation(conversation);
+      setSelectedNewMatch(null);
+    } else {
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        userName: conversation.name,
+        userPhoto: conversation.avatarUrl || undefined,
+        userId: conversation.otherUserId.toString(),
+      });
+    }
+  }, [navigation, showSplitView]);
+
+  const handleNewMatchPress = useCallback((match: NewMatch) => {
+    // ✅ FIX: Only use split view on tablets, not small phones in landscape
+    if (showSplitView) {
+      setSelectedNewMatch(match);
+      setSelectedConversation(null);
+    } else {
+      navigation.navigate('Chat', {
+        conversationId: `new-${match.matchId}`,
+        userName: match.name,
+        userPhoto: match.avatarUrl || undefined,
+        userId: match.userId.toString(),
+      });
+    }
+  }, [navigation, showSplitView]);
+
+  const handleCloseChat = useCallback(() => {
+    setSelectedConversation(null);
+    setSelectedNewMatch(null);
+  }, []);
+
+  // Count unread new matches (those with notifications)
+  const unreadMatchesCount = filteredNewMatches.filter(m => m.hasNotification).length;
+
+  // FlatList getItemLayout for optimization
+  const getConversationItemLayout = useCallback((
+    _data: ArrayLike<Conversation> | null | undefined,
+    index: number
+  ) => ({
+    length: CONVERSATION_ITEM_HEIGHT,
+    offset: CONVERSATION_ITEM_HEIGHT * index,
+    index,
+  }), []);
+
+  // Memoized render item
+  const renderConversationItem = useCallback(({ item }: { item: Conversation }) => (
+    <ConversationRow
+      conversation={item}
+      onPress={() => handleConversationPress(item)}
+      isSelected={showSplitView && selectedConversation?.id === item.id}
+    />
+  ), [handleConversationPress, showSplitView, selectedConversation?.id]);
+
+  // Memoized ListHeaderComponent
+  const ListHeader = useMemo(() => {
+    // Don't show new matches section if no matches
+    if (filteredNewMatches.length === 0) return null;
+
+    return (
+      <View style={styles.newMatchesSection}>
+        <View style={styles.newMatchesHeader}>
+          <Text style={styles.sectionTitle}>NEW MATCHES</Text>
+          {/* ORANGE badge per Figma */}
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{unreadMatchesCount}</Text>
+          </View>
+        </View>
+
+        {/* Horizontal Scroll of Match Avatars */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.matchesScrollContent}
+          accessible={true}
+          accessibilityLabel="New matches"
+          accessibilityRole="list"
+        >
+          {filteredNewMatches.map((match) => (
+            <NewMatchAvatar
+              key={match.id}
+              match={match}
+              onPress={() => handleNewMatchPress(match)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    );
+  }, [filteredNewMatches, unreadMatchesCount, handleNewMatchPress]);
+
+  // Conversation List Component (memoized)
+  const ConversationList = useMemo(() => (
+    <View style={[
+      styles.conversationListContainer,
+      // ✅ FIX: Only apply landscape styles on tablets, not small phones
+      showSplitView && styles.conversationListLandscape,
+      // Adjust split ratio for very wide tablets (1024px+)
+      showSplitView && { flex: 0.35 },
+      { paddingHorizontal: 0 },
+    ]}>
+      {/* Network Status Banner */}
+      <NetworkStatusBanner isConnected={isNetworkConnected} />
+
+      {/* Header */}
+      <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
+        <Text style={[styles.title, showSplitView && styles.titleLandscape]}>Chats</Text>
+
+        {/* Search Bar - ✅ FIX: Responsive padding for small devices */}
+        <View style={[
+          styles.searchBar,
+          isSmallDevice && styles.searchBarSmall,
+        ]}>
+          <Feather name="search" size={20} color={colors.gray[400]} style={[
+            styles.searchIcon,
+            isSmallDevice && styles.searchIconSmall,
+          ]} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search Messenger"
+            placeholderTextColor={colors.gray[400]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessible={true}
+            accessibilityLabel="Search conversations"
+            accessibilityHint="Enter name or message to search"
+            returnKeyType="search"
+          />
+        </View>
+      </View>
+
+      {/* Content States */}
+      {isLoading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState onRetry={handleRetry} />
+      ) : (
+        <FlatList
+          data={filteredConversations}
+          keyExtractor={(item) => item.id}
+          renderItem={renderConversationItem}
+          getItemLayout={getConversationItemLayout}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 20 }}
+          ListHeaderComponent={ListHeader}
+          ListEmptyComponent={
+            searchQuery.trim() ? (
+              <NoSearchResultsState
+                searchQuery={searchQuery}
+                onClearSearch={() => setSearchQuery('')}
+              />
+            ) : (
+              <NoConversationsState />
+            )
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.orange[500]]}
+              tintColor={colors.orange[500]}
+            />
+          }
+        />
+      )}
+    </View>
+  ), [
+    showSplitView,
+    horizontalPadding,
+    searchQuery,
+    isLoading,
+    error,
+    handleRetry,
+    filteredConversations,
+    renderConversationItem,
+    getConversationItemLayout,
+    insets.bottom,
+    ListHeader,
+    refreshing,
+    handleRefresh,
+    isNetworkConnected,
+    isSmallDevice,
+  ]);
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={colors.white}
+        translucent={false}
+      />
+
+      {/* ✅ FIX: Only show split view on tablets, not small phones in landscape */}
+      {showSplitView ? (
+        // TABLET LANDSCAPE: Split view
+        <View style={styles.splitContainer}>
+          {/* Left Panel - Conversation List */}
+          {ConversationList}
+
+          {/* Divider */}
+          <View style={styles.splitDivider} />
+
+          {/* Right Panel - Chat or Empty State */}
+          <View style={styles.rightPanel}>
+            {selectedConversation ? (
+              <EmbeddedChat
+                conversation={selectedConversation}
+                onClose={handleCloseChat}
+              />
+            ) : selectedNewMatch ? (
+              <EmbeddedChat
+                conversation={selectedNewMatch}
+                isNewMatch
+                onClose={handleCloseChat}
+              />
+            ) : (
+              <EmptyState />
+            )}
+          </View>
+        </View>
+      ) : (
+        // PORTRAIT or PHONE LANDSCAPE: Full-screen conversation list
+        ConversationList
+      )}
+    </View>
+  );
+};
+
+// ============================================================================
+// STYLES - Matching Figma CSS exactly with UI audit fixes
+// ============================================================================
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+
+  // Split view (landscape)
+  splitContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  splitDivider: {
+    width: 1,
+    backgroundColor: colors.gray[200],
+  },
+  rightPanel: {
+    flex: 1,
+    backgroundColor: colors.gray[50],
+  },
+
+  // Conversation List Container
+  conversationListContainer: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  conversationListLandscape: {
+    flex: 0.4,
+    minWidth: 300,
+    maxWidth: 480,
+    borderRightWidth: 0,
+  },
+
+  // Header - px-6 pt-6 pb-4
+  header: {
+    paddingTop: 24,
+    paddingBottom: 16,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+
+  // Title - text-3xl font-bold text-gray-900 mb-4
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.gray[900],
+    marginBottom: 16,
+  },
+  titleLandscape: {
+    fontSize: 24,
+    marginBottom: 12,
+  },
+
+  // Search Bar - pl-12 pr-4 py-3.5 bg-gray-50 rounded-full
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[50],
+    borderRadius: 9999,
+    paddingLeft: 48,
+    paddingRight: 16,
+    minHeight: 48,
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  // ✅ FIX: Smaller search bar padding on small devices
+  searchBarSmall: {
+    paddingLeft: 40,
+    paddingRight: 12,
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: 16,
+  },
+  // ✅ FIX: Adjusted icon position for small devices
+  searchIconSmall: {
+    left: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.gray[900],
+    padding: 0,
+  },
+
+  // New Matches Section - px-6 py-6
+  // ✅ FIX: Reduced padding for small devices
+  newMatchesSection: {
+    paddingHorizontal: 16, // Reduced from 24 for small devices
+    paddingVertical: 20, // Reduced from 24 for small devices
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+
+  // New Matches Header - mb-4
+  newMatchesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+
+  // Section Title - text-base font-semibold uppercase tracking-wide
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray[900],
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // Count Badge - w-8 h-8 bg-orange-500 rounded-full (ORANGE per Figma!)
+  countBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.orange[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countBadgeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // Matches Scroll - gap-4 pb-2
+  // ✅ FIX: Reduced gap for small devices
+  matchesScrollContent: {
+    paddingBottom: 8,
+    gap: 12, // Reduced from 16 for tighter layout on small screens
+  },
+
+  // Match Avatar Container - increased touch target for seniors
+  matchAvatarContainer: {
+    alignItems: 'center',
+    minWidth: 72,
+    minHeight: 88,
+    paddingHorizontal: 4,
+    paddingTop: 4,
+  },
+  matchAvatarWrapper: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+
+  // Match Avatar - w-16 h-16 (64px) rounded-full, ORANGE gradient
+  matchAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  matchAvatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  matchAvatarText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // Match Online Dot - bottom-0 right-0 w-5 h-5 (20px)
+  matchOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.teal[500],
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+
+  // Match Heart Badge - -top-1 -right-1 w-6 h-6 (24px)
+  matchHeartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.teal[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Match Name - text-sm font-medium text-gray-700
+  // ✅ FIX: Add maxWidth for truncation on small devices
+  matchName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.gray[700],
+    maxWidth: 64, // Match avatar width for proper truncation
+    textAlign: 'center',
+  },
+
+  // Conversation Row - px-6 py-4 gap-4
+  // ✅ FIX: Reduced padding on small devices
+  conversationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16, // Reduced from 24 for small devices
+    paddingVertical: 14, // Slightly reduced from 16
+    gap: 12, // Reduced from 16 for tighter layout on small screens
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  conversationRowSelected: {
+    backgroundColor: colors.gray[100],
+  },
+
+  // Conversation Avatar Wrapper
+  conversationAvatarWrapper: {
+    position: 'relative',
+  },
+
+  // Conversation Avatar - w-14 h-14 (56px), TEAL gradient per Figma
+  conversationAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  conversationAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  conversationAvatarText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // Conversation Online Dot - bottom-0 right-0 w-4 h-4 (16px)
+  conversationOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.teal[500],
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+
+  // Conversation Content - flex-1 pt-1
+  conversationContent: {
+    flex: 1,
+    paddingTop: 4,
+  },
+
+  // Conversation Top Row - mb-1
+  conversationTopRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+
+  // Conversation Name - text-lg font-semibold text-gray-900
+  conversationName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.gray[900],
+    flex: 1,
+  },
+
+  // Conversation Time - text-sm text-gray-600 ml-2 (FIXED: gray[600] for WCAG AA)
+  conversationTime: {
+    fontSize: 16,
+    color: colors.gray[600],
+    marginLeft: 8,
+  },
+
+  // Conversation Message - text-base text-gray-600 (FIXED: gray[600] for WCAG AA)
+  conversationMessage: {
+    fontSize: 16,
+    color: colors.gray[600],
+  },
+  conversationMessageUnread: {
+    color: colors.gray[900],
+    fontWeight: '500',
+  },
+
+  // Unread Dot - w-3 h-3 (12px) bg-orange-500 mt-2
+  unreadDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.orange[500],
+    marginTop: 8,
+  },
+
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+  loadingState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingStateText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.gray[600],
+  },
+
+  // ============================================================================
+  // ERROR STATE
+  // ============================================================================
+  errorState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  errorStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.gray[900],
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorStateSubtitle: {
+    fontSize: 16,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.orange[500],
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // ============================================================================
+  // NO CONVERSATIONS STATE
+  // ============================================================================
+  noConversationsState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 48,
+  },
+  noConversationsCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  noConversationsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.gray[900],
+    marginBottom: 8,
+  },
+  noConversationsSubtitle: {
+    fontSize: 16,
+    color: colors.gray[600],
+    textAlign: 'center',
+  },
+
+  // ============================================================================
+  // NO SEARCH RESULTS STATE
+  // ============================================================================
+  noSearchResultsState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 48,
+  },
+  noSearchResultsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.gray[900],
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  noSearchResultsSubtitle: {
+    fontSize: 16,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  clearSearchButton: {
+    backgroundColor: colors.orange[500],
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearSearchButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // ============================================================================
+  // NETWORK STATUS BANNER
+  // ============================================================================
+  networkBanner: {
+    backgroundColor: colors.orange[500],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  networkBannerText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.white,
+  },
+
+  // ============================================================================
+  // EMPTY STATE (Landscape right panel)
+  // ============================================================================
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyStateCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: colors.gray[900],
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    color: colors.gray[600],
+    textAlign: 'center',
+  },
+
+  // ============================================================================
+  // EMBEDDED CHAT
+  // ============================================================================
+  embeddedChat: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  chatHeaderLandscape: {
+    paddingVertical: 8,
+  },
+  // Compact header in phone landscape to maximize chat space
+  chatHeaderPhoneLandscape: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chatHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1, // Allow flex shrink for name truncation
+  },
+  chatHeaderAvatarWrapper: {
+    position: 'relative',
+  },
+  chatHeaderAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatHeaderAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  chatHeaderAvatarText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  chatHeaderOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.teal[500],
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  // Name container with flex shrink for proper truncation
+  chatHeaderNameContainer: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  chatHeaderName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray[900],
+  },
+  chatHeaderStatus: {
+    fontSize: 16,
+    color: colors.gray[600], // FIXED: gray[600] for WCAG AA
+  },
+  chatHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  // FIXED: Touch target minimum 44pt
+  chatHeaderActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Disabled state for call buttons when offline
+  chatHeaderActionButtonDisabled: {
+    opacity: 0.5,
+  },
+
+  // Chat Messages
+  chatMessagesContainer: {
+    flex: 1,
+  },
+  chatMessagesList: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  chatMessageRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  chatMessageRowOwn: {
+    justifyContent: 'flex-end',
+  },
+  chatMessageContent: {
+    // maxWidth set dynamically based on screen size
+  },
+  chatBubbleOwn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  chatBubbleTextOwn: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.white,
+  },
+  chatBubbleOther: {
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  chatBubbleTextOther: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.gray[900],
+  },
+  // Time row with status indicator (matching ChatScreen pattern)
+  chatTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  chatTimeRowOwn: {
+    justifyContent: 'flex-end',
+  },
+  chatTimeText: {
+    fontSize: 16,
+    color: colors.gray[600], // WCAG AA compliant contrast
+  },
+  chatTimeTextOwn: {
+    textAlign: 'right',
+  },
+  // Status icon for sent messages
+  chatStatusIcon: {
+    marginLeft: 2,
+  },
+
+  // Chat Input
+  chatInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[100],
+  },
+  // Compact input area in landscape to maximize vertical space
+  chatInputContainerLandscape: {
+    paddingTop: 6,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  // FIXED: Touch target minimum 44pt
+  chatEmojiButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[100],
+    borderRadius: 9999,
+    paddingLeft: 16,
+    paddingRight: 8,
+    minHeight: 44,
+  },
+  chatTextInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.gray[900],
+    paddingVertical: 8,
+    maxHeight: 100,
+  },
+  // FIXED: Touch target minimum 44pt
+  chatInputEmojiButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatSendButtonWrapper: {
+    width: 44,
+    height: 44,
+  },
+  // FIXED: Touch target minimum 44pt
+  chatSendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // FIXED: Touch target minimum 44pt
+  chatLikeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Disabled states for send/like buttons (senior-friendly debounce)
+  chatSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  chatLikeButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  // ============================================================================
+  // INFO PANEL (Embedded Chat)
+  // ============================================================================
+  infoPanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.white,
+    zIndex: 50,
+  },
+  // Tablet-specific info panel styling (constrained width, positioned right)
+  infoPanelTablet: {
+    left: 'auto',
+    right: 0,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.gray[200],
+    shadowColor: colors.black,
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  // FIXED: Touch target minimum 44pt
+  infoPanelCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  infoPanelProfileSection: {
+    alignItems: 'center',
+    paddingTop: 64,
+    paddingBottom: 24,
+  },
+  infoPanelAvatarWrapper: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  infoPanelAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoPanelAvatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  infoPanelAvatarText: {
+    color: colors.white,
+    fontSize: 36,
+    fontWeight: '600',
+  },
+  infoPanelOnlineDot: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.teal[500],
+    borderWidth: 4,
+    borderColor: colors.white,
+  },
+  infoPanelName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray[900],
+    marginBottom: 4,
+  },
+  infoPanelEncryption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoPanelEncryptionText: {
+    fontSize: 16,
+    color: colors.gray[600], // FIXED: gray[600] for WCAG AA
+  },
+  infoPanelActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  infoPanelActionButton: {
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    minWidth: 80,
+  },
+  infoPanelActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoPanelActionIconGray: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoPanelActionText: {
+    fontSize: 16,
+    color: colors.gray[700],
+    fontWeight: '500',
+  },
+  infoPanelMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[100],
+    minHeight: 56, // Touch target
+  },
+  infoPanelMenuItemBorder: {
+    marginTop: 16,
+  },
+  infoPanelMenuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  infoPanelMenuText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.gray[900],
+  },
+});
+
+export default MessagesScreen;

@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "TANDER",
+    "slug": "tander",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F97316"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tander.app",
+      "bitcode": false,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "TANDER uses Face ID for quick and secure sign-in."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F97316"
+      },
+      "package": "com.tander.app",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "@config-plugins/react-native-webrtc",
+      [
+        "expo-notifications",
+        {
+          "color": "#F97316",
+          "defaultChannel": "tander_incoming_calls",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "TANDER uses Face ID for quick and secure sign-in."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1f156cdd-8c3d-484f-99f4-d62eb54f06e1"
+      }
+    }
+  }
+}
