@@ -25,7 +25,6 @@ import {
   ScrollView,
   Animated,
   Keyboard,
-  ActivityIndicator,
   Alert,
   Linking,
   Image,
@@ -43,14 +42,164 @@ import { useResponsive } from '@shared/hooks/useResponsive';
 import { useChat, Message } from '../hooks/useChat';
 import { blockUser, reportUser } from '@services/api/profileApi';
 import { muteConversation, unmuteConversation, getMuteStatus } from '@services/api/chatApi';
+import { stompService } from '@services/websocket';
 import type { MessagesStackParamList } from '@navigation/types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+// ✅ PREMIUM: Import new UI components
+import { DateSeparator } from '../components/DateSeparator';
+import { TypingIndicator } from '../components/TypingIndicator';
+import { ConnectionStatusBar, ConnectionState } from '../components/ConnectionStatusBar';
+import { ChatSkeleton } from '../components/ChatSkeleton';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 type ChatScreenRouteProp = RouteProp<MessagesStackParamList, 'Chat'>;
 type ChatScreenNavigationProp = NativeStackNavigationProp<MessagesStackParamList, 'Chat'>;
+
+// ============================================================================
+// CHAT LOADING MESSAGES - Rotating encouraging messages for seniors
+// ============================================================================
+const CHAT_LOADING_MESSAGES = [
+  'Loading your conversation...',
+  'Fetching messages...',
+  'Connecting to chat...',
+  'Almost ready...',
+];
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+/**
+ * Decode HTML entities in text (e.g., &#39; -> ', &amp; -> &)
+ * Handles common HTML entities that may come from backend
+ */
+const decodeHTMLEntities = (text: string): string => {
+  if (!text) return text;
+  return text
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+};
+
+// ============================================================================
+// CHAT LOADING STATE COMPONENT - Enhanced with animations
+// ============================================================================
+const ChatLoadingState: React.FC = () => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [dots, setDots] = useState('');
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // Rotate through loading messages
+  useEffect(() => {
+    const messageTimer = setInterval(() => {
+      // Fade out, change message, fade in
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0.5,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      setMessageIndex((prev) => (prev + 1) % CHAT_LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(messageTimer);
+  }, [fadeAnim]);
+
+  // Animated dots
+  useEffect(() => {
+    const dotsTimer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 400);
+    return () => clearInterval(dotsTimer);
+  }, []);
+
+  // Bounce animation for icon
+  useEffect(() => {
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -6,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    bounce.start();
+    return () => bounce.stop();
+  }, [bounceAnim]);
+
+  return (
+    <View style={chatLoadingStyles.container}>
+      {/* Animated gradient circle with bouncing icon */}
+      <LinearGradient
+        colors={[colors.orange[100], colors.teal[100]]}
+        style={chatLoadingStyles.circle}
+      >
+        <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
+          <Feather name="message-circle" size={36} color={colors.orange[500]} />
+        </Animated.View>
+      </LinearGradient>
+
+      {/* Rotating message with animated dots */}
+      <Animated.Text style={[chatLoadingStyles.text, { opacity: fadeAnim }]}>
+        {CHAT_LOADING_MESSAGES[messageIndex]}
+      </Animated.Text>
+      <Text style={chatLoadingStyles.dots}>{dots || ' '}</Text>
+    </View>
+  );
+};
+
+// Styles for ChatLoadingState
+const chatLoadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  circle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  text: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: colors.gray[700],
+    textAlign: 'center',
+  },
+  dots: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.orange[500],
+    height: 28,
+    marginTop: 4,
+  },
+});
 
 // ============================================================================
 // CALL MESSAGE BUBBLE COMPONENT
@@ -216,7 +365,10 @@ const CallMessageBubble: React.FC<CallMessageBubbleProps> = ({ message, onCallBa
 
       {/* Center: Call info */}
       <View style={styles.callBubbleCenter}>
-        <Text style={[styles.callBubbleTitle, { color: style.textColor }]}>
+        <Text
+          style={[styles.callBubbleTitle, { color: style.textColor }]}
+          numberOfLines={1}
+        >
           {statusText}
         </Text>
         <View style={styles.callBubbleSubtitle}>
@@ -232,18 +384,7 @@ const CallMessageBubble: React.FC<CallMessageBubbleProps> = ({ message, onCallBa
         </View>
       </View>
 
-      {/* Right side: Call back button (only for missed/declined incoming calls) */}
-      {onCallBack && (isMissed || isDeclined) && !isOutgoing && (
-        <View style={styles.callBubbleRight}>
-          <View style={styles.callBackButtonContainer}>
-            <Feather
-              name={isVideo ? 'video' : 'phone'}
-              size={16}
-              color={colors.teal[500]}
-            />
-          </View>
-        </View>
-      )}
+      {/* ✅ FIX: Removed redundant callback button - whole bubble is touchable */}
     </View>
   );
 
@@ -357,8 +498,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onCallBack }) =>
       case 'failed':
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Feather name="alert-circle" size={14} color={colors.red[500]} />
-            <Text style={{ fontSize: 13, color: colors.red[500] }}>Failed</Text>
+            <Feather name="alert-circle" size={14} color={colors.semantic.error} />
+            <Text style={{ fontSize: 13, color: colors.semantic.error }}>Failed</Text>
           </View>
         );
       default:
@@ -383,12 +524,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onCallBack }) =>
             end={{ x: 1, y: 0 }}
             style={styles.bubbleOwn}
           >
-            <Text style={styles.bubbleTextOwn}>{message.text}</Text>
+            <Text style={styles.bubbleTextOwn}>{decodeHTMLEntities(message.text)}</Text>
           </LinearGradient>
         ) : (
           // Received message - Gray background
           <View style={styles.bubbleOther}>
-            <Text style={styles.bubbleTextOther}>{message.text}</Text>
+            <Text style={styles.bubbleTextOther}>{decodeHTMLEntities(message.text)}</Text>
           </View>
         )}
         <View style={[styles.timeRow, isOwn && styles.timeRowOwn]}>
@@ -872,7 +1013,7 @@ const PrivacySupportModal: React.FC<PrivacySupportModalProps> = ({ visible, onCl
               onUserBlocked?.();
               onClose();
             } catch (error) {
-              console.error('Failed to block user:', error);
+              console.warn('Failed to block user:', error);
               toast.error('Block Failed', 'Failed to block user. Please try again.');
             }
           }
@@ -910,7 +1051,7 @@ const PrivacySupportModal: React.FC<PrivacySupportModalProps> = ({ visible, onCl
                       );
                       onClose();
                     } catch (error) {
-                      console.error('Failed to report user:', error);
+                      console.warn('Failed to report user:', error);
                       toast.error('Report Failed', 'Failed to submit report. Please try again.');
                     }
                   }
@@ -1386,16 +1527,19 @@ export const ChatScreen: React.FC = () => {
   const { conversationId, userName, userPhoto, userId, expiresAt, isNewMatch } = route.params;
   const userAvatar = userName?.charAt(0) || 'U';
 
-  // Real-time chat hook
+  // Real-time chat hook with lazy loading support
   const {
     messages,
     isLoading,
+    isLoadingMore, // ✅ Lazy loading: pagination loading state
     isConnected,
     isOtherUserTyping,
     isOtherUserOnline,
     sendMessage,
     sendTypingIndicator,
     markAsRead,
+    loadMoreMessages, // ✅ Lazy loading: load older messages
+    hasMoreMessages, // ✅ Lazy loading: more messages available
   } = useChat({
     conversationId,
     otherUserId: typeof userId === 'string' ? parseInt(userId, 10) : userId || 0,
@@ -1410,6 +1554,17 @@ export const ChatScreen: React.FC = () => {
   const [showMediaFiles, setShowMediaFiles] = useState(false);
   const [showPrivacySupport, setShowPrivacySupport] = useState(false);
   const [isSending, setIsSending] = useState(false); // Debounce for send button
+
+  // ✅ PREMIUM: Connection state for status bar
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connected');
+
+  // ✅ PREMIUM: Subscribe to connection state changes
+  useEffect(() => {
+    const unsubscribe = stompService.onConnectionState((state) => {
+      setConnectionState(state);
+    });
+    return unsubscribe;
+  }, []);
 
   // Accessibility: Reduced motion preference
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -1444,6 +1599,34 @@ export const ChatScreen: React.FC = () => {
   // Check if there are unread messages from the other user
   const hasUnreadMessages = useMemo(() => {
     return messages.some((msg) => msg.sender === 'them');
+  }, [messages]);
+
+  // ✅ PREMIUM: Messages with date separators for better timeline awareness
+  type ListItem = Message | { type: 'date-separator'; date: Date; id: string };
+
+  const messagesWithDateSeparators = useMemo((): ListItem[] => {
+    if (messages.length === 0) return [];
+
+    const result: ListItem[] = [];
+    let lastDateKey: string | null = null;
+
+    messages.forEach((message) => {
+      const messageDate = new Date(message.timestamp);
+      const dateKey = messageDate.toDateString();
+
+      // Add date separator if this is a new day
+      if (dateKey !== lastDateKey) {
+        result.push({
+          type: 'date-separator',
+          date: messageDate,
+          id: `date-${dateKey}`,
+        });
+        lastDateKey = dateKey;
+      }
+      result.push(message);
+    });
+
+    return result;
   }, [messages]);
 
   // ✅ Mark messages as read when screen is focused and app is active
@@ -1490,7 +1673,7 @@ export const ChatScreen: React.FC = () => {
       }
       setIsMuted(newMuteState);
     } catch (error) {
-      console.error('[ChatScreen] Failed to toggle mute:', error);
+      console.warn('[ChatScreen] Failed to toggle mute:', error);
       toast.error('Mute Failed', 'Failed to update mute setting. Please try again.');
     } finally {
       setIsMuteLoading(false);
@@ -1518,6 +1701,7 @@ export const ChatScreen: React.FC = () => {
           useNativeDriver: false,
         }).start();
       }
+      // Scroll to newest when keyboard shows
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: !reduceMotion }), 100);
     });
 
@@ -1539,12 +1723,74 @@ export const ChatScreen: React.FC = () => {
     };
   }, [keyboardHeight, reduceMotion]);
 
-  // Scroll to bottom when messages change
+  // ✅ Track if initial scroll has been done (only once per chat open)
+  const hasInitialScrolled = useRef(false);
+  const isLoadingMoreRef = useRef(false); // Track if we're loading older messages
+
+  // Update ref when isLoadingMore changes
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    isLoadingMoreRef.current = isLoadingMore;
+  }, [isLoadingMore]);
+
+  // ✅ Scroll to bottom ONCE on initial load only
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    if (hasMessages && !isLoading && !hasInitialScrolled.current) {
+      // Set flag IMMEDIATELY to prevent any race conditions
+      hasInitialScrolled.current = true;
+      // ✅ FIX: Increased delay to 500ms to ensure FlatList renders with date separators
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 500);
     }
-  }, [messages.length]);
+  }, [hasMessages, isLoading]); // Depend on boolean hasMessages, not messages.length
+
+  // ✅ FIX: Scroll to bottom using scrollToOffset with large value
+  const scrollAttempts = useRef(0);
+  const maxScrollAttempts = 3;
+  const lastContentHeight = useRef(0);
+  const handleContentSizeChange = useCallback((width: number, height: number) => {
+    // Only scroll if content height changed and we have messages
+    if (hasMessages && !isLoading && height > 0 && height !== lastContentHeight.current) {
+      lastContentHeight.current = height;
+
+      if (scrollAttempts.current < maxScrollAttempts) {
+        scrollAttempts.current += 1;
+        // Use scrollToOffset with the content height to ensure we reach the bottom
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: height, animated: false });
+        }, 100);
+      }
+    }
+  }, [hasMessages, isLoading]);
+
+  // Reset scroll state when conversation changes
+  useEffect(() => {
+    scrollAttempts.current = 0;
+    lastContentHeight.current = 0;
+  }, [conversationId]);
+
+  // ✅ Scroll to bottom only when SENDING a new message (not loading older messages)
+  const lastMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (messages.length === 0 || !hasInitialScrolled.current) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const isNewMessageAtEnd = lastMessage && lastMessage.id !== lastMessageIdRef.current;
+    const isOwnNewMessage = lastMessage?.sender === 'me';
+
+    // Only scroll if:
+    // 1. There's a new message at the end (not loading older at top)
+    // 2. It's our own message OR we're already near the bottom
+    // 3. We're NOT loading more messages (which adds at top)
+    if (isNewMessageAtEnd && isOwnNewMessage && !isLoadingMoreRef.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    }
+
+    lastMessageIdRef.current = lastMessage?.id || null;
+  }, [messages]);
 
   // Mark messages as read when screen is focused
   useEffect(() => {
@@ -1733,6 +1979,17 @@ export const ChatScreen: React.FC = () => {
   }, [navigation, conversationId, numericUserId, userName, userPhoto, isConnected]);
 
   // Render message
+  // ✅ PREMIUM: Render item handles both messages and date separators
+  const renderListItem = useCallback(({ item }: { item: ListItem }) => {
+    // Check if it's a date separator
+    if ('type' in item && item.type === 'date-separator') {
+      return <DateSeparator date={item.date} />;
+    }
+    // It's a message
+    return <MessageBubble message={item as Message} onCallBack={handleCallBack} />;
+  }, [handleCallBack]);
+
+  // Legacy render for backwards compatibility
   const renderMessage = useCallback(({ item }: { item: Message }) => (
     <MessageBubble message={item} onCallBack={handleCallBack} />
   ), [handleCallBack]);
@@ -1770,7 +2027,15 @@ export const ChatScreen: React.FC = () => {
             </TouchableOpacity>
 
             {/* User Info - ✅ FIX: Add flex shrink for name truncation */}
-            <View style={[styles.headerUserInfo, isSmallDevice && styles.headerUserInfoSmall]}>
+            {/* ✅ UX: Tapping avatar/name opens info panel for better discoverability */}
+            <TouchableOpacity
+              onPress={() => setShowInfo(true)}
+              style={[styles.headerUserInfo, isSmallDevice && styles.headerUserInfoSmall]}
+              accessible={true}
+              accessibilityLabel={`View ${userName}'s profile and options`}
+              accessibilityRole="button"
+              accessibilityHint="Double tap to open conversation info"
+            >
               <View style={styles.headerAvatarWrapper}>
                 {userPhoto ? (
                   <Image
@@ -1797,7 +2062,7 @@ export const ChatScreen: React.FC = () => {
                   {isOtherUserTyping ? 'Typing...' : isOtherUserOnline ? 'Active now' : 'Offline'}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Action Buttons */}
@@ -1836,40 +2101,71 @@ export const ChatScreen: React.FC = () => {
 
         {/* Messages */}
         <Animated.View style={[styles.messagesContainer, { paddingBottom: keyboardHeight }]}>
+          {/* ✅ PREMIUM: Connection status bar */}
+          <ConnectionStatusBar
+            state={connectionState}
+            onRetry={() => stompService.reconnect()}
+          />
+
           {/* 24-hour expiration banner for new matches */}
           {isNewMatch && expiresAt && messages.length === 0 && (
             <ExpirationBanner expiresAt={expiresAt} userName={userName} />
           )}
 
           {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.orange[500]} />
-              <Text style={styles.loadingText}>Loading messages...</Text>
-            </View>
+            <ChatSkeleton />
           ) : (
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              renderItem={renderMessage}
-              keyExtractor={item => item.id}
-              contentContainerStyle={[
-                styles.messagesList,
-                messages.length === 0 && styles.emptyMessagesList,
-              ]}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              ListEmptyComponent={
-                <WarmWelcomeSection
-                  userName={userName}
-                  userAvatar={userAvatar}
-                  userPhotoUrl={userPhoto}
-                  onSendIceBreaker={handleSendIceBreaker}
-                  onSelectPhrase={handleSelectPhrase}
-                  isSending={isSending}
-                />
-              }
-            />
+            <>
+              <FlatList
+                ref={flatListRef}
+                data={messagesWithDateSeparators} // ✅ PREMIUM: Includes date separators
+                renderItem={renderListItem}
+                keyExtractor={item => 'type' in item ? item.id : item.id}
+                contentContainerStyle={[
+                  styles.messagesList,
+                  messages.length === 0 && styles.emptyMessagesList,
+                ]}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                // ✅ FIX: Scroll to bottom when content loads
+                onContentSizeChange={handleContentSizeChange}
+                // ✅ Maintain scroll position when prepending older messages (iOS)
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 10,
+                }}
+                // ✅ Lazy loading: Load older messages when scrolling to top
+                onScroll={({ nativeEvent }) => {
+                  // Trigger load more when near the top (older messages)
+                  if (nativeEvent.contentOffset.y < 100 && hasMoreMessages && !isLoadingMore) {
+                    loadMoreMessages();
+                  }
+                }}
+                scrollEventThrottle={100}
+                ListHeaderComponent={
+                  isLoadingMore ? (
+                    <View style={styles.loadingMoreContainer}>
+                      <Text style={styles.loadingMoreText}>Loading older messages...</Text>
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <WarmWelcomeSection
+                    userName={userName}
+                    userAvatar={userAvatar}
+                    userPhotoUrl={userPhoto}
+                    onSendIceBreaker={handleSendIceBreaker}
+                    onSelectPhrase={handleSelectPhrase}
+                    isSending={isSending}
+                  />
+                }
+                ListFooterComponent={
+                  // ✅ PREMIUM: Animated typing indicator
+                  <TypingIndicator isVisible={isOtherUserTyping} userName={userName} />
+                }
+              />
+            </>
           )}
 
           {/* Input Area - ✅ FIX: Responsive padding for small devices and landscape */}
@@ -2167,6 +2463,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  // ✅ Lazy loading: Loading indicator for pagination
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: colors.gray[500],
+    fontWeight: '500',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2261,13 +2567,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: 12,
-    paddingRight: 16,
-    paddingVertical: 12,
+    paddingRight: 12,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1.5,
-    gap: 12,
-    minWidth: 200,
-    maxWidth: '70%', // ✅ LANDSCAPE FIX: Reduced from 90% for better alignment in landscape
+    gap: 10,
+    minWidth: 240,
+    maxWidth: '85%', // ✅ FIX: Increased to prevent text wrapping on narrow screens
     // Subtle shadow for depth
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 1 },
@@ -2328,9 +2634,9 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   callBackButtonContainer: {
-    width: 56, // Senior-friendly touch target (increased from 40)
-    height: 56,
-    borderRadius: 28,
+    width: 44, // ✅ FIX: Reduced from 56 to fit better on narrow screens
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.teal[50],
     borderWidth: 1.5,
     borderColor: colors.teal[200],

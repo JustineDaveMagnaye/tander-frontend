@@ -279,7 +279,7 @@ export const storeCredentials = async (
     }
     return true;
   } catch (error) {
-    console.error('Failed to store credentials:', error);
+    console.warn('Failed to store credentials:', error);
     return false;
   }
 };
@@ -298,7 +298,7 @@ export const getStoredCredentials = async (): Promise<StoredCredentials | null> 
     if (!credentialsStr) return null;
     return JSON.parse(credentialsStr) as StoredCredentials;
   } catch (error) {
-    console.error('Failed to get stored credentials:', error);
+    console.warn('Failed to get stored credentials:', error);
     return null;
   }
 };
@@ -315,7 +315,7 @@ export const clearCredentials = async (): Promise<boolean> => {
     }
     return true;
   } catch (error) {
-    console.error('Failed to clear credentials:', error);
+    console.warn('Failed to clear credentials:', error);
     return false;
   }
 };
@@ -358,7 +358,7 @@ export const setBiometricLoginEnabled = async (enabled: boolean): Promise<boolea
     }
     return true;
   } catch (error) {
-    console.error('Failed to set biometric enabled state:', error);
+    console.warn('Failed to set biometric enabled state:', error);
     return false;
   }
 };

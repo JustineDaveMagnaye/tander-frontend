@@ -1,6 +1,6 @@
 /**
  * TANDER Discovery Screen
- * Premium, accessible dating experience for Filipino Seniors (50+)
+ * Premium, accessible dating experience for Filipino Seniors (60+)
  *
  * Features:
  * - Smooth 60fps swipe animations with native driver
@@ -36,8 +36,7 @@ import {
   FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Keyboard,
-  AccessibilityInfo,
+  Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,16 +61,6 @@ import type { MainTabParamList, MessagesStackParamList } from '@navigation/types
 const SWIPE_THRESHOLD = 0.25;
 const SWIPE_OUT_DURATION = 250;
 const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?background=F97316&color=fff&size=400&bold=true&name=';
-
-// Premium color theme (matching ProfileScreen)
-const PREMIUM_GRADIENT = {
-  top: '#FF7B51',      // Warm coral/orange
-  topAlt: '#F68562',   // Lighter coral
-  mid: '#8B7355',      // Muted olive-brown
-  midAlt: '#A08060',   // Lighter olive
-  bottom: '#349E92',   // Teal/sea-green
-  bottomAlt: '#34A296', // Lighter teal
-};
 
 // Senior-friendly sizing constants (WCAG AAA + design system compliance)
 const TOUCH_TARGET_MINIMUM = 56;      // Comfortable touch target for seniors
@@ -122,8 +111,8 @@ const SwipeStamp = memo<StampProps>(({ type, opacity }) => {
       ]}
       pointerEvents="none"
     >
-      <View style={[styles.stampInner, { borderColor: isLike ? colors.teal[500] : colors.romantic.passRed }]}>
-        <Text style={[styles.stampText, { color: isLike ? colors.teal[500] : colors.romantic.passRed }]}>
+      <View style={[styles.stampInner, { borderColor: isLike ? colors.teal[500] : '#FF5A5F' }]}>
+        <Text style={[styles.stampText, { color: isLike ? colors.teal[500] : '#FF5A5F' }]}>
           {isLike ? 'LIKE' : 'NOPE'}
         </Text>
       </View>
@@ -160,25 +149,7 @@ const ProfileCard = memo<CardProps>(({
   nopeOpacity,
   onViewProfile,
 }) => {
-  // State for photo navigation on the card
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-
-  // Build array of all photos (primary + additional)
-  const allPhotos = useMemo(() => {
-    const photos: string[] = [];
-    const primaryImage = getImageUri(profile);
-    if (primaryImage) photos.push(primaryImage);
-    if (profile.additionalPhotos && profile.additionalPhotos.length > 0) {
-      profile.additionalPhotos.forEach(p => {
-        if (p && !photos.includes(p)) photos.push(p);
-      });
-    }
-    return photos.length > 0 ? photos : [getImageUri(profile)];
-  }, [profile]);
-
-  const currentImageUri = allPhotos[currentPhotoIndex] || getImageUri(profile);
-  const hasMultiplePhotos = allPhotos.length > 1;
-
+  const imageUri = getImageUri(profile);
   const name = profile.name || 'Unknown';
   const age = profile.age > 0 && profile.age < 120 ? profile.age : null;
   const location = profile.location || 'Philippines';
@@ -191,199 +162,122 @@ const ProfileCard = memo<CardProps>(({
   const isCompact = height < 400;
 
   // Scale font sizes based on available space
-  // CRITICAL: All fonts must meet 16px minimum for senior accessibility (WCAG AA)
   const nameSize = isVeryCompact ? 22 : (isCompact ? 26 : 34);
   const ageSize = isVeryCompact ? 18 : (isCompact ? 20 : 26);
-  const locationSize = isVeryCompact ? FONT_SIZE_MINIMUM : (isCompact ? FONT_SIZE_MINIMUM : 18);
-  const tagFontSize = isVeryCompact ? FONT_SIZE_MINIMUM : (isCompact ? FONT_SIZE_MINIMUM : FONT_SIZE_MINIMUM);
-
-  // Handle tap on left/right side of card to navigate photos
-  const handlePhotoTap = useCallback((tapX: number) => {
-    if (!hasMultiplePhotos) return;
-
-    const leftZone = width * 0.3;
-    const rightZone = width * 0.7;
-
-    if (tapX < leftZone && currentPhotoIndex > 0) {
-      // Tap on left - go to previous photo
-      triggerHaptic('light');
-      setCurrentPhotoIndex(prev => prev - 1);
-    } else if (tapX > rightZone && currentPhotoIndex < allPhotos.length - 1) {
-      // Tap on right - go to next photo
-      triggerHaptic('light');
-      setCurrentPhotoIndex(prev => prev + 1);
-    }
-  }, [hasMultiplePhotos, width, currentPhotoIndex, allPhotos.length]);
+  const locationSize = isVeryCompact ? 14 : (isCompact ? 15 : 18);
+  const tagFontSize = isVeryCompact ? 12 : (isCompact ? 13 : 15);
 
   return (
     <Animated.View
-      style={[styles.cardPremium, { width, height }, style]}
+      style={[styles.card, { width, height }, style]}
       {...(isTop ? panHandlers : {})}
     >
-      {/* Premium gradient border effect */}
-      <LinearGradient
-        colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom, PREMIUM_GRADIENT.top]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.cardBorderGradient}
+      {/* Profile Photo */}
+      <Image
+        source={{ uri: imageUri }}
+        style={styles.cardImage}
+        resizeMode="cover"
+        accessibilityLabel={`Photo of ${name}`}
       />
 
-      {/* Card inner content */}
-      <View style={styles.cardInner}>
-        {/* Photo tap zones for navigation */}
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={(e) => handlePhotoTap(e.nativeEvent.locationX)}
-          style={StyleSheet.absoluteFillObject}
-          accessibilityLabel={hasMultiplePhotos
-            ? `Photo ${currentPhotoIndex + 1} of ${allPhotos.length} of ${name}. Tap left or right to see more photos.`
-            : `Photo of ${name}`
-          }
-        >
-          {/* Profile Photo */}
-          <Image
-            source={{ uri: currentImageUri }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
+      {/* Gradient overlay for text readability */}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
+        locations={[0.4, 0.75, 1]}
+        style={styles.cardGradient}
+      />
 
-        {/* Premium photo indicators */}
-        {hasMultiplePhotos && (
-          <View style={styles.cardPhotoIndicatorsPremium}>
-            {allPhotos.map((_, index) => (
-              <View
-                key={`indicator-${index}`}
-                style={[
-                  styles.cardPhotoIndicatorPremium,
-                  index === currentPhotoIndex && styles.cardPhotoIndicatorActivePremium,
-                ]}
-              />
-            ))}
-          </View>
-        )}
+      {/* Verified badge */}
+      {profile.verified && (
+        <View style={styles.verifiedBadge} accessibilityLabel="Verified profile">
+          <Feather name="check-circle" size={14} color="#fff" />
+          <Text style={styles.verifiedText}>Verified</Text>
+        </View>
+      )}
 
-        {/* Enhanced gradient overlay with warm tint */}
-        <LinearGradient
-          colors={['rgba(249,115,22,0.05)', 'transparent', 'rgba(0,0,0,0.75)', 'rgba(0,0,0,0.95)']}
-          locations={[0, 0.3, 0.7, 1]}
-          style={styles.cardGradient}
-          pointerEvents="none"
-        />
+      {/* Online indicator */}
+      {profile.online && (
+        <View style={styles.onlineBadge} accessibilityLabel="Currently online">
+          <View style={styles.onlineDot} />
+          <Text style={styles.onlineText}>Online</Text>
+        </View>
+      )}
 
-        {/* Premium Verified badge with glassmorphism */}
-        {profile.verified && (
-          <View style={styles.verifiedBadgePremium} accessibilityLabel="Verified profile">
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.verifiedBadgeGradient}
-            >
-              <View style={styles.verifiedIconCircle}>
-                <Feather name="check" size={12} color="#22C55E" />
-              </View>
-              <Text style={styles.verifiedTextPremium}>Verified</Text>
-            </LinearGradient>
-          </View>
-        )}
+      {/* Swipe stamps */}
+      {isTop && (
+        <>
+          <SwipeStamp type="like" opacity={likeOpacity} />
+          <SwipeStamp type="nope" opacity={nopeOpacity} />
+        </>
+      )}
 
-        {/* Premium Online indicator with glow */}
-        {profile.online && (
-          <View style={styles.onlineBadgePremium} accessibilityLabel="Currently online">
-            <View style={styles.onlineDotPremium} />
-            <Text style={styles.onlineTextPremium}>Online</Text>
-          </View>
-        )}
+      {/* Profile info overlay */}
+      <View style={[
+        styles.cardInfo,
+        isCompact && styles.cardInfoCompact,
+        isVeryCompact && styles.cardInfoVeryCompact,
+      ]}>
+        {/* Name & Age */}
+        <View style={styles.nameRow}>
+          <Text
+            style={[styles.nameText, { fontSize: nameSize }]}
+            numberOfLines={1}
+            accessibilityRole="header"
+          >
+            {name}
+          </Text>
+          {age && (
+            <Text style={[styles.ageText, { fontSize: ageSize }]}>{age}</Text>
+          )}
+        </View>
 
-        {/* Swipe stamps */}
-        {isTop && (
-          <>
-            <SwipeStamp type="like" opacity={likeOpacity} />
-            <SwipeStamp type="nope" opacity={nopeOpacity} />
-          </>
-        )}
-
-        {/* Profile info overlay */}
-        <View style={[
-          styles.cardInfo,
-          isCompact && styles.cardInfoCompact,
-          isVeryCompact && styles.cardInfoVeryCompact,
-        ]}>
-          {/* Premium Name & Age with text shadow */}
-          <View style={styles.nameRow}>
-            <Text
-              style={[styles.nameTextPremium, { fontSize: nameSize }]}
-              numberOfLines={1}
-              accessibilityRole="header"
-            >
-              {name}
+        {/* Location - hide on very compact */}
+        {!isVeryCompact && (
+          <View style={styles.locationRow}>
+            <Feather name="map-pin" size={locationSize} color={colors.orange[400]} />
+            <Text style={[styles.locationText, { fontSize: locationSize }]} numberOfLines={1}>
+              {location}
             </Text>
-            {age && (
-              <Text style={[styles.ageTextPremium, { fontSize: ageSize }]}>{age}</Text>
+          </View>
+        )}
+
+        {/* Interests preview - hide on very compact, show max 2 on compact */}
+        {!isVeryCompact && profile.interests && profile.interests.length > 0 && (
+          <View style={styles.tagsRow}>
+            {profile.interests.slice(0, isCompact ? 2 : 3).map((interest, i) => (
+              <View key={i} style={[styles.tag, isCompact && styles.tagCompact]}>
+                <Text style={[styles.tagText, { fontSize: tagFontSize }]}>{interest}</Text>
+              </View>
+            ))}
+            {profile.interests.length > (isCompact ? 2 : 3) && (
+              <View style={[styles.tag, styles.tagMore, isCompact && styles.tagCompact]}>
+                <Text style={[styles.tagText, { fontSize: tagFontSize }]}>
+                  +{profile.interests.length - (isCompact ? 2 : 3)}
+                </Text>
+              </View>
             )}
           </View>
+        )}
 
-          {/* Premium Location with glass pill */}
-          {!isVeryCompact && (
-            <View style={styles.locationRowPremium}>
-              <Feather name="map-pin" size={locationSize - 2} color={colors.orange[300]} />
-              <Text style={[styles.locationTextPremium, { fontSize: locationSize }]} numberOfLines={1}>
-                {location}
-              </Text>
-            </View>
-          )}
-
-          {/* Premium Interests tags */}
-          {!isVeryCompact && profile.interests && profile.interests.length > 0 && (
-            <View style={styles.tagsRow}>
-              {profile.interests.slice(0, isCompact ? 2 : 3).map((interest, i) => (
-                <View key={i} style={[styles.tagPremium, isCompact && styles.tagCompact]}>
-                  <Text style={[styles.tagTextPremium, { fontSize: tagFontSize }]}>{interest}</Text>
-                </View>
-              ))}
-              {profile.interests.length > (isCompact ? 2 : 3) && (
-                <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top + '60', PREMIUM_GRADIENT.bottom + '60']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.tagPremium, styles.tagMorePremium, isCompact && styles.tagCompact]}
-                >
-                  <Text style={[styles.tagTextPremium, { fontSize: tagFontSize }]}>
-                    +{profile.interests.length - (isCompact ? 2 : 3)}
-                  </Text>
-                </LinearGradient>
-              )}
-            </View>
-          )}
-
-          {/* Premium View Profile button with gradient */}
-          <TouchableOpacity
-            style={[
-              styles.viewProfileBtnPremium,
-              isCompact && styles.viewProfileBtnCompact,
-              isVeryCompact && styles.viewProfileBtnVeryCompact,
-            ]}
-            onPress={onViewProfile}
-            activeOpacity={0.85}
-            accessibilityLabel="View full profile"
-            accessibilityRole="button"
-            accessibilityHint="Opens detailed profile view"
-          >
-            <LinearGradient
-              colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.viewProfileBtnGradient}
-            >
-              <Feather name="user" size={isVeryCompact ? 16 : 20} color="#fff" />
-              <Text style={[styles.viewProfileTextPremium, isVeryCompact && { fontSize: 14 }]}>
-                {isVeryCompact ? 'View Profile' : 'View Full Profile'}
-              </Text>
-              <Feather name="chevron-right" size={isVeryCompact ? 16 : 20} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        {/* View Full Profile button - responsive sizing */}
+        <TouchableOpacity
+          style={[
+            styles.viewProfileBtn,
+            isCompact && styles.viewProfileBtnCompact,
+            isVeryCompact && styles.viewProfileBtnVeryCompact,
+          ]}
+          onPress={onViewProfile}
+          activeOpacity={0.8}
+          accessibilityLabel="View full profile"
+          accessibilityRole="button"
+          accessibilityHint="Opens detailed profile view"
+        >
+          <Feather name="user" size={isVeryCompact ? 16 : 20} color="#fff" />
+          <Text style={[styles.viewProfileText, isVeryCompact && { fontSize: 14 }]}>
+            {isVeryCompact ? 'View Profile' : 'View Full Profile'}
+          </Text>
+          <Feather name="chevron-right" size={isVeryCompact ? 16 : 20} color="#fff" />
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -403,6 +297,7 @@ interface ActionButtonProps {
   onPress: () => void;
   disabled?: boolean;
   label: string;
+  labelColor?: string;
   isPrimary?: boolean;
 }
 
@@ -414,6 +309,7 @@ const ActionButton = memo<ActionButtonProps>(({
   onPress,
   disabled,
   label,
+  labelColor,
   isPrimary,
 }) => {
   const handlePress = useCallback(() => {
@@ -422,6 +318,9 @@ const ActionButton = memo<ActionButtonProps>(({
       onPress();
     }
   }, [disabled, isPrimary, onPress]);
+
+  // Use labelColor if provided, otherwise use icon color (but not white)
+  const textColor = labelColor || (color === '#fff' ? (isPrimary ? colors.teal[500] : color) : color);
 
   return (
     <View style={styles.actionBtnWrapper}>
@@ -446,7 +345,7 @@ const ActionButton = memo<ActionButtonProps>(({
       >
         <Feather name={icon} size={size * 0.45} color={color} />
       </TouchableOpacity>
-      <Text style={[styles.actionLabel, { color }]}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: textColor }]}>{label}</Text>
     </View>
   );
 });
@@ -485,52 +384,36 @@ const ActionButtonsContainer = memo<ActionButtonsContainerProps>(({
   }, [isTablet, isLandscape, isSmallPhone]);
 
   const undoSize = useMemo(() => {
-    // CRITICAL: Minimum 56px touch target for senior accessibility
     if (isTablet) return 56;
-    if (isLandscape) return TOUCH_TARGET_MINIMUM; // 56px minimum even in landscape
-    if (isSmallPhone) return TOUCH_TARGET_MINIMUM; // 56px minimum on small phones
-    return TOUCH_TARGET_MINIMUM;
+    if (isLandscape) return 44; // Smaller in landscape
+    if (isSmallPhone) return 44; // Smaller on small phones
+    return 52;
   }, [isTablet, isLandscape, isSmallPhone]);
 
   return (
     <View style={[
-      styles.actionsContainerPremium,
+      styles.actionsContainer,
       isLandscape && !isTablet && styles.actionsContainerLandscape,
       isSmallPhone && !isLandscape && styles.actionsContainerSmallPhone,
     ]}>
-      {/* Premium Pass button with gradient border */}
-      <View style={styles.actionBtnWrapper}>
-        <View style={[
-          styles.passBtnPremium,
-          { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 },
-          disabled && styles.actionBtnDisabled,
-        ]}>
-          <TouchableOpacity
-            onPress={() => { if (!disabled) { triggerHaptic('medium'); onPass(); } }}
-            disabled={disabled}
-            activeOpacity={0.85}
-            accessibilityLabel="Pass"
-            accessibilityRole="button"
-            accessibilityState={{ disabled }}
-            style={[
-              styles.passBtnInner,
-              { width: buttonSize - 6, height: buttonSize - 6, borderRadius: (buttonSize - 6) / 2 },
-            ]}
-          >
-            <Feather name="x" size={buttonSize * 0.4} color={colors.romantic.passRed} />
-          </TouchableOpacity>
-        </View>
-        <Text style={[styles.actionLabelPremium, { color: colors.romantic.passRed }]}>Pass</Text>
-      </View>
+      {/* Pass button */}
+      <ActionButton
+        icon="x"
+        color="#FF5A5F"
+        bgColor="#fff"
+        size={buttonSize}
+        onPress={onPass}
+        disabled={disabled}
+        label="Pass"
+      />
 
-      {/* Premium Undo button */}
+      {/* Undo button */}
       <View style={styles.actionBtnWrapper}>
         <TouchableOpacity
           style={[
-            styles.undoBtnPremium,
+            styles.undoBtn,
             { width: undoSize, height: undoSize, borderRadius: undoSize / 2 },
-            canUndo && styles.undoBtnActive,
-            (!canUndo || disabled) && styles.undoBtnDisabledPremium,
+            (!canUndo || disabled) && styles.undoBtnDisabled
           ]}
           onPress={onUndo}
           disabled={!canUndo || disabled}
@@ -546,40 +429,23 @@ const ActionButtonsContainer = memo<ActionButtonsContainerProps>(({
           />
         </TouchableOpacity>
         <Text style={[
-          styles.actionLabelPremium,
+          styles.actionLabel,
           { color: canUndo ? colors.orange[500] : colors.gray[400] },
           isLandscape && !isTablet && styles.actionLabelLandscape,
         ]}>Back</Text>
       </View>
 
-      {/* Premium Like button with gradient */}
-      <View style={styles.actionBtnWrapper}>
-        <TouchableOpacity
-          onPress={() => { if (!disabled) { triggerHaptic('success'); onLike(); } }}
-          disabled={disabled}
-          activeOpacity={0.85}
-          accessibilityLabel="Like"
-          accessibilityRole="button"
-          accessibilityState={{ disabled }}
-          style={[
-            styles.likeBtnPremium,
-            { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 },
-            disabled && styles.actionBtnDisabled,
-          ]}
-        >
-          <LinearGradient
-            colors={[colors.teal[400], colors.teal[500], colors.teal[600]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.likeBtnGradient, { borderRadius: buttonSize / 2 }]}
-          >
-            {/* Highlight shimmer */}
-            <View style={styles.likeBtnHighlight} />
-            <Feather name="heart" size={buttonSize * 0.4} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
-        <Text style={[styles.actionLabelPremium, { color: colors.teal[500] }]}>Like</Text>
-      </View>
+      {/* Like button */}
+      <ActionButton
+        icon="heart"
+        color="#fff"
+        bgColor={colors.teal[500]}
+        size={buttonSize}
+        onPress={onLike}
+        disabled={disabled}
+        label="Like"
+        isPrimary
+      />
     </View>
   );
 });
@@ -587,103 +453,20 @@ const ActionButtonsContainer = memo<ActionButtonsContainerProps>(({
 ActionButtonsContainer.displayName = 'ActionButtonsContainer';
 
 // ============================================================================
-// LOADING STATE - Premium with animated TanderLogoIcon
+// LOADING STATE
 // ============================================================================
 
-interface LoadingStateProps {
-  width: number;
-  height: number;
-  reduceMotion?: boolean;
-}
-
-const LoadingState = memo<LoadingStateProps>(({ width, height, reduceMotion = false }) => {
-  const pulseAnim = useRef(new Animated.Value(0.9)).current;
-  const dot1Anim = useRef(new Animated.Value(0)).current;
-  const dot2Anim = useRef(new Animated.Value(0)).current;
-  const dot3Anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduceMotion) return;
-
-    // Pulse animation for logo
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.05, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.9, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-
-    // Staggered dot animations
-    const animateDot = (anim: Animated.Value, delay: number) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0, duration: 400, useNativeDriver: true }),
-        ])
-      ).start();
-    };
-
-    animateDot(dot1Anim, 0);
-    animateDot(dot2Anim, 200);
-    animateDot(dot3Anim, 400);
-  }, [reduceMotion, pulseAnim, dot1Anim, dot2Anim, dot3Anim]);
-
-  return (
-    <View style={[styles.loadingCardPremium, { width, height }]}>
-      {/* Gradient background */}
-      <LinearGradient
-        colors={['#FFF7ED', '#FFFFFF', '#F0FDFA']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-
-      {/* Decorative background circles */}
-      <View style={styles.loadingBgCircle1} />
-      <View style={styles.loadingBgCircle2} />
-
-      {/* Animated logo container */}
-      <Animated.View style={[
-        styles.loadingLogoContainer,
-        !reduceMotion && { transform: [{ scale: pulseAnim }] },
-      ]}>
-        <LinearGradient
-          colors={[PREMIUM_GRADIENT.topAlt, PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.loadingLogoGradient}
-        >
-          <TanderLogoIcon size={56} focused />
-        </LinearGradient>
-      </Animated.View>
-
-      {/* Loading text */}
-      <Text style={styles.loadingTextPremium}>Finding your matches</Text>
-
-      {/* Animated dots */}
-      <View style={styles.loadingDots}>
-        <Animated.View style={[
-          styles.loadingDot,
-          !reduceMotion && { opacity: dot1Anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
-        ]} />
-        <Animated.View style={[
-          styles.loadingDot,
-          !reduceMotion && { opacity: dot2Anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
-        ]} />
-        <Animated.View style={[
-          styles.loadingDot,
-          !reduceMotion && { opacity: dot3Anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
-        ]} />
-      </View>
-    </View>
-  );
-});
+const LoadingState = memo<{ width: number; height: number }>(({ width, height }) => (
+  <View style={[styles.loadingCard, { width, height }]}>
+    <ActivityIndicator size="large" color={colors.orange[500]} />
+    <Text style={styles.loadingText}>Finding matches...</Text>
+  </View>
+));
 
 LoadingState.displayName = 'LoadingState';
 
 // ============================================================================
-// EMPTY STATE - Premium with decorative elements
+// EMPTY STATE
 // ============================================================================
 
 interface EmptyStateProps {
@@ -693,73 +476,36 @@ interface EmptyStateProps {
 }
 
 const EmptyState = memo<EmptyStateProps>(({ isError, onRetry, message }) => (
-  <View style={styles.emptyStatePremium}>
-    {/* Decorative background circles */}
-    <View style={styles.emptyBgCircle1} />
-    <View style={styles.emptyBgCircle2} />
-
-    {/* Premium icon container with gradient */}
-    <View style={styles.emptyIconContainerPremium}>
-      <LinearGradient
-        colors={isError ? [colors.romantic.passRed, '#DC2626'] : [PREMIUM_GRADIENT.topAlt, PREMIUM_GRADIENT.bottom]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.emptyIconGradientPremium}
-      >
-        {isError ? (
-          <Feather name="wifi-off" size={56} color="#fff" />
-        ) : (
-          <View style={styles.emptyLogoContainer}>
-            <TanderLogoIcon size={64} focused />
-          </View>
-        )}
-      </LinearGradient>
+  <View style={styles.emptyState}>
+    <View style={[styles.emptyIcon, isError && styles.emptyIconError]}>
+      <Feather
+        name={isError ? 'wifi-off' : 'heart'}
+        size={48}
+        color={isError ? '#FF5A5F' : colors.orange[400]}
+      />
     </View>
-
-    {/* Sparkle decorations (only for non-error state) */}
-    {!isError && (
-      <>
-        <View style={styles.sparkle1}>
-          <Feather name="star" size={18} color={colors.orange[400]} />
-        </View>
-        <View style={styles.sparkle2}>
-          <Feather name="star" size={14} color={colors.teal[400]} />
-        </View>
-        <View style={styles.sparkle3}>
-          <Feather name="star" size={12} color={colors.orange[300]} />
-        </View>
-      </>
-    )}
-
-    {/* Title */}
-    <Text style={styles.emptyTitlePremium} accessibilityRole="header">
+    <Text style={styles.emptyTitle} accessibilityRole="header">
       {isError ? 'Connection Issue' : 'All Caught Up!'}
     </Text>
-
-    {/* Subtitle */}
-    <Text style={styles.emptySubtitlePremium}>
+    <Text style={styles.emptySubtitle}>
       {isError
         ? message || 'Please check your connection and try again'
-        : 'Great job exploring! Check back later for new connections nearby'}
+        : 'Check back soon for new people nearby'}
     </Text>
-
-    {/* Premium CTA button */}
     <TouchableOpacity
-      style={styles.emptyBtnPremium}
+      style={styles.emptyBtn}
       onPress={onRetry}
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       accessibilityLabel={isError ? 'Try again' : 'Refresh profiles'}
       accessibilityRole="button"
     >
       <LinearGradient
-        colors={isError ? [colors.gray[500], colors.gray[600]] : [PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.emptyBtnGradientPremium}
+        colors={[colors.orange[500], colors.orange[600]]}
+        style={styles.emptyBtnGradient}
       >
-        <Feather name={isError ? 'refresh-cw' : 'compass'} size={22} color="#fff" />
-        <Text style={styles.emptyBtnTextPremium}>
-          {isError ? 'Try Again' : 'Expand Search'}
+        <Feather name="refresh-cw" size={20} color="#fff" />
+        <Text style={styles.emptyBtnText}>
+          {isError ? 'Try Again' : 'Refresh'}
         </Text>
       </LinearGradient>
     </TouchableOpacity>
@@ -793,7 +539,7 @@ const MatchModal = memo<MatchModalProps>(({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <LinearGradient
-          colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
+          colors={[colors.orange[500], colors.teal[500]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.modalContent, isTablet && styles.modalContentTablet]}
@@ -1004,10 +750,10 @@ const PhotoCarousel = memo<PhotoCarouselProps>(({
         {showVerifiedBadge && (
           <View style={[styles.carouselVerifiedBadge, isTablet && styles.carouselVerifiedBadgeTablet]}>
             <LinearGradient
-              colors={colors.gradient.verifiedGradient}
+              colors={['#22C55E', '#16A34A']}
               style={styles.carouselBadgeGradient}
             >
-              <Feather name="check-circle" size={isTablet ? 18 : 14} color={colors.white} />
+              <Feather name="check-circle" size={isTablet ? 18 : 14} color="#fff" />
               <Text style={[styles.carouselBadgeText, isTablet && { fontSize: 16 }]}>Verified</Text>
             </LinearGradient>
           </View>
@@ -1086,10 +832,10 @@ const PhotoCarousel = memo<PhotoCarouselProps>(({
       {/* Enhanced photo counter badge with gradient */}
       <View style={[styles.photoCounter, isTablet && styles.photoCounterTablet]}>
         <LinearGradient
-          colors={[colors.romantic.glassDark, 'rgba(0,0,0,0.5)']}
+          colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.5)']}
           style={styles.photoCounterGradient}
         >
-          <Feather name="image" size={isTablet ? 18 : 16} color={colors.white} />
+          <Feather name="image" size={isTablet ? 18 : 16} color="#fff" />
           <Text style={[styles.photoCounterText, isTablet && { fontSize: 17 }]}>
             {activeIndex + 1} / {allPhotos.length}
           </Text>
@@ -1100,10 +846,10 @@ const PhotoCarousel = memo<PhotoCarouselProps>(({
       {showVerifiedBadge && (
         <View style={[styles.carouselVerifiedBadge, isTablet && styles.carouselVerifiedBadgeTablet]}>
           <LinearGradient
-            colors={colors.gradient.verifiedGradient}
+            colors={['#22C55E', '#16A34A']}
             style={styles.carouselBadgeGradient}
           >
-            <Feather name="check-circle" size={isTablet ? 18 : 14} color={colors.white} />
+            <Feather name="check-circle" size={isTablet ? 18 : 14} color="#fff" />
             <Text style={[styles.carouselBadgeText, isTablet && { fontSize: 16 }]}>Verified</Text>
           </LinearGradient>
         </View>
@@ -1472,8 +1218,6 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
   const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const inputContainerRef = useRef<View>(null);
   const maxLength = 200;
 
   // Animation values
@@ -1511,28 +1255,6 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
       setSelectedSuggestion(null);
     }
   }, [visible, slideAnim, fadeAnim, scaleAnim]);
-
-  // Keyboard handling - scroll to input when keyboard appears
-  useEffect(() => {
-    const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const keyboardShowListener = Keyboard.addListener(keyboardShowEvent, () => {
-      // Scroll to end to show the input and buttons
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    });
-
-    const keyboardHideListener = Keyboard.addListener(keyboardHideEvent, () => {
-      // Optionally scroll back to top when keyboard hides
-    });
-
-    return () => {
-      keyboardShowListener.remove();
-      keyboardHideListener.remove();
-    };
-  }, []);
 
   const handleSend = useCallback(() => {
     if (message.trim().length > 0) {
@@ -1638,7 +1360,6 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.rewriteModalKeyboard}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 20}
         >
           <Animated.View
             style={[
@@ -1668,7 +1389,7 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
             <View style={[styles.rewriteModalHeader, isTablet && styles.rewriteModalHeaderTablet]}>
               <View style={styles.rewriteModalHeaderContent}>
                 <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
+                  colors={[colors.orange[500], colors.teal[500]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={[styles.rewriteModalIcon, isTablet && styles.rewriteModalIconTablet]}
@@ -1698,125 +1419,110 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
               </TouchableOpacity>
             </View>
 
-            {/* Scrollable Content Area - enables scrolling when keyboard is open */}
-            <ScrollView
-              ref={scrollViewRef}
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.rewriteModalScrollContent}
-            >
-              {/* Suggested Lines Section */}
-              <View style={styles.suggestedSection}>
-                <View style={styles.suggestedHeaderRow}>
-                  <Feather name="zap" size={18} color={colors.orange[500]} />
-                  <Text style={[styles.suggestedLinesLabel, isTablet && styles.suggestedLinesLabelTablet]}>
-                    Quick conversation starters
-                  </Text>
-                </View>
-                <Text style={[styles.suggestedHint, isTablet && { fontSize: 15 }]}>
-                  Tap a suggestion or write your own message below
+            {/* Suggested Lines Section */}
+            <View style={styles.suggestedSection}>
+              <View style={styles.suggestedHeaderRow}>
+                <Feather name="zap" size={18} color={colors.orange[500]} />
+                <Text style={[styles.suggestedLinesLabel, isTablet && styles.suggestedLinesLabelTablet]}>
+                  Quick conversation starters
                 </Text>
               </View>
+              <Text style={[styles.suggestedHint, isTablet && { fontSize: 15 }]}>
+                Tap a suggestion or write your own message below
+              </Text>
+            </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.suggestedLinesScroll}
-                contentContainerStyle={styles.suggestedLinesContent}
-                nestedScrollEnabled
-              >
-                {SUGGESTED_LINES.map((line, index) => {
-                  const isSelected = selectedSuggestion === index;
-                  const categoryColor = getCategoryColor(line.category);
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.suggestedLinesScroll}
+              contentContainerStyle={styles.suggestedLinesContent}
+            >
+              {SUGGESTED_LINES.map((line, index) => {
+                const isSelected = selectedSuggestion === index;
+                const categoryColor = getCategoryColor(line.category);
 
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.suggestedLineChip,
-                        isTablet && styles.suggestedLineChipTablet,
-                        isSelected && styles.suggestedLineChipSelected,
-                        isSelected && { borderColor: categoryColor },
-                      ]}
-                      onPress={() => handleSelectSuggestion(line.text, index)}
-                      activeOpacity={0.7}
-                      accessibilityLabel={`Use suggestion: ${line.text}`}
-                      accessibilityState={{ selected: isSelected }}
-                    >
-                      <View style={[styles.suggestedLineIconWrapper, { backgroundColor: `${categoryColor}15` }]}>
-                        <Feather name={line.icon as any} size={isTablet ? 18 : 16} color={categoryColor} />
-                      </View>
-                      <Text
-                        style={[
-                          styles.suggestedLineText,
-                          isTablet && styles.suggestedLineTextTablet,
-                          isSelected && { color: colors.gray[900] },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {line.text}
-                      </Text>
-                      {isSelected && (
-                        <View style={[styles.suggestedLineCheck, { backgroundColor: categoryColor }]}>
-                          <Feather name="check" size={12} color="#fff" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Premium Input Area */}
-              <View style={[
-                styles.rewriteInputContainer,
-                isTablet && styles.rewriteInputContainerTablet,
-                inputFocused && styles.rewriteInputContainerFocused,
-              ]}>
-                <View style={styles.rewriteInputHeader}>
-                  <Text style={[styles.rewriteInputLabel, isTablet && { fontSize: 16 }]}>Your message</Text>
-                  <Text
+                return (
+                  <TouchableOpacity
+                    key={index}
                     style={[
-                      styles.rewriteCharCount,
-                      { color: getCharCountColor() },
-                      isTablet && { fontSize: 16 },
+                      styles.suggestedLineChip,
+                      isTablet && styles.suggestedLineChipTablet,
+                      isSelected && styles.suggestedLineChipSelected,
+                      isSelected && { borderColor: categoryColor },
                     ]}
+                    onPress={() => handleSelectSuggestion(line.text, index)}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`Use suggestion: ${line.text}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    {message.length}/{maxLength}
-                  </Text>
-                </View>
-                <TextInput
-                  ref={inputRef}
-                  style={[
-                    styles.rewriteInput,
-                    isTablet && styles.rewriteInputTablet,
-                    isLandscapePhone && styles.rewriteInputLandscapePhone,
-                  ]}
-                  value={message}
-                  onChangeText={(text) => {
-                    setMessage(text);
-                    setSelectedSuggestion(null);
-                  }}
-                  placeholder={`Write something nice to ${recipientName}...`}
-                  placeholderTextColor={colors.gray[400]}
-                  multiline
-                  maxLength={maxLength}
-                  textAlignVertical="top"
-                  onFocus={() => {
-                    setInputFocused(true);
-                    // Scroll to show input when focused
-                    setTimeout(() => {
-                      scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }, 150);
-                  }}
-                  onBlur={() => setInputFocused(false)}
-                  accessibilityLabel="Message input"
-                  accessibilityHint={`Write a message to ${recipientName}. Maximum ${maxLength} characters.`}
-                />
-              </View>
+                    <View style={[styles.suggestedLineIconWrapper, { backgroundColor: `${categoryColor}15` }]}>
+                      <Feather name={line.icon as any} size={isTablet ? 18 : 16} color={categoryColor} />
+                    </View>
+                    <Text
+                      style={[
+                        styles.suggestedLineText,
+                        isTablet && styles.suggestedLineTextTablet,
+                        isSelected && { color: colors.gray[900] },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {line.text}
+                    </Text>
+                    {isSelected && (
+                      <View style={[styles.suggestedLineCheck, { backgroundColor: categoryColor }]}>
+                        <Feather name="check" size={12} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-              {/* Action Buttons */}
-              <View style={[styles.rewriteModalActions, isTablet && styles.rewriteModalActionsTablet]}>
+            {/* Premium Input Area */}
+            <View style={[
+              styles.rewriteInputContainer,
+              isTablet && styles.rewriteInputContainerTablet,
+              inputFocused && styles.rewriteInputContainerFocused,
+            ]}>
+              <View style={styles.rewriteInputHeader}>
+                <Text style={[styles.rewriteInputLabel, isTablet && { fontSize: 16 }]}>Your message</Text>
+                <Text
+                  style={[
+                    styles.rewriteCharCount,
+                    { color: getCharCountColor() },
+                    isTablet && { fontSize: 16 },
+                  ]}
+                >
+                  {message.length}/{maxLength}
+                </Text>
+              </View>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.rewriteInput,
+                  isTablet && styles.rewriteInputTablet,
+                  isLandscapePhone && styles.rewriteInputLandscapePhone,
+                ]}
+                value={message}
+                onChangeText={(text) => {
+                  setMessage(text);
+                  setSelectedSuggestion(null);
+                }}
+                placeholder={`Write something nice to ${recipientName}...`}
+                placeholderTextColor={colors.gray[400]}
+                multiline
+                maxLength={maxLength}
+                textAlignVertical="top"
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                accessibilityLabel="Message input"
+                accessibilityHint={`Write a message to ${recipientName}. Maximum ${maxLength} characters.`}
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={[styles.rewriteModalActions, isTablet && styles.rewriteModalActionsTablet]}>
               <TouchableOpacity
                 style={[styles.rewriteCancelBtn, isTablet && styles.rewriteCancelBtnTablet]}
                 onPress={handleClose}
@@ -1847,7 +1553,7 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
                   colors={
                     !message.trim() || isSending
                       ? [colors.gray[300], colors.gray[400]]
-                      : [PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]
+                      : [colors.orange[500], colors.teal[500]]
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -1865,8 +1571,7 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-              </View>
-            </ScrollView>
+            </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </Animated.View>
@@ -1875,351 +1580,6 @@ const RewriteStoryModal = memo<RewriteStoryModalProps>(({
 });
 
 RewriteStoryModal.displayName = 'RewriteStoryModal';
-
-// ============================================================================
-// FILTER MODAL - Discovery filters aligned with backend API
-// ============================================================================
-
-interface FilterModalProps {
-  visible: boolean;
-  filters: import('@services/api/discoveryApi').DiscoveryFilters;
-  onClose: () => void;
-  onApply: (filters: import('@services/api/discoveryApi').DiscoveryFilters) => void;
-  onClear: () => void;
-}
-
-const FilterModal = memo<FilterModalProps>(({
-  visible,
-  filters,
-  onClose,
-  onApply,
-  onClear,
-}) => {
-  const insets = useSafeAreaInsets();
-  const { isTablet, isLandscape, width, height } = useResponsive();
-
-  // Local state for form values
-  const [minAge, setMinAge] = useState(filters.minAge ?? 50);
-  const [maxAge, setMaxAge] = useState(filters.maxAge ?? 100);
-  const [city, setCity] = useState(filters.city ?? '');
-  const [verifiedOnly, setVerifiedOnly] = useState(filters.verifiedOnly ?? false);
-
-  // Reset form when modal opens with current filters
-  useEffect(() => {
-    if (visible) {
-      setMinAge(filters.minAge ?? 50);
-      setMaxAge(filters.maxAge ?? 100);
-      setCity(filters.city ?? '');
-      setVerifiedOnly(filters.verifiedOnly ?? false);
-    }
-  }, [visible, filters]);
-
-  // Animation values
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 65,
-          friction: 11,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
-    }
-  }, [visible, slideAnim, fadeAnim]);
-
-  const handleApply = useCallback(() => {
-    triggerHaptic('success');
-    onApply({
-      minAge,
-      maxAge: maxAge < 100 ? maxAge : undefined,
-      city: city.trim() || undefined,
-      verifiedOnly,
-    });
-    onClose();
-  }, [minAge, maxAge, city, verifiedOnly, onApply, onClose]);
-
-  const handleClear = useCallback(() => {
-    triggerHaptic('light');
-    setMinAge(50);
-    setMaxAge(100);
-    setCity('');
-    setVerifiedOnly(false);
-    onClear();
-    onClose();
-  }, [onClear, onClose]);
-
-  const handleClose = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 300,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => onClose());
-  }, [fadeAnim, slideAnim, onClose]);
-
-  // Responsive modal sizing
-  const isLandscapePhone = isLandscape && !isTablet;
-  const modalWidth = useMemo(() => {
-    if (isTablet) {
-      return isLandscape ? Math.min(width * 0.5, 500) : Math.min(width * 0.7, 450);
-    }
-    if (isLandscapePhone) {
-      return Math.min(width * 0.7, 450);
-    }
-    return width;
-  }, [isTablet, isLandscape, isLandscapePhone, width]);
-
-  const modalMaxHeight = useMemo(() => {
-    if (isLandscapePhone) return height * 0.95;
-    if (isTablet) return isLandscape ? height * 0.85 : height * 0.8;
-    return height * 0.85;
-  }, [isLandscapePhone, isTablet, isLandscape, height]);
-
-  // Check if any filters are active
-  const hasActiveFilters = minAge !== 50 || maxAge < 100 || city.trim() !== '' || verifiedOnly;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={handleClose}
-      statusBarTranslucent
-    >
-      <Animated.View style={[styles.filterModalOverlay, { opacity: fadeAnim }]}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
-          activeOpacity={1}
-          onPress={handleClose}
-          accessibilityLabel="Close filters"
-        />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.filterModalKeyboard}
-        >
-          <Animated.View
-            style={[
-              styles.filterModalContent,
-              {
-                width: modalWidth,
-                maxHeight: modalMaxHeight,
-                paddingBottom: Math.max(insets.bottom, isLandscapePhone ? 12 : 24),
-                transform: [{ translateY: slideAnim }],
-              },
-              isTablet && styles.filterModalContentTablet,
-              isLandscapePhone && styles.filterModalContentLandscapePhone,
-            ]}
-          >
-            {/* Handle bar for mobile */}
-            {!isTablet && !isLandscapePhone && (
-              <View style={styles.filterModalHandle}>
-                <View style={styles.filterModalHandleBar} />
-              </View>
-            )}
-
-            {/* Header */}
-            <View style={styles.filterModalHeader}>
-              <View style={styles.filterModalHeaderLeft}>
-                <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.filterModalIcon}
-                >
-                  <Feather name="sliders" size={isTablet ? 26 : 22} color={colors.white} />
-                </LinearGradient>
-                <View>
-                  <Text style={[styles.filterModalTitle, isTablet && { fontSize: 26 }]} accessibilityRole="header">
-                    Filter Profiles
-                  </Text>
-                  <Text style={[styles.filterModalSubtitle, isTablet && { fontSize: 17 }]}>
-                    Find your perfect match
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={handleClose}
-                style={styles.filterModalClose}
-                activeOpacity={0.7}
-                accessibilityLabel="Close filter modal"
-                accessibilityRole="button"
-              >
-                <Feather name="x" size={isTablet ? 28 : 24} color={colors.gray[600]} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Filter Content */}
-            <ScrollView
-              style={styles.filterModalScroll}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.filterModalScrollContent}
-            >
-              {/* Age Range Section */}
-              <View style={styles.filterSection}>
-                <View style={styles.filterSectionHeader}>
-                  <Feather name="users" size={20} color={colors.orange[500]} />
-                  <Text style={[styles.filterSectionTitle, isTablet && { fontSize: 20 }]}>Age Range</Text>
-                </View>
-                <View style={styles.filterAgeRow}>
-                  <View style={styles.filterAgeInput}>
-                    <Text style={[styles.filterAgeLabel, isTablet && { fontSize: 17 }]}>Min Age</Text>
-                    <View style={styles.filterAgeControl}>
-                      <TouchableOpacity
-                        style={[styles.filterAgeBtn, minAge <= 50 && styles.filterAgeBtnDisabled]}
-                        onPress={() => setMinAge(prev => Math.max(50, prev - 5))}
-                        disabled={minAge <= 50}
-                        accessibilityLabel="Decrease minimum age"
-                        accessibilityRole="button"
-                      >
-                        <Feather name="minus" size={20} color={minAge <= 50 ? colors.gray[400] : colors.orange[500]} />
-                      </TouchableOpacity>
-                      <Text style={[styles.filterAgeValue, isTablet && { fontSize: 22 }]}>{minAge}</Text>
-                      <TouchableOpacity
-                        style={[styles.filterAgeBtn, minAge >= maxAge - 5 && styles.filterAgeBtnDisabled]}
-                        onPress={() => setMinAge(prev => Math.min(maxAge - 5, prev + 5))}
-                        disabled={minAge >= maxAge - 5}
-                        accessibilityLabel="Increase minimum age"
-                        accessibilityRole="button"
-                      >
-                        <Feather name="plus" size={20} color={minAge >= maxAge - 5 ? colors.gray[400] : colors.orange[500]} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  <View style={styles.filterAgeDivider} />
-                  <View style={styles.filterAgeInput}>
-                    <Text style={[styles.filterAgeLabel, isTablet && { fontSize: 17 }]}>Max Age</Text>
-                    <View style={styles.filterAgeControl}>
-                      <TouchableOpacity
-                        style={[styles.filterAgeBtn, maxAge <= minAge + 5 && styles.filterAgeBtnDisabled]}
-                        onPress={() => setMaxAge(prev => Math.max(minAge + 5, prev - 5))}
-                        disabled={maxAge <= minAge + 5}
-                        accessibilityLabel="Decrease maximum age"
-                        accessibilityRole="button"
-                      >
-                        <Feather name="minus" size={20} color={maxAge <= minAge + 5 ? colors.gray[400] : colors.teal[500]} />
-                      </TouchableOpacity>
-                      <Text style={[styles.filterAgeValue, isTablet && { fontSize: 22 }]}>{maxAge}</Text>
-                      <TouchableOpacity
-                        style={[styles.filterAgeBtn, maxAge >= 100 && styles.filterAgeBtnDisabled]}
-                        onPress={() => setMaxAge(prev => Math.min(100, prev + 5))}
-                        disabled={maxAge >= 100}
-                        accessibilityLabel="Increase maximum age"
-                        accessibilityRole="button"
-                      >
-                        <Feather name="plus" size={20} color={maxAge >= 100 ? colors.gray[400] : colors.teal[500]} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Location Section */}
-              <View style={styles.filterSection}>
-                <View style={styles.filterSectionHeader}>
-                  <Feather name="map-pin" size={20} color={colors.orange[500]} />
-                  <Text style={[styles.filterSectionTitle, isTablet && { fontSize: 20 }]}>Location</Text>
-                </View>
-                <TextInput
-                  style={[styles.filterTextInput, isTablet && { fontSize: 18, minHeight: 60 }]}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Enter city name (e.g., Manila)"
-                  placeholderTextColor={colors.gray[400]}
-                  accessibilityLabel="City filter"
-                  accessibilityHint="Enter a city name to filter profiles by location"
-                />
-              </View>
-
-              {/* Verified Only Section */}
-              <View style={styles.filterSection}>
-                <View style={styles.filterSectionHeader}>
-                  <Feather name="shield" size={20} color={colors.orange[500]} />
-                  <Text style={[styles.filterSectionTitle, isTablet && { fontSize: 20 }]}>Verification</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.filterToggleRow}
-                  onPress={() => setVerifiedOnly(!verifiedOnly)}
-                  activeOpacity={0.7}
-                  accessibilityLabel={verifiedOnly ? 'Show all profiles' : 'Show only verified profiles'}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: verifiedOnly }}
-                >
-                  <View style={styles.filterToggleContent}>
-                    <View style={[styles.filterToggleIconWrapper, verifiedOnly && styles.filterToggleIconWrapperActive]}>
-                      <Feather name="check-circle" size={20} color={verifiedOnly ? colors.white : colors.teal[500]} />
-                    </View>
-                    <View style={styles.filterToggleText}>
-                      <Text style={[styles.filterToggleLabel, isTablet && { fontSize: 18 }]}>Verified profiles only</Text>
-                      <Text style={[styles.filterToggleHint, isTablet && { fontSize: 16 }]}>
-                        Show only ID-verified members
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.filterToggleSwitch, verifiedOnly && styles.filterToggleSwitchActive]}>
-                    <Animated.View style={[styles.filterToggleKnob, verifiedOnly && styles.filterToggleKnobActive]} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-
-            {/* Action Buttons */}
-            <View style={styles.filterModalActions}>
-              {hasActiveFilters && (
-                <TouchableOpacity
-                  style={styles.filterClearBtn}
-                  onPress={handleClear}
-                  activeOpacity={0.7}
-                  accessibilityLabel="Clear all filters"
-                  accessibilityRole="button"
-                >
-                  <Feather name="x" size={18} color={colors.gray[600]} />
-                  <Text style={[styles.filterClearText, isTablet && { fontSize: 17 }]}>Clear All</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.filterApplyBtn, !hasActiveFilters && { flex: 1 }]}
-                onPress={handleApply}
-                activeOpacity={0.85}
-                accessibilityLabel="Apply filters"
-                accessibilityRole="button"
-              >
-                <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.filterApplyBtnGradient}
-                >
-                  <Feather name="check" size={isTablet ? 24 : 20} color={colors.white} />
-                  <Text style={[styles.filterApplyText, isTablet && { fontSize: 19 }]}>Apply Filters</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Animated.View>
-    </Modal>
-  );
-});
-
-FilterModal.displayName = 'FilterModal';
 
 // ============================================================================
 // PROFILE MODAL - Enhanced full profile view
@@ -2231,7 +1591,6 @@ interface ProfileModalProps {
   onClose: () => void;
   onLike: () => void;
   onPass: () => void;
-  onMessageSent?: () => void; // Called when message is sent - triggers like animation without API call
 }
 
 const ProfileModal = memo<ProfileModalProps>(({
@@ -2240,7 +1599,6 @@ const ProfileModal = memo<ProfileModalProps>(({
   onClose,
   onLike,
   onPass,
-  onMessageSent,
 }) => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight, isLandscape, isTablet } = useResponsive();
@@ -2293,24 +1651,19 @@ const ProfileModal = memo<ProfileModalProps>(({
       if (response.success) {
         triggerHaptic('success');
         setShowRewriteModal(false);
-        // Close the modal and trigger auto right-swipe animation
-        // Since sending a message means we like them
+        // Close the modal - the swipe is already recorded by the backend
         onClose();
-        // Trigger the like animation after modal closes (without duplicate API call)
-        setTimeout(() => {
-          onMessageSent?.();
-        }, 100);
       } else {
-        console.error('Failed to send comment:', response.message);
+        console.warn('Failed to send comment:', response.message);
         triggerHaptic('medium');
       }
     } catch (error) {
-      console.error('Failed to send comment:', error);
+      console.warn('Failed to send comment:', error);
       triggerHaptic('medium');
     } finally {
       setIsSendingComment(false);
     }
-  }, [profile, sendComment, onClose, onMessageSent]);
+  }, [profile, sendComment, onClose]);
 
   const handleLikeAndClose = useCallback(() => {
     onLike();
@@ -2376,7 +1729,7 @@ const ProfileModal = memo<ProfileModalProps>(({
     return Math.floor(screenWidth * 0.4);
   }, [isLandscape, screenWidth]);
 
-  const _landscapePhotoHeight = useMemo(() => {
+  const landscapePhotoHeight = useMemo(() => {
     if (!isLandscape) return photoGalleryHeight;
     // In landscape, photo takes FULL height (header/actions are on the right side)
     return screenHeight - insets.top - insets.bottom;
@@ -2472,8 +1825,8 @@ const ProfileModal = memo<ProfileModalProps>(({
                   accessibilityLabel="Pass on this profile"
                   accessibilityRole="button"
                 >
-                  <Feather name="x" size={22} color={colors.romantic.passRed} />
-                  <Text style={[styles.profileModalBtnText, { color: colors.romantic.passRed }]}>Pass</Text>
+                  <Feather name="x" size={22} color="#FF5A5F" />
+                  <Text style={[styles.profileModalBtnText, { color: '#FF5A5F' }]}>Pass</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -2565,8 +1918,8 @@ const ProfileModal = memo<ProfileModalProps>(({
                 accessibilityLabel="Pass on this profile"
                 accessibilityRole="button"
               >
-                <Feather name="x" size={isTablet ? 28 : 24} color={colors.romantic.passRed} />
-                <Text style={[styles.profileModalBtnText, { color: colors.romantic.passRed }, isTablet && { fontSize: 20 }]}>
+                <Feather name="x" size={isTablet ? 28 : 24} color="#FF5A5F" />
+                <Text style={[styles.profileModalBtnText, { color: '#FF5A5F' }, isTablet && { fontSize: 20 }]}>
                   Pass
                 </Text>
               </TouchableOpacity>
@@ -2689,7 +2042,7 @@ const ProfileInfoContent = memo<ProfileInfoContentProps>(({
       <View style={[styles.storySection, isTablet && styles.storySectionTablet]}>
         <View style={styles.storySectionHeader}>
           <LinearGradient
-            colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
+            colors={[colors.orange[500], colors.teal[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.storyIcon, isTablet && { width: 56, height: 56, borderRadius: 28 }]}
@@ -2728,7 +2081,7 @@ const ProfileInfoContent = memo<ProfileInfoContentProps>(({
           accessibilityRole="button"
         >
           <LinearGradient
-            colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
+            colors={[colors.orange[500], colors.teal[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.rewriteStoryBtnGradient, isTablet && { minHeight: 68, paddingVertical: 20 }]}
@@ -2759,110 +2112,87 @@ interface HeaderProps {
   isTablet?: boolean;
   isLandscape?: boolean;
   isSmallPhone?: boolean;
-  hasActiveFilters?: boolean;
-  onFilterPress: () => void;
 }
+
+// Premium Filter Icon (View-based)
+const FilterIcon: React.FC<{ size: number; color: string }> = ({ size, color }) => {
+  const barHeight = Math.max(2, size * 0.08);
+  const barGap = size * 0.22;
+
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      {/* Top bar with dots */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: barGap }}>
+        <View style={{ width: size * 0.6, height: barHeight, backgroundColor: color, borderRadius: barHeight / 2 }} />
+        <View style={{ position: 'absolute', right: size * 0.15, width: size * 0.15, height: size * 0.15, borderRadius: size * 0.075, backgroundColor: color }} />
+      </View>
+      {/* Middle bar with dots */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: barGap }}>
+        <View style={{ width: size * 0.6, height: barHeight, backgroundColor: color, borderRadius: barHeight / 2 }} />
+        <View style={{ position: 'absolute', left: size * 0.05, width: size * 0.15, height: size * 0.15, borderRadius: size * 0.075, backgroundColor: color }} />
+      </View>
+      {/* Bottom bar with dots */}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ width: size * 0.6, height: barHeight, backgroundColor: color, borderRadius: barHeight / 2 }} />
+        <View style={{ position: 'absolute', right: size * 0.25, width: size * 0.15, height: size * 0.15, borderRadius: size * 0.075, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+};
 
 const Header = memo<HeaderProps>(({
   count,
   isTablet = false,
   isLandscape = false,
   isSmallPhone = false,
-  hasActiveFilters = false,
-  onFilterPress,
 }) => {
-  // Responsive header sizing
-  // Landscape phones need compact headers to maximize card space
-  // Small phones need slightly smaller elements while maintaining accessibility
   const isLandscapePhone = isLandscape && !isTablet;
 
-  // Enhanced logo sizes - larger for premium feel
-  const logoSize = isTablet ? 40 : (isLandscapePhone ? 28 : (isSmallPhone ? 28 : 32));
-  const logoContainerSize = isTablet ? 56 : (isLandscapePhone ? 44 : (isSmallPhone ? 44 : 48));
-  const titleSize = isTablet ? 26 : (isLandscapePhone ? 18 : (isSmallPhone ? 18 : 22));
-  // Button size must meet 56px minimum for comfortable senior use
-  const btnSize = isTablet ? TOUCH_TARGET_COMFORTABLE : (isLandscapePhone ? TOUCH_TARGET_MINIMUM : TOUCH_TARGET_MINIMUM);
-  const iconSize = isTablet ? 26 : (isLandscapePhone ? 20 : 22);
+  // Premium responsive sizing
+  const logoSize = isTablet ? 48 : (isLandscapePhone ? 34 : (isSmallPhone ? 34 : 40));
+  const titleSize = isTablet ? 26 : (isLandscapePhone ? 20 : (isSmallPhone ? 20 : 22));
+  const subtitleSize = isTablet ? 15 : 14;
+  const btnSize = isTablet ? 52 : (isLandscapePhone ? 44 : (isSmallPhone ? 46 : 48));
+  const iconSize = isTablet ? 24 : (isLandscapePhone ? 20 : 22);
 
   return (
-    <View style={styles.headerGradientWrapper}>
-      {/* Subtle gradient background */}
-      <LinearGradient
-        colors={['#FFF7ED', '#FFFFFF', '#F0FDFA']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={[
-        styles.header,
-        isTablet && styles.headerTablet,
-        isLandscapePhone && styles.headerLandscapePhone,
-        isSmallPhone && !isLandscape && styles.headerSmallPhone,
-      ]}>
-        <View style={styles.headerLeft}>
-          {/* Premium logo with gradient background and glow */}
-          <View style={[
-            styles.logoWrapper,
-            { width: logoContainerSize, height: logoContainerSize, borderRadius: logoContainerSize / 2 },
-          ]}>
-            <LinearGradient
-              colors={[PREMIUM_GRADIENT.topAlt, PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[
-                styles.logoGradientBg,
-                { borderRadius: logoContainerSize / 2 },
-              ]}
-            >
-              <TanderLogoIcon size={logoSize} focused />
-            </LinearGradient>
-          </View>
-
-          <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { fontSize: titleSize }]} accessibilityRole="header">
-              DISCOVER
+    <View style={[
+      styles.header,
+      styles.headerPremium,
+      isTablet && styles.headerTablet,
+      isLandscapePhone && styles.headerLandscapePhone,
+      isSmallPhone && !isLandscape && styles.headerSmallPhone,
+    ]}>
+      <View style={styles.headerLeft}>
+        <TanderLogoIcon size={logoSize} focused />
+        <View style={{ marginLeft: 4 }}>
+          <Text style={[styles.headerTitle, styles.headerTitlePremium, { fontSize: titleSize }]}>
+            DISCOVER
+          </Text>
+          {count > 0 && !isLandscapePhone && (
+            <Text style={[styles.headerSubtitle, styles.headerSubtitlePremium, { fontSize: subtitleSize }]}>
+              {count} people nearby
             </Text>
-            {/* Premium people count badge */}
-            {count > 0 && !isLandscapePhone && (
-              <View style={styles.countBadge}>
-                <View style={styles.countDot} />
-                <Text style={styles.countText}>{count} nearby</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Premium filter button */}
-        <TouchableOpacity
-          style={[
-            styles.headerBtnPremium,
-            { width: btnSize, height: btnSize, borderRadius: btnSize / 2 },
-            hasActiveFilters && styles.headerBtnPremiumActive,
-          ]}
-          onPress={onFilterPress}
-          activeOpacity={0.8}
-          accessibilityLabel={hasActiveFilters ? 'Filters active, tap to edit' : 'Open filters'}
-          accessibilityRole="button"
-        >
-          <LinearGradient
-            colors={hasActiveFilters ? [PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom] : [colors.gray[50], colors.gray[100]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.headerBtnGradient, { borderRadius: btnSize / 2 }]}
-          >
-            <Feather
-              name="sliders"
-              size={iconSize}
-              color={hasActiveFilters ? colors.white : colors.gray[600]}
-            />
-          </LinearGradient>
-          {hasActiveFilters && (
-            <View style={styles.headerBtnBadgePremium}>
-              <Text style={styles.headerBtnBadgeText}>!</Text>
-            </View>
           )}
-        </TouchableOpacity>
+        </View>
       </View>
+      <TouchableOpacity
+        style={[
+          styles.headerBtn,
+          styles.headerBtnPremium,
+          { width: btnSize, height: btnSize, borderRadius: btnSize / 2 }
+        ]}
+        activeOpacity={0.85}
+        accessibilityLabel="Filters"
+        accessibilityRole="button"
+        onPress={() => Alert.alert(
+          'Filters',
+          'Discovery filters coming soon! You\'ll be able to filter by age, distance, interests, and more.',
+          [{ text: 'OK', style: 'default' }]
+        )}
+      >
+        <FilterIcon size={iconSize} color={colors.gray[600]} />
+      </TouchableOpacity>
     </View>
   );
 });
@@ -2892,7 +2222,6 @@ export const DiscoveryScreen: React.FC = () => {
     showMatchPopup,
     currentProfile,
     hasProfiles,
-    filters,
     loadProfiles,
     swipeRight,
     swipeLeft,
@@ -2901,39 +2230,12 @@ export const DiscoveryScreen: React.FC = () => {
     reset,
     dismissMatchPopup,
     clearError,
-    setFilters,
-    clearFilters,
   } = useDiscovery();
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [swipeHistory, setSwipeHistory] = useState<Array<{ id: number; direction: 'left' | 'right' }>>([]);
   const [swipedProfileIds, setSwipedProfileIds] = useState<Set<number>>(new Set());
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  // Check for reduce motion accessibility setting
-  useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isReduceMotionEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      (isEnabled) => setReduceMotion(isEnabled)
-    );
-
-    return () => subscription?.remove();
-  }, []);
-
-  // Check if any non-default filters are active
-  const hasActiveFilters = useMemo(() => {
-    return (filters.maxAge !== undefined && filters.maxAge < 100) ||
-      (filters.city !== undefined && filters.city !== '') ||
-      filters.verifiedOnly === true;
-  }, [filters]);
   const position = useRef(new Animated.ValueXY()).current;
   const swipeThreshold = width * SWIPE_THRESHOLD;
   // Can undo if we have history AND we're not at the beginning AND not animating
@@ -3065,25 +2367,19 @@ export const DiscoveryScreen: React.FC = () => {
     }
   }, [canUndo, goToPrevious, position]);
 
-  // Animate card out (respects reduce motion setting)
+  // Animate card out
   const animateOut = useCallback(
     (direction: 'left' | 'right') => {
       setIsAnimating(true);
       const toX = direction === 'right' ? width + 100 : -width - 100;
 
-      if (reduceMotion) {
-        // Skip animation for users with reduce motion enabled
-        position.setValue({ x: toX, y: 0 });
-        completeSwipe(direction);
-      } else {
-        Animated.timing(position, {
-          toValue: { x: toX, y: 0 },
-          duration: SWIPE_OUT_DURATION,
-          useNativeDriver: true,
-        }).start(() => completeSwipe(direction));
-      }
+      Animated.timing(position, {
+        toValue: { x: toX, y: 0 },
+        duration: SWIPE_OUT_DURATION,
+        useNativeDriver: true,
+      }).start(() => completeSwipe(direction));
     },
-    [position, width, completeSwipe, reduceMotion]
+    [position, width, completeSwipe]
   );
 
   // Pan responder with native driver
@@ -3104,21 +2400,16 @@ export const DiscoveryScreen: React.FC = () => {
             triggerHaptic('medium');
             animateOut('left');
           } else {
-            // Snap back to center (respects reduce motion)
-            if (reduceMotion) {
-              position.setValue({ x: 0, y: 0 });
-            } else {
-              Animated.spring(position, {
-                toValue: { x: 0, y: 0 },
-                friction: 5,
-                tension: 100,
-                useNativeDriver: true,
-              }).start();
-            }
+            Animated.spring(position, {
+              toValue: { x: 0, y: 0 },
+              friction: 5,
+              tension: 100,
+              useNativeDriver: true,
+            }).start();
           }
         },
       }),
-    [isAnimating, position, swipeThreshold, animateOut, reduceMotion]
+    [isAnimating, position, swipeThreshold, animateOut]
   );
 
   // Button handlers
@@ -3133,16 +2424,6 @@ export const DiscoveryScreen: React.FC = () => {
     triggerHaptic('success');
     animateOut('right');
   }, [hasProfiles, isAnimating, animateOut]);
-
-  // Handle message sent from ProfileModal - animate like without API call
-  // (backend already recorded the swipe when message was sent)
-  const handleMessageSent = useCallback(() => {
-    if (!currentProfile || !hasProfiles || isAnimating) return;
-    // Mark as already swiped to prevent duplicate API call
-    setSwipedProfileIds(prev => new Set(prev).add(currentProfile.id));
-    triggerHaptic('success');
-    animateOut('right');
-  }, [currentProfile, hasProfiles, isAnimating, animateOut]);
 
   const handleMessage = useCallback(() => {
     if (!matchInfo) return;
@@ -3175,7 +2456,7 @@ export const DiscoveryScreen: React.FC = () => {
   // Render cards
   const renderCards = () => {
     if (isLoading) {
-      return <LoadingState width={cardDimensions.width} height={cardDimensions.height} reduceMotion={reduceMotion} />;
+      return <LoadingState width={cardDimensions.width} height={cardDimensions.height} />;
     }
 
     if (error && !hasProfiles) {
@@ -3239,15 +2520,13 @@ export const DiscoveryScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <Header
         count={profiles.length - currentIndex}
         isTablet={isTablet}
         isLandscape={isLandscape}
         isSmallPhone={isSmallPhone}
-        hasActiveFilters={hasActiveFilters}
-        onFilterPress={() => setShowFilterModal(true)}
       />
 
       <View style={containerStyle}>
@@ -3291,15 +2570,6 @@ export const DiscoveryScreen: React.FC = () => {
         onClose={handleCloseProfileModal}
         onLike={handleLike}
         onPass={handlePass}
-        onMessageSent={handleMessageSent}
-      />
-
-      <FilterModal
-        visible={showFilterModal}
-        filters={filters}
-        onClose={() => setShowFilterModal(false)}
-        onApply={setFilters}
-        onClear={clearFilters}
       />
     </View>
   );
@@ -3312,131 +2582,49 @@ export const DiscoveryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.gray[50],
   },
 
-  // Header - Premium styling
-  headerGradientWrapper: {
-    overflow: 'hidden',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
   },
   headerTablet: {
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   headerLandscapePhone: {
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 12,
   },
   headerSmallPhone: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-  },
-  logoWrapper: {
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoGradientBg: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  headerTitleContainer: {
-    gap: 6,
+    gap: 12,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.gray[900],
-    letterSpacing: 2,
+    color: colors.orange[500],
+    letterSpacing: 1,
   },
-  countBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.orange[50],
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.orange[100],
-    alignSelf: 'flex-start',
+  headerSubtitle: {
+    fontSize: FONT_SIZE_MINIMUM, // Increased from 13 for senior readability
+    color: colors.gray[500],
+    marginTop: 2,
+    lineHeight: FONT_SIZE_MINIMUM * LINE_HEIGHT_MULTIPLIER,
   },
-  countDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.orange[500],
-  },
-  countText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.orange[600],
-  },
-  headerBtnPremium: {
-    shadowColor: colors.teal[500],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-    minWidth: 44,
-    minHeight: 44,
-  },
-  headerBtnPremiumActive: {
-    shadowColor: colors.orange[500],
-    shadowOpacity: 0.3,
-  },
-  headerBtnGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  headerBtnBadgePremium: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.romantic.passRed,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  headerBtnBadgeText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  // Legacy header styles (kept for compatibility)
   headerBtn: {
     width: TOUCH_TARGET_MINIMUM,
     height: TOUCH_TARGET_MINIMUM,
@@ -3444,8 +2632,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[100],
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 44, // WCAG minimum
+    minHeight: 44, // WCAG minimum
+  },
+
+  // Premium header styles
+  headerPremium: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerTitlePremium: {
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: colors.orange[500],
+  },
+  headerSubtitlePremium: {
+    color: colors.gray[400],
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  headerBtnPremium: {
+    backgroundColor: '#F8F9FA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // Main layout
@@ -3481,94 +2698,23 @@ const styles = StyleSheet.create({
   },
 
   // Card - Premium styling
-  cardPremium: {
-    position: 'absolute',
-    borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  cardBorderGradient: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
-  },
-  cardInner: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    right: 3,
-    bottom: 3,
-    borderRadius: 25,
-    overflow: 'hidden',
-    backgroundColor: colors.gray[200],
-  },
   card: {
     position: 'absolute',
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: colors.gray[200],
+    backgroundColor: '#F8F9FA',
+    // Premium multi-layer shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
   },
   cardImage: {
     ...StyleSheet.absoluteFillObject,
   },
   cardGradient: {
     ...StyleSheet.absoluteFillObject,
-  },
-  // Premium photo indicators
-  cardPhotoIndicatorsPremium: {
-    position: 'absolute',
-    top: 20,
-    left: 24,
-    right: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    zIndex: 10,
-  },
-  cardPhotoIndicatorPremium: {
-    flex: 1,
-    maxWidth: 60,
-    height: 5,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderRadius: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  cardPhotoIndicatorActivePremium: {
-    backgroundColor: colors.white,
-    shadowColor: colors.orange[500],
-    shadowOpacity: 0.5,
-  },
-  // Legacy photo indicators
-  cardPhotoIndicators: {
-    position: 'absolute',
-    top: 16,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    zIndex: 10,
-  },
-  cardPhotoIndicator: {
-    flex: 1,
-    maxWidth: 60,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    borderRadius: 2,
-  },
-  cardPhotoIndicatorActive: {
-    backgroundColor: colors.white,
   },
   cardInfo: {
     position: 'absolute',
@@ -3584,96 +2730,12 @@ const styles = StyleSheet.create({
     padding: 12,
   },
 
-  // Premium badges
-  verifiedBadgePremium: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#22C55E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-    zIndex: 10,
-  },
-  verifiedBadgeGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minHeight: 44,
-  },
-  verifiedIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verifiedTextPremium: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  onlineBadgePremium: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    minHeight: 44,
-    zIndex: 10,
-  },
-  onlineDotPremium: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#22C55E',
-    shadowColor: '#22C55E',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-  },
-  onlineTextPremium: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  // Premium name row
+  // Name row
   nameRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 10,
-    marginBottom: 8,
-  },
-  nameTextPremium: {
-    fontWeight: '800',
-    color: '#fff',
-    flex: 1,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-    letterSpacing: -0.5,
-  },
-  ageTextPremium: {
-    fontWeight: '600',
-    color: colors.orange[300],
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    marginBottom: 6,
   },
   nameText: {
     fontWeight: '700',
@@ -3682,31 +2744,10 @@ const styles = StyleSheet.create({
   },
   ageText: {
     fontWeight: '600',
-    color: colors.romantic.glassWhite,
+    color: 'rgba(255,255,255,0.9)',
   },
 
   // Location
-  // Premium location row with glass pill
-  locationRowPremium: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    alignSelf: 'flex-start',
-  },
-  locationTextPremium: {
-    color: colors.white,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3714,36 +2755,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   locationText: {
-    color: colors.romantic.glassWhite,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
     flex: 1,
   },
 
-  // Tags - Premium styling
+  // Tags
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 14,
-  },
-  tagPremium: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  tagTextPremium: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  tagMorePremium: {
-    borderWidth: 0,
+    marginBottom: 12,
   },
   tag: {
     paddingHorizontal: 14,
@@ -3765,32 +2787,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Premium View Profile button
-  viewProfileBtnPremium: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  viewProfileBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    minHeight: 56,
-  },
-  viewProfileTextPremium: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  // Legacy View Profile button
+  // View Profile button
   viewProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3859,13 +2856,13 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.romantic.likeGreen,
+    backgroundColor: '#22C55E',
   },
   onlineDotSmall: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.romantic.likeGreen,
+    backgroundColor: '#22C55E',
   },
   onlineText: {
     color: '#fff',
@@ -3902,17 +2899,6 @@ const styles = StyleSheet.create({
   },
 
   // Action buttons
-  // Premium action buttons container
-  actionsContainerPremium: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    gap: 32,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    backgroundColor: colors.gray[50],
-  },
   actionsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -3920,7 +2906,7 @@ const styles = StyleSheet.create({
     gap: 36,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    paddingBottom: 18,
+    paddingBottom: 100, // Padding for premium tab bar
     backgroundColor: colors.gray[50],
   },
   actionsContainerLandscape: {
@@ -3935,74 +2921,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   actionsContainerSmallPhone: {
-    // Small phones - reduce spacing
+    // Small phones - reduce spacing but keep tab bar padding
     gap: 24,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    paddingBottom: 14,
-  },
-  // Premium Pass button
-  passBtnPremium: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.romantic.passRed,
-    shadowColor: colors.romantic.passRed,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  passBtnInner: {
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Premium Like button
-  likeBtnPremium: {
-    overflow: 'hidden',
-    shadowColor: colors.teal[500],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  likeBtnGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  likeBtnHighlight: {
-    position: 'absolute',
-    top: 6,
-    left: '25%',
-    width: '50%',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  // Premium Undo button
-  undoBtnPremium: {
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: colors.gray[200],
-  },
-  undoBtnActive: {
-    borderColor: colors.orange[300],
-    shadowColor: colors.orange[500],
-    shadowOpacity: 0.2,
-  },
-  undoBtnDisabledPremium: {
-    opacity: 0.5,
-    backgroundColor: colors.gray[100],
+    paddingBottom: 100, // Padding for premium tab bar
   },
   undoBtn: {
     width: 52,
@@ -4022,18 +2945,8 @@ const styles = StyleSheet.create({
   undoBtnDisabled: {
     opacity: 0.5,
   },
-  actionBtnDisabled: {
-    opacity: 0.5,
-  },
   actionBtnWrapper: {
     alignItems: 'center',
-  },
-  actionLabelPremium: {
-    marginTop: 10,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   actionBtn: {
     justifyContent: 'center',
@@ -4292,7 +3205,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.romantic.likeGreen,
+    backgroundColor: '#22C55E',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -4337,7 +3250,7 @@ const styles = StyleSheet.create({
   },
   profileModalOnlineText: {
     fontSize: FONT_SIZE_MINIMUM,
-    color: colors.romantic.likeGreen,
+    color: '#22C55E',
     fontWeight: '500',
     lineHeight: FONT_SIZE_MINIMUM * LINE_HEIGHT_MULTIPLIER,
   },
@@ -4621,10 +3534,10 @@ const styles = StyleSheet.create({
     borderRadius: 36,
   },
   profileModalBtnPass: {
-    backgroundColor: colors.white,
+    backgroundColor: '#fff',
     borderWidth: 3,
-    borderColor: colors.romantic.passRed,
-    shadowColor: colors.romantic.passRed,
+    borderColor: '#FF5A5F',
+    shadowColor: '#FF5A5F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -4705,13 +3618,13 @@ const styles = StyleSheet.create({
   },
   progressBarTouchable: {
     flex: 1,
-    height: TOUCH_TARGET_MINIMUM, // 56px senior-friendly touch target (was 44px)
+    height: 44, // WCAG minimum touch target
     justifyContent: 'center',
-    minHeight: TOUCH_TARGET_MINIMUM,
+    minHeight: 44,
   },
   progressBarTouchableTablet: {
-    height: TOUCH_TARGET_COMFORTABLE, // 64px for tablets
-    minHeight: TOUCH_TARGET_COMFORTABLE,
+    height: TOUCH_TARGET_MINIMUM,
+    minHeight: TOUCH_TARGET_MINIMUM,
   },
   progressBar: {
     height: 5,
@@ -4819,7 +3732,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.romantic.likeGreen,
+    backgroundColor: '#22C55E',
   },
   carouselOnlineText: {
     color: '#fff',
@@ -5022,10 +3935,6 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
   },
-  rewriteModalScrollContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
-  },
   suggestedSection: {
     marginBottom: 16,
   },
@@ -5226,502 +4135,11 @@ const styles = StyleSheet.create({
   rewriteSendText: {
     fontSize: FONT_SIZE_BODY,
     fontWeight: '700',
-    color: colors.white,
+    color: '#fff',
     lineHeight: FONT_SIZE_BODY * LINE_HEIGHT_MULTIPLIER,
   },
   rewriteSendTextTablet: {
     fontSize: 20,
-  },
-
-  // ============================================================================
-  // FILTER MODAL STYLES
-  // ============================================================================
-  filterModalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-  },
-  filterModalKeyboard: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  filterModalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  filterModalContentTablet: {
-    borderRadius: 32,
-    marginHorizontal: 'auto',
-    marginBottom: 40,
-  },
-  filterModalContentLandscapePhone: {
-    borderRadius: 24,
-    marginHorizontal: 'auto',
-    marginVertical: 'auto',
-    alignSelf: 'center',
-  },
-  filterModalHandle: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  filterModalHandleBar: {
-    width: 48,
-    height: 5,
-    backgroundColor: colors.gray[300],
-    borderRadius: 3,
-  },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  filterModalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    flex: 1,
-  },
-  filterModalIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterModalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.gray[900],
-  },
-  filterModalSubtitle: {
-    fontSize: FONT_SIZE_MINIMUM,
-    color: colors.gray[500],
-    marginTop: 2,
-    lineHeight: FONT_SIZE_MINIMUM * LINE_HEIGHT_MULTIPLIER,
-  },
-  filterModalClose: {
-    width: TOUCH_TARGET_MINIMUM,
-    height: TOUCH_TARGET_MINIMUM,
-    borderRadius: TOUCH_TARGET_MINIMUM / 2,
-    backgroundColor: colors.gray[100],
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterModalScroll: {
-    maxHeight: 320,
-  },
-  filterModalScrollContent: {
-    paddingBottom: 8,
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  filterSectionTitle: {
-    fontSize: FONT_SIZE_BODY,
-    fontWeight: '700',
-    color: colors.gray[900],
-  },
-  filterAgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.gray[50],
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-  },
-  filterAgeInput: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  filterAgeLabel: {
-    fontSize: FONT_SIZE_MINIMUM,
-    color: colors.gray[500],
-    marginBottom: 10,
-    fontWeight: '500',
-  },
-  filterAgeControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  filterAgeBtn: {
-    width: TOUCH_TARGET_MINIMUM,
-    height: TOUCH_TARGET_MINIMUM,
-    borderRadius: TOUCH_TARGET_MINIMUM / 2,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.orange[200],
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  filterAgeBtnDisabled: {
-    backgroundColor: colors.gray[100],
-    borderColor: colors.gray[200],
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  filterAgeValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.gray[900],
-    minWidth: 40,
-    textAlign: 'center',
-  },
-  filterAgeDivider: {
-    width: 1,
-    height: 60,
-    backgroundColor: colors.gray[200],
-    marginHorizontal: 16,
-  },
-  filterTextInput: {
-    backgroundColor: colors.gray[50],
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    fontSize: FONT_SIZE_BODY,
-    color: colors.gray[900],
-    borderWidth: 2,
-    borderColor: colors.gray[200],
-    minHeight: TOUCH_TARGET_MINIMUM,
-  },
-  filterToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.gray[50],
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-    minHeight: 72,
-  },
-  filterToggleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
-  },
-  filterToggleIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.teal[50],
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.teal[200],
-  },
-  filterToggleIconWrapperActive: {
-    backgroundColor: colors.teal[500],
-    borderColor: colors.teal[500],
-  },
-  filterToggleText: {
-    flex: 1,
-  },
-  filterToggleLabel: {
-    fontSize: FONT_SIZE_BODY,
-    fontWeight: '600',
-    color: colors.gray[900],
-  },
-  filterToggleHint: {
-    fontSize: FONT_SIZE_MINIMUM,
-    color: colors.gray[500],
-    marginTop: 2,
-    lineHeight: FONT_SIZE_MINIMUM * LINE_HEIGHT_MULTIPLIER,
-  },
-  filterToggleSwitch: {
-    width: 52,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.gray[300],
-    padding: 2,
-    justifyContent: 'center',
-  },
-  filterToggleSwitchActive: {
-    backgroundColor: colors.teal[500],
-  },
-  filterToggleKnob: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  filterToggleKnobActive: {
-    marginLeft: 20,
-  },
-  filterModalActions: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 8,
-  },
-  filterClearBtn: {
-    flex: 0.35,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    backgroundColor: colors.gray[100],
-    borderRadius: 28,
-    minHeight: TOUCH_TARGET_MINIMUM,
-  },
-  filterClearText: {
-    fontSize: FONT_SIZE_MINIMUM,
-    fontWeight: '600',
-    color: colors.gray[600],
-  },
-  filterApplyBtn: {
-    flex: 0.65,
-    borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  filterApplyBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    minHeight: TOUCH_TARGET_MINIMUM,
-  },
-  filterApplyText: {
-    fontSize: FONT_SIZE_BODY,
-    fontWeight: '700',
-    color: colors.white,
-  },
-
-  // Header filter badge
-  headerBtnActive: {
-    backgroundColor: colors.orange[50],
-    borderWidth: 2,
-    borderColor: colors.orange[200],
-  },
-  headerBtnBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-  },
-  headerBtnBadgeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.orange[500],
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-
-  // ============================================================================
-  // PREMIUM LOADING STATE STYLES
-  // ============================================================================
-  loadingCardPremium: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 28,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  loadingBgCircle1: {
-    position: 'absolute',
-    top: '10%',
-    left: '5%',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.orange[100],
-    opacity: 0.5,
-  },
-  loadingBgCircle2: {
-    position: 'absolute',
-    bottom: '15%',
-    right: '8%',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.teal[100],
-    opacity: 0.5,
-  },
-  loadingLogoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    overflow: 'hidden',
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 10,
-    marginBottom: 24,
-  },
-  loadingLogoGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  loadingTextPremium: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.gray[700],
-    letterSpacing: 0.5,
-    marginBottom: 16,
-  },
-  loadingDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.orange[400],
-  },
-
-  // ============================================================================
-  // PREMIUM EMPTY STATE STYLES
-  // ============================================================================
-  emptyStatePremium: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  emptyBgCircle1: {
-    position: 'absolute',
-    top: '5%',
-    right: '-10%',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: colors.orange[50],
-    opacity: 0.7,
-  },
-  emptyBgCircle2: {
-    position: 'absolute',
-    bottom: '10%',
-    left: '-15%',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: colors.teal[50],
-    opacity: 0.7,
-  },
-  emptyIconContainerPremium: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    overflow: 'hidden',
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 12,
-    marginBottom: 28,
-  },
-  emptyIconGradientPremium: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 70,
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  emptyLogoContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sparkle1: {
-    position: 'absolute',
-    top: '18%',
-    right: '25%',
-  },
-  sparkle2: {
-    position: 'absolute',
-    top: '28%',
-    left: '22%',
-  },
-  sparkle3: {
-    position: 'absolute',
-    bottom: '38%',
-    right: '18%',
-  },
-  emptyTitlePremium: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.gray[900],
-    marginBottom: 12,
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  emptySubtitlePremium: {
-    fontSize: 18,
-    color: colors.gray[600],
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 18 * 1.6,
-    paddingHorizontal: 20,
-    maxWidth: 320,
-  },
-  emptyBtnPremium: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    shadowColor: colors.orange[500],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  emptyBtnGradientPremium: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-    paddingHorizontal: 36,
-    paddingVertical: 20,
-    minHeight: 64,
-  },
-  emptyBtnTextPremium: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
 });
 

@@ -200,7 +200,7 @@ export const SecurityScreen: React.FC<SecurityScreenProps> = ({ onBack }) => {
         const securitySettings = await getSecuritySettings();
         setTwoFactorEnabled(securitySettings.twoFactorEnabled);
       } catch (err) {
-        console.error('Failed to load security settings:', err);
+        console.warn('Failed to load security settings:', err);
       }
     };
     loadSettings();
@@ -221,7 +221,7 @@ export const SecurityScreen: React.FC<SecurityScreenProps> = ({ onBack }) => {
     try {
       await updateTwoFactor(value);
     } catch (err) {
-      console.error('Failed to update two-factor:', err);
+      console.warn('Failed to update two-factor:', err);
       setTwoFactorEnabled(previousValue);
       Alert.alert('Error', 'Failed to update two-factor authentication.');
     }
@@ -281,7 +281,7 @@ export const SecurityScreen: React.FC<SecurityScreenProps> = ({ onBack }) => {
         try {
           await disableBiometricApi();
         } catch (err) {
-          console.error('Failed to disable biometric on server:', err);
+          console.warn('Failed to disable biometric on server:', err);
         }
         Alert.alert('Success', `${biometricLabel} login has been disabled.`);
       }
@@ -309,7 +309,7 @@ export const SecurityScreen: React.FC<SecurityScreenProps> = ({ onBack }) => {
         try {
           await enableBiometricApi();
         } catch (err) {
-          console.error('Failed to enable biometric on server:', err);
+          console.warn('Failed to enable biometric on server:', err);
         }
 
         setShowBiometricModal(false);
@@ -317,7 +317,7 @@ export const SecurityScreen: React.FC<SecurityScreenProps> = ({ onBack }) => {
         Alert.alert('Success', `${biometricLabel} login is now enabled! You can use it to sign in.`);
       }
     } catch (err) {
-      console.error('Failed to enable biometric:', err);
+      console.warn('Failed to enable biometric:', err);
       Alert.alert('Error', 'Failed to enable biometric login. Please try again.');
     } finally {
       setIsEnablingBiometric(false);

@@ -29,6 +29,7 @@ import {
   updatePrivacySettings,
   PrivacySettings as ApiPrivacySettings,
 } from '@/services/api/profileApi';
+import { toast } from '@/store/toastStore';
 
 // =============================================================================
 // TYPES
@@ -141,8 +142,12 @@ export const PrivacyScreen: React.FC<PrivacyScreenProps> = ({ onBack }) => {
           shareLocation: apiSettings.locationEnabled,
         });
       } catch (err) {
-        console.error('Failed to load privacy settings:', err);
-        // Keep defaults on error
+        console.warn('Failed to load privacy settings:', err);
+        // Show user-friendly error message, keep defaults on error
+        toast.error(
+          'Unable to Load Privacy Settings',
+          'Please check your internet connection and try again.'
+        );
       }
     };
     loadSettings();
@@ -159,9 +164,14 @@ export const PrivacyScreen: React.FC<PrivacyScreenProps> = ({ onBack }) => {
       const apiValue = key === 'incognitoMode' ? !newValue : newValue;
       await updatePrivacySettings({ [apiKey]: apiValue });
     } catch (err) {
-      console.error(`Failed to update ${key}:`, err);
+      console.warn(`Failed to update ${key}:`, err);
       // Revert on error
       setSettings((prev) => ({ ...prev, [key]: !newValue }));
+      // Show user-friendly error message
+      toast.error(
+        'Unable to Update Setting',
+        'Please check your internet connection and try again.'
+      );
     }
   }, [settings]);
 

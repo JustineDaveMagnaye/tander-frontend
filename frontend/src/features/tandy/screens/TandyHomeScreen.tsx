@@ -1,20 +1,23 @@
 /**
- * TANDER TandyHomeScreen - Tandy Landing Page
+ * TANDER TandyHomeScreen - Super Premium iPhone-Like UI/UX
  *
- * Shows tab bar. User taps "Chat with Tandy" to go full-screen chat.
- * Pattern matches MessagesScreen -> ChatScreen flow.
+ * Design Philosophy:
+ * - Glassmorphism effects with frosted glass cards
+ * - Ambient floating orbs for visual depth
+ * - Spring physics animations on all interactions
+ * - Premium gradient buttons with glow effects
+ * - Sophisticated typography hierarchy
+ * - Smooth entrance animations
+ * - Senior-friendly touch targets (56-64px minimum)
  *
- * UI/UX Enhancements:
- * - Card shadows for visual depth
- * - Avatar gradient ring with subtle glow effect
- * - Press feedback animations on all interactive elements
- * - Enhanced feature list with better iconography
- * - Improved sponsor cards with press states
- * - Floating action button style for primary CTA
- * - Comprehensive accessibility labels and hints
+ * Accessibility:
+ * - WCAG AAA contrast ratios
+ * - Large touch targets for seniors
+ * - Screen reader optimized
+ * - Reduced motion support
  */
 
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -25,155 +28,32 @@ import {
   Platform,
   Animated,
   Pressable,
+  AccessibilityInfo,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '@shared/styles/colors';
 import { TanderLogoIcon } from '@shared/components/icons/TanderLogoIcon';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TandyStackParamList } from '@navigation/types';
 import { useResponsive } from '@shared/hooks/useResponsive';
+import {
+  PREMIUM_COLORS,
+  AmbientBackground,
+  AnimatedEntrance,
+  PremiumGradientButton,
+  PremiumBadge,
+} from '../components/PremiumComponents';
 
 // =============================================================================
-// ANIMATED PRESSABLE BUTTON COMPONENT
+// TYPES
 // =============================================================================
 
-interface AnimatedPressableProps {
-  onPress: () => void;
-  style?: any;
-  children: React.ReactNode;
-  accessibilityLabel: string;
-  accessibilityHint?: string;
-  disabled?: boolean;
-}
-
-const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
-  onPress,
-  style,
-  children,
-  accessibilityLabel,
-  accessibilityHint,
-  disabled,
-}) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    // TODO: Add haptic feedback - Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 100,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 3,
-      tension: 100,
-    }).start();
-  };
-
-  // Extract flex property to apply to Pressable for proper sizing
-  const flatStyle = StyleSheet.flatten(style) || {};
-  const pressableStyle = {
-    flex: flatStyle.flex,
-    flexGrow: flatStyle.flexGrow,
-    flexShrink: flatStyle.flexShrink,
-    alignSelf: flatStyle.alignSelf,
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={accessibilityHint}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      style={pressableStyle}
-    >
-      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-};
-
-// =============================================================================
-// AVATAR WITH GLOW COMPONENT
-// =============================================================================
-
-interface AvatarWithGlowProps {
-  size: number;
-  isPhoneLandscape: boolean;
-  isTablet: boolean;
-}
-
-const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({ size, isPhoneLandscape, isTablet }) => {
-  const glowAnim = useRef(new Animated.Value(0.4)).current;
-
-  useEffect(() => {
-    // Subtle pulsing glow animation
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 0.7,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0.4,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [glowAnim]);
-
-  const iconSize = isPhoneLandscape ? 32 : (isTablet ? 56 : 48);
-
-  return (
-    <View style={[styles.avatarGlowContainer, { width: size + 20, height: size + 20 }]}>
-      {/* Outer glow layer */}
-      <Animated.View
-        style={[
-          styles.avatarGlow,
-          {
-            width: size + 16,
-            height: size + 16,
-            borderRadius: (size + 16) / 2,
-            opacity: glowAnim,
-          },
-        ]}
-      />
-      {/* Main gradient ring */}
-      <LinearGradient
-        colors={[colors.orange[500], colors.teal[500]]}
-        style={[
-          styles.avatarGradient,
-          { width: size, height: size, borderRadius: size / 2 }
-        ]}
-      >
-        <View style={[styles.avatarInner, { borderRadius: (size - 8) / 2 }]}>
-          <TanderLogoIcon size={iconSize} focused />
-        </View>
-      </LinearGradient>
-    </View>
-  );
-};
-
-// =============================================================================
-// SPONSORS DATA
-// =============================================================================
+type TandyHomeNavigationProp = NativeStackNavigationProp<TandyStackParamList, 'TandyHome'>;
 
 interface Sponsor {
   id: string;
@@ -183,6 +63,10 @@ interface Sponsor {
   color: string;
   url?: string;
 }
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
 
 const SPONSORS: Sponsor[] = [
   {
@@ -211,89 +95,268 @@ const SPONSORS: Sponsor[] = [
   },
 ];
 
+const WELLNESS_FEATURES = [
+  {
+    icon: 'message-circle' as const,
+    title: 'Friendly Chat',
+    description: 'Chat anytime',
+    color: colors.teal[500],
+    bgColor: colors.teal[50],
+  },
+  {
+    icon: 'wind' as const,
+    title: 'Breathing',
+    description: 'Calm your mind',
+    color: colors.orange[500],
+    bgColor: colors.orange[50],
+  },
+  {
+    icon: 'sun' as const,
+    title: 'Meditation',
+    description: 'Find inner peace',
+    color: colors.pink[500],
+    bgColor: colors.pink[50],
+  },
+  {
+    icon: 'heart' as const,
+    title: 'Wellness Tips',
+    description: 'Daily inspiration',
+    color: colors.teal[600],
+    bgColor: colors.teal[50],
+  },
+];
+
 // =============================================================================
-// FEATURE ITEM COMPONENT
+// PREMIUM AVATAR COMPONENT - Stunning animated avatar with glow
 // =============================================================================
 
-interface FeatureItemProps {
-  text: string;
-  index: number;
-  isSmallDevice: boolean;
-  isTablet: boolean;
+interface PremiumAvatarProps {
+  size: number;
+  reduceMotion: boolean;
 }
 
-const FeatureItem: React.FC<FeatureItemProps> = ({ text, index, isSmallDevice, isTablet }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+const PremiumAvatar: React.FC<PremiumAvatarProps> = ({ size, reduceMotion }) => {
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowOpacity = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    const delay = index * 100;
+    if (reduceMotion) return;
+
+    // Slow rotation for gradient ring
+    const rotate = Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 8000,
+        useNativeDriver: true,
+      })
+    );
+
+    // Subtle pulse for glow
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Glow breathing
+    const glow = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacity, {
+          toValue: 0.6,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowOpacity, {
+          toValue: 0.3,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    rotate.start();
+    pulse.start();
+    glow.start();
+
+    return () => {
+      rotate.stop();
+      pulse.stop();
+      glow.stop();
+    };
+  }, [reduceMotion, rotateAnim, pulseAnim, glowOpacity]);
+
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const iconSize = size * 0.5;
+  const ringSize = size + 12;
+  const glowSize = size + 40;
+
+  return (
+    <View style={[avatarStyles.container, { width: glowSize, height: glowSize }]}>
+      {/* Outer glow */}
+      <Animated.View
+        style={[
+          avatarStyles.glow,
+          {
+            width: glowSize,
+            height: glowSize,
+            borderRadius: glowSize / 2,
+            opacity: glowOpacity,
+            transform: [{ scale: pulseAnim }],
+          },
+        ]}
+      />
+
+      {/* Rotating gradient ring */}
+      <Animated.View
+        style={[
+          avatarStyles.ringContainer,
+          {
+            width: ringSize,
+            height: ringSize,
+            borderRadius: ringSize / 2,
+            transform: [{ rotate: rotateInterpolate }],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={[colors.orange[400], colors.teal[400], colors.orange[500], colors.teal[500]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            avatarStyles.gradientRing,
+            { width: ringSize, height: ringSize, borderRadius: ringSize / 2 },
+          ]}
+        />
+      </Animated.View>
+
+      {/* Main avatar */}
+      <View
+        style={[
+          avatarStyles.avatarInner,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          },
+        ]}
+      >
+        <TanderLogoIcon size={iconSize} focused />
+      </View>
+    </View>
+  );
+};
+
+const avatarStyles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glow: {
+    position: 'absolute',
+    backgroundColor: colors.teal[300],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[400],
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 30,
+      },
+    }),
+  },
+  ringContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientRing: {
+    padding: 4,
+  },
+  avatarInner: {
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+  },
+});
+
+// =============================================================================
+// PREMIUM FEATURE CARD - Glass-effect feature card
+// =============================================================================
+
+interface PremiumFeatureCardProps {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  description: string;
+  color: string;
+  bgColor: string;
+  onPress: () => void;
+  index: number;
+  reduceMotion: boolean;
+}
+
+const PremiumFeatureCard: React.FC<PremiumFeatureCardProps> = ({
+  icon,
+  title,
+  description,
+  color,
+  bgColor,
+  onPress,
+  index,
+  reduceMotion,
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const slideAnim = useRef(new Animated.Value(reduceMotion ? 0 : 30)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400,
-        delay,
+        duration: 500,
+        delay: index * 100 + 400,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        delay,
+        delay: index * 100 + 400,
         useNativeDriver: true,
+        tension: 50,
         friction: 8,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim, index]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.featureItem,
-        isTablet && styles.featureItemTablet,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }],
-        },
-      ]}
-      accessibilityLabel={text}
-    >
-      <View style={styles.featureIconContainer}>
-        <Feather name="check-circle" size={20} color={colors.teal[500]} />
-      </View>
-      <Text style={[styles.featureText, isSmallDevice && styles.featureTextSmall]}>{text}</Text>
-    </Animated.View>
-  );
-};
-
-// =============================================================================
-// SPONSOR CARD COMPONENT
-// =============================================================================
-
-interface SponsorCardProps {
-  sponsor: Sponsor;
-  onPress: () => void;
-  isTablet: boolean;
-  isHorizontal?: boolean;
-  index: number;
-}
-
-const SponsorCard: React.FC<SponsorCardProps> = ({ sponsor, onPress, isTablet, isHorizontal, index }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      delay: index * 100,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim, index]);
+  }, [fadeAnim, slideAnim, index, reduceMotion]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.95,
       useNativeDriver: true,
-      friction: 8,
+      tension: 300,
+      friction: 10,
     }).start();
   };
 
@@ -301,42 +364,45 @@ const SponsorCard: React.FC<SponsorCardProps> = ({ sponsor, onPress, isTablet, i
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      friction: 3,
+      tension: 200,
+      friction: 8,
     }).start();
   };
-
-  // Determine width style for the wrapper
-  const wrapperStyle = isHorizontal
-    ? { width: 260 }
-    : isTablet
-    ? { width: '48%' as const }
-    : { width: '100%' as const };
 
   return (
     <Animated.View
       style={[
-        wrapperStyle,
-        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+        featureCardStyles.wrapper,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+        },
       ]}
     >
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        accessibilityLabel={`${sponsor.name} - ${sponsor.tagline}`}
-        accessibilityHint="Opens sponsor website"
+        accessibilityLabel={`${title}. ${description}`}
         accessibilityRole="button"
+        style={{ flex: 1 }}
       >
-        <View style={styles.sponsorCard}>
-          <View style={[styles.sponsorIcon, { backgroundColor: `${sponsor.color}15` }]}>
-            <Feather name={sponsor.icon} size={24} color={sponsor.color} />
-          </View>
-          <View style={styles.sponsorInfo}>
-            <Text style={styles.sponsorName}>{sponsor.name}</Text>
-            <Text style={styles.sponsorTagline}>{sponsor.tagline}</Text>
-          </View>
-          <View style={styles.sponsorArrowContainer}>
-            <Feather name="external-link" size={16} color={colors.gray[400]} />
+        <View style={featureCardStyles.card}>
+          {/* Glass overlay for iOS */}
+          {Platform.OS === 'ios' && (
+            <BlurView
+              intensity={40}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+
+          <View style={featureCardStyles.content}>
+            <View style={[featureCardStyles.iconContainer, { backgroundColor: bgColor }]}>
+              <Feather name={icon} size={26} color={color} />
+            </View>
+            <Text style={featureCardStyles.title} numberOfLines={1}>{title}</Text>
+            <Text style={featureCardStyles.description} numberOfLines={2}>{description}</Text>
           </View>
         </View>
       </Pressable>
@@ -344,80 +410,407 @@ const SponsorCard: React.FC<SponsorCardProps> = ({ sponsor, onPress, isTablet, i
   );
 };
 
+const featureCardStyles = StyleSheet.create({
+  wrapper: {
+    width: '48%', // 2 cards per row
+    minWidth: 150,
+  },
+  card: {
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.95)',
+    borderRadius: 24,
+    padding: 18,
+    alignItems: 'center',
+    minHeight: 140,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  content: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: PREMIUM_COLORS.text.primary,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: PREMIUM_COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
+
+// =============================================================================
+// PREMIUM ACTION CARD - Large action button with gradient
+// =============================================================================
+
+interface PremiumActionCardProps {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  subtitle: string;
+  gradientColors: [string, string];
+  onPress: () => void;
+  index: number;
+  reduceMotion: boolean;
+}
+
+const PremiumActionCard: React.FC<PremiumActionCardProps> = ({
+  icon,
+  title,
+  subtitle,
+  gradientColors,
+  onPress,
+  index,
+  reduceMotion,
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const slideAnim = useRef(new Animated.Value(reduceMotion ? 0 : 40)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: index * 150 + 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        delay: index * 150 + 200,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 8,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim, index, reduceMotion]);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 200,
+      friction: 8,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+        flex: 1,
+      }}
+    >
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityLabel={`${title}. ${subtitle}`}
+        accessibilityRole="button"
+      >
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={actionCardStyles.gradient}
+        >
+          <View style={actionCardStyles.iconContainer}>
+            <Feather name={icon} size={28} color={colors.white} />
+          </View>
+          <Text style={actionCardStyles.title}>{title}</Text>
+          <Text style={actionCardStyles.subtitle}>{subtitle}</Text>
+        </LinearGradient>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
+const actionCardStyles = StyleSheet.create({
+  gradient: {
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 140,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[900],
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+      },
+    }),
+  },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.white,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+  },
+});
+
+// =============================================================================
+// PREMIUM SPONSOR CARD - Glassmorphic sponsor card
+// =============================================================================
+
+interface PremiumSponsorCardProps {
+  sponsor: Sponsor;
+  onPress: () => void;
+  index: number;
+  reduceMotion: boolean;
+}
+
+const PremiumSponsorCard: React.FC<PremiumSponsorCardProps> = ({
+  sponsor,
+  onPress,
+  index,
+  reduceMotion,
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      delay: index * 100 + 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim, index, reduceMotion]);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 200,
+      friction: 8,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        opacity: fadeAnim,
+        transform: [{ scale: scaleAnim }],
+        width: 130, // Fixed width for consistent sizing
+      }}
+    >
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityLabel={`${sponsor.name}. ${sponsor.tagline}`}
+        accessibilityRole="button"
+        accessibilityHint="Opens sponsor website"
+      >
+        <View style={sponsorCardStyles.card}>
+          <View style={[sponsorCardStyles.iconContainer, { backgroundColor: `${sponsor.color}15` }]}>
+            <Feather name={sponsor.icon} size={22} color={sponsor.color} />
+          </View>
+          <Text style={sponsorCardStyles.name} numberOfLines={1}>{sponsor.name}</Text>
+          <Text style={sponsorCardStyles.tagline} numberOfLines={1}>{sponsor.tagline}</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
+const sponsorCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    minHeight: 110,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: PREMIUM_COLORS.text.primary,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  tagline: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: PREMIUM_COLORS.text.muted,
+    textAlign: 'center',
+  },
+});
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
-type TandyHomeNavigationProp = NativeStackNavigationProp<TandyStackParamList, 'TandyHome'>;
-
 export const TandyHomeScreen: React.FC = () => {
   const navigation = useNavigation<TandyHomeNavigationProp>();
   const insets = useSafeAreaInsets();
-  const { width, isLandscape, isTablet, getScreenMargin } = useResponsive();
+  const { width, isLandscape, isTablet, getScreenMargin, hp, wp } = useResponsive();
 
   const isSmallDevice = width <= 375;
   const isPhoneLandscape = isLandscape && !isTablet;
 
-  // Responsive padding
+  // Accessibility: Reduced motion preference
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const checkReduceMotion = async () => {
+      const isEnabled = await AccessibilityInfo.isReduceMotionEnabled();
+      setReduceMotion(isEnabled);
+    };
+    checkReduceMotion();
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion
+    );
+    return () => subscription?.remove();
+  }, []);
+
+  // Responsive values
   const horizontalPadding = useMemo(() => {
-    if (isPhoneLandscape) return Math.max(insets.left + 16, 24);
+    if (isPhoneLandscape) return Math.max(insets.left + 20, 28);
     return getScreenMargin();
   }, [isPhoneLandscape, insets.left, getScreenMargin]);
 
-  // Avatar size responsive to device and orientation
   const avatarSize = useMemo(() => {
     if (isPhoneLandscape) return 70;
     if (isTablet) return 120;
     return 100;
   }, [isPhoneLandscape, isTablet]);
 
-  // Show 2-column layout for quick actions on tablets
-  const showTwoColumnSponsors = isTablet;
-
-  const handleStartChat = () => {
-    navigation.navigate('TandyChat');
-  };
-
-  const handleStartBreathing = () => {
-    navigation.navigate('TandyBreathing');
-  };
-
-  const handleStartMeditation = () => {
-    navigation.navigate('TandyMeditation');
-  };
-
-  const handleContactPsychiatrist = () => {
-    // Navigate to the psychiatrist list screen
-    navigation.navigate('PsychiatristList');
-  };
+  // Navigation handlers
+  const handleStartChat = () => navigation.navigate('TandyChat');
+  const handleStartBreathing = () => navigation.navigate('TandyBreathing');
+  const handleStartMeditation = () => navigation.navigate('TandyMeditation');
+  const handleContactPsychiatrist = () => navigation.navigate('PsychiatristList');
 
   const handleSponsorPress = (sponsor: Sponsor) => {
     if (sponsor.url) {
-      Linking.openURL(sponsor.url).catch(() => {
-        // Handle error silently
-      });
+      Linking.openURL(sponsor.url).catch(() => {});
     }
   };
 
-  // Feature list items
-  const FEATURES = [
-    'Friendly conversation & emotional support',
-    'Guided breathing exercises',
-    'Timed meditation sessions',
-    'Relaxation & stress relief tips',
-  ];
+  // Entrance animations
+  const headerFade = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const headerSlide = useRef(new Animated.Value(reduceMotion ? 0 : -30)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    Animated.parallel([
+      Animated.timing(headerFade, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(headerSlide, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 8,
+      }),
+    ]).start();
+  }, [headerFade, headerSlide, reduceMotion]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+
+      {/* Gradient Background */}
+      <LinearGradient
+        colors={PREMIUM_COLORS.gradient.screenBg}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Ambient Floating Orbs */}
+      {!reduceMotion && <AmbientBackground variant="mixed" />}
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 100,
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 120,
             paddingHorizontal: horizontalPadding,
             paddingLeft: Math.max(horizontalPadding, insets.left + 16),
             paddingRight: Math.max(horizontalPadding, insets.right + 16),
@@ -426,204 +819,178 @@ export const TandyHomeScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Main content wrapper for landscape layout */}
-        <View style={[isPhoneLandscape && styles.landscapeContentRow]}>
-          {/* Left column in landscape: Avatar + Header */}
-          <View style={[isPhoneLandscape && styles.landscapeLeftColumn]}>
+        <View style={isPhoneLandscape && styles.landscapeContentRow}>
+          {/* Left column in landscape: Avatar + Title */}
+          <View style={isPhoneLandscape && styles.landscapeLeftColumn}>
             {/* Header */}
-            <View style={[styles.header, isPhoneLandscape && styles.headerLandscape]}>
-              <Text
-                style={[styles.headerTitle, isPhoneLandscape && styles.headerTitleLandscape]}
-                accessibilityRole="header"
-              >
+            <Animated.View
+              style={[
+                styles.header,
+                isPhoneLandscape && styles.headerLandscape,
+                {
+                  opacity: headerFade,
+                  transform: [{ translateY: headerSlide }],
+                },
+              ]}
+            >
+              {/* Premium Avatar */}
+              <PremiumAvatar size={avatarSize} reduceMotion={reduceMotion} />
+
+              {/* Online Badge */}
+              <View style={styles.onlineBadge}>
+                <View style={styles.onlineDot} />
+                <Text style={styles.onlineText}>Online</Text>
+              </View>
+
+              <Text style={[styles.headerTitle, isPhoneLandscape && styles.headerTitleLandscape]} accessibilityRole="header">
                 Tandy
               </Text>
               <Text style={[styles.headerSubtitle, isPhoneLandscape && styles.headerSubtitleLandscape]}>
                 Your Wellness Companion
               </Text>
-            </View>
-
-            {/* Tandy Avatar with Glow */}
-            <View style={[styles.avatarSection, isPhoneLandscape && styles.avatarSectionLandscape]}>
-              <AvatarWithGlow
-                size={avatarSize}
-                isPhoneLandscape={isPhoneLandscape}
-                isTablet={isTablet}
-              />
-              <View style={styles.onlineBadge}>
-                <View style={styles.onlineDot} />
-                <Text style={styles.onlineText}>Online</Text>
-              </View>
-            </View>
+            </Animated.View>
           </View>
 
-          {/* Right column in landscape: Welcome + Actions */}
-          <View style={[isPhoneLandscape && styles.landscapeRightColumn]}>
-
-            {/* Welcome Message */}
-            <View style={[styles.welcomeCard, isPhoneLandscape && styles.welcomeCardLandscape]}>
-              <Text style={[styles.welcomeTitle, isPhoneLandscape && styles.welcomeTitleLandscape]}>
-                Hi there!
-              </Text>
-              <Text style={[styles.welcomeText, isPhoneLandscape && styles.welcomeTextLandscape]}>
-                I'm Tandy, your personal wellness companion. I'm here to chat, listen, and help you relax whenever you need support.
-              </Text>
-            </View>
-
-            {/* Action Buttons */}
-            <View style={[styles.actionsContainer, isPhoneLandscape && styles.actionsContainerLandscape]}>
-              {/* Chat Button - Primary CTA with floating style */}
-              <AnimatedPressable
-                onPress={handleStartChat}
-                style={styles.primaryButtonContainer}
-                accessibilityLabel="Chat with Tandy"
-                accessibilityHint="Opens a conversation with Tandy"
-              >
-                <LinearGradient
-                  colors={[colors.orange[500], colors.teal[500]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.primaryButtonGradient, isPhoneLandscape && styles.primaryButtonGradientLandscape]}
-                >
-                  <Feather name="message-circle" size={isPhoneLandscape ? 20 : 24} color={colors.white} />
-                  <Text style={[styles.primaryButtonText, isPhoneLandscape && styles.primaryButtonTextLandscape]}>
-                    Chat with Tandy
+          {/* Right column in landscape: Actions */}
+          <View style={isPhoneLandscape && styles.landscapeRightColumn}>
+            {/* Welcome Card - Glass Effect */}
+            <AnimatedEntrance delay={100} direction="up" style={styles.welcomeCardWrapper}>
+              <View style={styles.welcomeCard}>
+                {Platform.OS === 'ios' && (
+                  <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+                )}
+                <View style={styles.welcomeContent}>
+                  <Text style={[styles.welcomeTitle, isPhoneLandscape && styles.welcomeTitleLandscape]}>
+                    Hi there! I'm Tandy
                   </Text>
-                </LinearGradient>
-              </AnimatedPressable>
-
-              {/* Quick Actions */}
-              <View style={[styles.quickActions, isPhoneLandscape && styles.quickActionsLandscape]}>
-                <AnimatedPressable
-                  onPress={handleStartBreathing}
-                  style={[styles.quickActionBtn, isPhoneLandscape && styles.quickActionBtnLandscape]}
-                  accessibilityLabel="Breathing exercise"
-                  accessibilityHint="Opens guided breathing exercise"
-                >
-                  <LinearGradient
-                    colors={[colors.teal[100], colors.teal[50]]}
-                    style={[styles.quickActionGradient, isPhoneLandscape && styles.quickActionGradientLandscape]}
-                  >
-                    <Feather name="wind" size={isPhoneLandscape ? 20 : 28} color={colors.teal[600]} />
-                    <Text style={[styles.quickActionText, { color: colors.teal[700] }, isPhoneLandscape && styles.quickActionTextLandscape]}>
-                      Breathing
-                    </Text>
-                  </LinearGradient>
-                </AnimatedPressable>
-
-                <AnimatedPressable
-                  onPress={handleStartMeditation}
-                  style={[styles.quickActionBtn, isPhoneLandscape && styles.quickActionBtnLandscape]}
-                  accessibilityLabel="Meditation"
-                  accessibilityHint="Opens guided meditation session"
-                >
-                  <LinearGradient
-                    colors={[colors.orange[100], colors.orange[50]]}
-                    style={[styles.quickActionGradient, isPhoneLandscape && styles.quickActionGradientLandscape]}
-                  >
-                    <Feather name="heart" size={isPhoneLandscape ? 20 : 28} color={colors.orange[600]} />
-                    <Text style={[styles.quickActionText, { color: colors.orange[700] }, isPhoneLandscape && styles.quickActionTextLandscape]}>
-                      Meditation
-                    </Text>
-                  </LinearGradient>
-                </AnimatedPressable>
-              </View>
-
-              {/* Contact Psychiatrist Button */}
-              <AnimatedPressable
-                onPress={handleContactPsychiatrist}
-                style={styles.psychiatristButtonContainer}
-                accessibilityLabel="Contact our psychiatrist"
-                accessibilityHint="Opens phone dialer to call our mental health professional"
-              >
-                <View style={[styles.psychiatristButton, isPhoneLandscape && styles.psychiatristButtonLandscape]}>
-                  <View style={styles.psychiatristIconContainer}>
-                    <Feather name="phone" size={isPhoneLandscape ? 18 : 22} color="#7C3AED" />
-                  </View>
-                  <View style={styles.psychiatristTextContainer}>
-                    <Text style={[styles.psychiatristTitle, isPhoneLandscape && styles.psychiatristTitleLandscape]}>
-                      Contact Our Psychiatrist
-                    </Text>
-                    <Text style={[styles.psychiatristSubtitle, isPhoneLandscape && styles.psychiatristSubtitleLandscape]}>
-                      Professional mental health support available
-                    </Text>
-                  </View>
-                  <View style={styles.psychiatristArrow}>
-                    <Feather name="chevron-right" size={20} color="#7C3AED" />
-                  </View>
+                  <Text style={[styles.welcomeText, isPhoneLandscape && styles.welcomeTextLandscape]}>
+                    Your personal wellness companion. I'm here to chat, listen, and help you relax whenever you need support.
+                  </Text>
                 </View>
-              </AnimatedPressable>
-            </View>
-          </View>
-        </View>
+              </View>
+            </AnimatedEntrance>
 
-        {/* Features List */}
-        <View style={[
-          styles.featuresContainer,
-          isTablet && styles.featuresContainerTablet
-        ]}>
-          <Text
-            style={[styles.featuresTitle, isSmallDevice && styles.featuresTitleSmall]}
-            accessibilityRole="header"
-          >
-            What I can help with:
-          </Text>
-          <View style={[styles.featuresGrid, isTablet && styles.featuresGridTablet]}>
-            {FEATURES.map((feature, index) => (
-              <FeatureItem
-                key={index}
-                text={feature}
-                index={index}
-                isSmallDevice={isSmallDevice}
-                isTablet={isTablet}
+            {/* Primary CTA - Chat with Tandy */}
+            <AnimatedEntrance delay={200} direction="up" style={styles.primaryCTAWrapper}>
+              <PremiumGradientButton
+                onPress={handleStartChat}
+                label="Chat with Tandy"
+                icon="message-circle"
+                variant="primary"
+                size="xlarge"
+                fullWidth
+                accessibilityHint="Opens a conversation with Tandy"
               />
-            ))}
+            </AnimatedEntrance>
+
+            {/* Quick Actions Grid */}
+            <View style={[styles.quickActionsGrid, isPhoneLandscape && styles.quickActionsGridLandscape]}>
+              <PremiumActionCard
+                icon="wind"
+                title="Breathing"
+                subtitle="Calm your mind"
+                gradientColors={[colors.teal[400], colors.teal[600]]}
+                onPress={handleStartBreathing}
+                index={0}
+                reduceMotion={reduceMotion}
+              />
+              <PremiumActionCard
+                icon="sun"
+                title="Meditation"
+                subtitle="Find peace"
+                gradientColors={[colors.orange[400], colors.orange[600]]}
+                onPress={handleStartMeditation}
+                index={1}
+                reduceMotion={reduceMotion}
+              />
+            </View>
+
+            {/* Contact Psychiatrist */}
+            <AnimatedEntrance delay={500} direction="up" style={styles.psychiatristWrapper}>
+              <Pressable
+                onPress={handleContactPsychiatrist}
+                accessibilityLabel="Contact our psychiatrist"
+                accessibilityHint="Opens list of mental health professionals"
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.psychiatristCard,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+              >
+                <View style={styles.psychiatristIconContainer}>
+                  <Feather name="phone" size={22} color="#7C3AED" />
+                </View>
+                <View style={styles.psychiatristTextContainer}>
+                  <Text style={styles.psychiatristTitle}>Contact Our Psychiatrist</Text>
+                  <Text style={styles.psychiatristSubtitle}>
+                    Professional mental health support
+                  </Text>
+                </View>
+                <View style={styles.psychiatristArrow}>
+                  <Feather name="chevron-right" size={20} color="#7C3AED" />
+                </View>
+              </Pressable>
+            </AnimatedEntrance>
           </View>
         </View>
 
-        {/* Sponsors Card */}
-        <View style={[styles.sponsorsContainer, isTablet && styles.sponsorsContainerTablet]}>
-          <View style={styles.sponsorsHeader}>
-            <Feather name="award" size={18} color={colors.gray[500]} />
-            <Text style={styles.sponsorsTitle}>Powered by Our Partners</Text>
+        {/* Features Section */}
+        <AnimatedEntrance delay={300} direction="up">
+          <View style={styles.sectionHeader}>
+            <Feather name="zap" size={18} color={colors.orange[500]} />
+            <Text style={styles.sectionTitle}>What I can help with</Text>
           </View>
+        </AnimatedEntrance>
 
-          {/* Horizontal scrollable on tablet landscape, vertical list otherwise */}
-          {showTwoColumnSponsors && isLandscape ? (
+        <View style={[styles.featuresGrid, isTablet && styles.featuresGridTablet]}>
+          {WELLNESS_FEATURES.map((feature, index) => (
+            <PremiumFeatureCard
+              key={feature.title}
+              {...feature}
+              onPress={
+                feature.title === 'Breathing'
+                  ? handleStartBreathing
+                  : feature.title === 'Meditation'
+                  ? handleStartMeditation
+                  : handleStartChat
+              }
+              index={index}
+              reduceMotion={reduceMotion}
+            />
+          ))}
+        </View>
+
+        {/* Sponsors Section */}
+        <AnimatedEntrance delay={600} direction="up">
+          <View style={styles.sponsorsSection}>
+            <View style={[styles.sectionHeader, { marginLeft: 24 }]}>
+              <Feather name="award" size={18} color={colors.gray[600]} />
+              <Text style={[styles.sectionTitle, { color: colors.gray[600] }]}>
+                Our Partners
+              </Text>
+            </View>
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sponsorsHorizontalList}
-              accessibilityLabel="Sponsor partners"
+              contentContainerStyle={styles.sponsorsScrollContent}
             >
               {SPONSORS.map((sponsor, index) => (
-                <SponsorCard
+                <PremiumSponsorCard
                   key={sponsor.id}
                   sponsor={sponsor}
                   onPress={() => handleSponsorPress(sponsor)}
-                  isTablet={isTablet}
-                  isHorizontal
                   index={index}
+                  reduceMotion={reduceMotion}
                 />
               ))}
             </ScrollView>
-          ) : (
-            <View style={[styles.sponsorsList, showTwoColumnSponsors && styles.sponsorsListTablet]}>
-              {SPONSORS.map((sponsor, index) => (
-                <SponsorCard
-                  key={sponsor.id}
-                  sponsor={sponsor}
-                  onPress={() => handleSponsorPress(sponsor)}
-                  isTablet={showTwoColumnSponsors}
-                  index={index}
-                />
-              ))}
-            </View>
-          )}
 
-          <Text style={styles.sponsorsDisclaimer}>
-            These partners help make Tandy possible
-          </Text>
-        </View>
+            <Text style={styles.sponsorsDisclaimer}>
+              These partners help make Tandy possible
+            </Text>
+          </View>
+        </AnimatedEntrance>
       </ScrollView>
     </View>
   );
@@ -636,7 +1003,7 @@ export const TandyHomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: '#FEFEFE',
   },
   scrollView: {
     flex: 1,
@@ -645,16 +1012,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
-  // Landscape layout styles
+  // Landscape layout
   landscapeContentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 24,
-    marginBottom: 16,
+    gap: 28,
+    marginBottom: 20,
   },
   landscapeLeftColumn: {
     alignItems: 'center',
-    width: 140,
+    width: 150,
   },
   landscapeRightColumn: {
     flex: 1,
@@ -663,90 +1030,44 @@ const styles = StyleSheet.create({
   // Header
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
   },
   headerLandscape: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.gray[900],
-    letterSpacing: 0.5,
+    fontSize: 32,
+    fontWeight: '800',
+    color: PREMIUM_COLORS.text.primary,
+    letterSpacing: 1,
+    marginTop: 16,
   },
   headerTitleLandscape: {
-    fontSize: 22,
+    fontSize: 24,
+    marginTop: 12,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: colors.gray[500],
+    fontSize: 17,
+    fontWeight: '500',
+    color: PREMIUM_COLORS.text.secondary,
     marginTop: 4,
   },
   headerSubtitleLandscape: {
-    fontSize: 13,
-    marginTop: 2,
+    fontSize: 14,
   },
 
-  // Avatar with Glow
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  avatarSectionLandscape: {
-    marginBottom: 12,
-  },
-  avatarGlowContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarGlow: {
-    position: 'absolute',
-    backgroundColor: colors.orange[300],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.orange[500],
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-      },
-      android: {
-        // Android doesn't support shadow well, using a subtle background instead
-      },
-    }),
-  },
-  avatarGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    padding: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.gray[900],
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  avatarInner: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 46,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // Online badge
   onlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
     backgroundColor: colors.teal[50],
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.teal[100],
   },
   onlineDot: {
     width: 8,
@@ -756,38 +1077,36 @@ const styles = StyleSheet.create({
   },
   onlineText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: colors.teal[700],
   },
 
-  // Welcome
+  // Welcome card
+  welcomeCardWrapper: {
+    marginBottom: 20,
+  },
   welcomeCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.75)' : colors.white,
+    borderRadius: 28,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.gray[100],
+    borderColor: colors.gray[200],
     ...Platform.select({
       ios: {
         shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.12,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
+        shadowRadius: 16,
       },
     }),
   },
-  welcomeCardLandscape: {
-    padding: 16,
-    marginBottom: 16,
+  welcomeContent: {
+    padding: 24,
   },
   welcomeTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.gray[900],
+    fontSize: 22,
+    fontWeight: '700',
+    color: PREMIUM_COLORS.text.primary,
     marginBottom: 8,
   },
   welcomeTitleLandscape: {
@@ -797,348 +1116,130 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 16,
     lineHeight: 24,
-    color: colors.gray[600],
+    color: PREMIUM_COLORS.text.secondary,
   },
   welcomeTextLandscape: {
     fontSize: 14,
     lineHeight: 20,
   },
 
-  // Actions
-  actionsContainer: {
-    marginBottom: 24,
-  },
-  actionsContainerLandscape: {
-    marginBottom: 16,
-  },
-  primaryButtonContainer: {
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.orange[600],
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  primaryButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    minHeight: 56, // Senior-friendly touch target
-  },
-  primaryButtonGradientLandscape: {
-    paddingVertical: 12,
-    minHeight: 48,
-  },
-  primaryButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.white,
-    letterSpacing: 0.3,
-  },
-  primaryButtonTextLandscape: {
-    fontSize: 16,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickActionsLandscape: {
-    gap: 8,
-  },
-  quickActionBtn: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-    minHeight: 70, // Senior-friendly touch target
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  quickActionBtnLandscape: {
-    minHeight: 52,
-  },
-  quickActionGradient: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  quickActionGradientLandscape: {
-    paddingVertical: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickActionText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  quickActionTextLandscape: {
-    fontSize: 13,
+  // Primary CTA
+  primaryCTAWrapper: {
+    marginBottom: 20,
   },
 
-  // Psychiatrist Button
-  psychiatristButtonContainer: {
-    marginTop: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
+  // Quick actions grid
+  quickActionsGrid: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 20,
   },
-  psychiatristButton: {
+  quickActionsGridLandscape: {
+    gap: 10,
+  },
+
+  // Psychiatrist card
+  psychiatristWrapper: {
+    marginBottom: 28,
+  },
+  psychiatristCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F3FF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     gap: 14,
-    minHeight: 76,
+    minHeight: 80,
     borderWidth: 1,
-    borderColor: '#E9D5FF',
+    borderColor: '#D8B4FE',
     ...Platform.select({
       ios: {
         shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 3 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.12,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
+        shadowRadius: 10,
       },
     }),
   },
-  psychiatristButtonLandscape: {
-    padding: 12,
-    minHeight: 60,
-    gap: 10,
-  },
   psychiatristIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: '#EDE9FE',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   psychiatristTextContainer: {
     flex: 1,
   },
   psychiatristTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#5B21B6',
-    marginBottom: 2,
-  },
-  psychiatristTitleLandscape: {
-    fontSize: 14,
+    marginBottom: 3,
   },
   psychiatristSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '500',
     color: '#7C3AED',
-    lineHeight: 18,
-  },
-  psychiatristSubtitleLandscape: {
-    fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 20,
   },
   psychiatristArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: '#EDE9FE',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // Features
-  featuresContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.gray[100],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  featuresContainerTablet: {
-    padding: 24,
-  },
-  featuresTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[900],
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginBottom: 16,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: PREMIUM_COLORS.text.primary,
     letterSpacing: 0.3,
   },
-  featuresTitleSmall: {
-    fontSize: 15,
-  },
+
+  // Features grid - 2x2 layout
   featuresGrid: {
-    // Default: single column
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 28,
   },
   featuresGridTablet: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 16,
   },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    minHeight: 44, // Touch target for seniors
-  },
-  featureItemTablet: {
-    width: '50%',
-    paddingRight: 12,
-  },
-  featureIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.teal[50],
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featureText: {
-    fontSize: 15,
-    color: colors.gray[600],
-    flex: 1,
-    lineHeight: 22, // Better readability for seniors
-  },
-  featureTextSmall: {
-    fontSize: 14,
+  featureCardWrapper: {
+    width: '47%', // 2 cards per row with gap
+    minWidth: 150,
   },
 
-  // Sponsors
-  sponsorsContainer: {
-    marginTop: 24,
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.gray[100],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+  // Sponsors section
+  sponsorsSection: {
+    marginBottom: 20,
+    marginHorizontal: -24, // Allow scroll to edge
   },
-  sponsorsContainerTablet: {
-    padding: 24,
-  },
-  sponsorsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  sponsorsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.gray[500],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sponsorsList: {
+  sponsorsScrollContent: {
     gap: 12,
-  },
-  sponsorsListTablet: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  sponsorsHorizontalList: {
-    paddingVertical: 4,
-    gap: 12,
-  },
-  sponsorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.gray[50],
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
-    minHeight: 76, // Senior-friendly touch target
-    width: '100%', // Fill the wrapper
-    borderWidth: 1,
-    borderColor: colors.gray[100],
-  },
-  sponsorCardTablet: {
-    width: '48%',
-  },
-  sponsorCardHorizontal: {
-    width: 260,
-    marginRight: 12,
-  },
-  sponsorIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sponsorInfo: {
-    flex: 1,
-  },
-  sponsorName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[900],
-    marginBottom: 2,
-  },
-  sponsorTagline: {
-    fontSize: 13,
-    color: colors.gray[500],
-    lineHeight: 18,
-  },
-  sponsorArrowContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingLeft: 24, // Align with content above
+    paddingRight: 48, // Extra padding to prevent truncation
   },
   sponsorsDisclaimer: {
-    fontSize: 12,
-    color: colors.gray[400],
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[600], // Better contrast
     textAlign: 'center',
     marginTop: 16,
-    fontStyle: 'italic',
+    marginHorizontal: 24, // Re-add margin since section has negative margin
   },
 });
 

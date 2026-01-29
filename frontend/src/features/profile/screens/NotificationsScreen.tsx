@@ -166,7 +166,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ onBack
           vibrationEnabled: apiSettings.vibrationEnabled,
         });
       } catch (err) {
-        console.error('Failed to load notification settings:', err);
+        console.warn('Failed to load notification settings:', err);
         // Keep defaults on error
       }
     };
@@ -180,7 +180,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ onBack
     try {
       await updateSingleNotificationSetting(key as keyof ApiNotificationSettings, newValue);
     } catch (err) {
-      console.error(`Failed to update ${key}:`, err);
+      console.warn(`Failed to update ${key}:`, err);
       // Revert on error
       setSettings((prev) => ({ ...prev, [key]: !newValue }));
     }

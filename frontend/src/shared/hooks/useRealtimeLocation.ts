@@ -189,7 +189,7 @@ export function useRealtimeLocation(): UseRealtimeLocationReturn {
         await Linking.openSettings();
       }
     } catch (err) {
-      console.error('Error opening settings:', err);
+      console.warn('Error opening settings:', err);
     }
   }, []);
 

@@ -869,7 +869,7 @@ export const IDVerificationScreen: React.FC<Props> = ({ navigation, route }) => 
             lineHeight: (fontSize - 1) * 1.5,
           }}
         >
-          To keep our community safe and verify you're 50+, we need a photo of your government-issued ID (driver's license, passport, or national ID).
+          To keep our community safe and verify you're 60+, we need a photo of your government-issued ID (driver's license, passport, or national ID).
         </Text>
       </View>
 

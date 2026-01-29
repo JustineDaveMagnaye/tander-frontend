@@ -46,10 +46,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
 import { colors } from '@shared/styles/colors';
+import {
+  PREMIUM_COLORS,
+  AnimatedSpringButton,
+  FloatingOrb,
+} from '../components/PremiumComponents';
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -430,6 +436,176 @@ const useResponsiveSizes = (): ResponsiveSizes & {
       showMasterDetail,
     };
   }, [width, height, isLandscape, isTablet]);
+};
+
+// ============================================================================
+// PREMIUM AMBIENT ORBS - Soft, ethereal floating orbs for visual depth
+// ============================================================================
+
+interface AmbientOrbProps {
+  delay: number;
+  size: number;
+  startX: number;
+  startY: number;
+  color: string;
+  floatDistance: number;
+  duration: number;
+}
+
+const AmbientOrb: React.FC<AmbientOrbProps> = ({
+  delay,
+  size,
+  startX,
+  startY,
+  color,
+  floatDistance,
+  duration,
+}) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    // Gentle fade in
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 2500,
+      delay,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+
+    // Slow scale up
+    Animated.timing(scale, {
+      toValue: 1,
+      duration: 3000,
+      delay,
+      easing: Easing.out(Easing.back(1.05)),
+      useNativeDriver: true,
+    }).start();
+
+    // Ultra-smooth vertical floating
+    const floatY = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: -floatDistance,
+          duration: duration,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: floatDistance * 0.3,
+          duration: duration * 0.75,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: duration * 0.5,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Gentle horizontal drift
+    const floatX = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateX, {
+          toValue: floatDistance * 0.35,
+          duration: duration * 1.1,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: -floatDistance * 0.25,
+          duration: duration * 1.3,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: duration * 0.7,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const floatTimer = setTimeout(() => {
+      floatY.start();
+      floatX.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(floatTimer);
+      floatY.stop();
+      floatX.stop();
+    };
+  }, [delay, duration, floatDistance, opacity, scale, translateX, translateY]);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${startX}%`,
+        top: `${startY}%`,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        opacity,
+        transform: [{ translateY }, { translateX }, { scale }],
+      }}
+      pointerEvents="none"
+    />
+  );
+};
+
+// Premium orb colors - Very soft, ethereal
+const AMBIENT_ORB_COLORS = {
+  tealLight: 'rgba(94, 234, 212, 0.06)',
+  tealMid: 'rgba(20, 184, 166, 0.05)',
+  tealDark: 'rgba(13, 148, 136, 0.04)',
+  orangeLight: 'rgba(251, 146, 60, 0.05)',
+  orangeMid: 'rgba(249, 115, 22, 0.04)',
+  peach: 'rgba(253, 186, 116, 0.04)',
+  aqua: 'rgba(45, 212, 191, 0.05)',
+};
+
+interface AmbientOrbsProps {
+  reduceMotion: boolean;
+}
+
+const AmbientOrbs: React.FC<AmbientOrbsProps> = ({ reduceMotion }) => {
+  if (reduceMotion) return null;
+
+  // Premium ambient orbs configuration
+  const orbs = useMemo(() => [
+    // Large background orbs
+    { delay: 0, duration: 14000, size: 160, startX: 5, startY: 8, color: AMBIENT_ORB_COLORS.tealLight, floatDistance: 22 },
+    { delay: 2500, duration: 16000, size: 180, startX: 75, startY: 5, color: AMBIENT_ORB_COLORS.orangeLight, floatDistance: 18 },
+    { delay: 1500, duration: 15000, size: 140, startX: 85, startY: 60, color: AMBIENT_ORB_COLORS.aqua, floatDistance: 20 },
+    { delay: 3000, duration: 13000, size: 150, startX: 0, startY: 50, color: AMBIENT_ORB_COLORS.tealMid, floatDistance: 24 },
+    { delay: 1000, duration: 17000, size: 170, startX: 70, startY: 80, color: AMBIENT_ORB_COLORS.peach, floatDistance: 16 },
+    // Medium accent orbs
+    { delay: 500, duration: 11000, size: 100, startX: 20, startY: 25, color: AMBIENT_ORB_COLORS.tealDark, floatDistance: 28 },
+    { delay: 2000, duration: 12000, size: 90, startX: 55, startY: 40, color: AMBIENT_ORB_COLORS.orangeMid, floatDistance: 26 },
+    { delay: 3500, duration: 10000, size: 110, startX: 40, startY: 85, color: AMBIENT_ORB_COLORS.tealLight, floatDistance: 24 },
+    // Small accent orbs
+    { delay: 800, duration: 9000, size: 60, startX: 15, startY: 45, color: AMBIENT_ORB_COLORS.aqua, floatDistance: 32 },
+    { delay: 1800, duration: 8500, size: 55, startX: 80, startY: 30, color: AMBIENT_ORB_COLORS.tealMid, floatDistance: 30 },
+    { delay: 600, duration: 9500, size: 50, startX: 45, startY: 70, color: AMBIENT_ORB_COLORS.peach, floatDistance: 28 },
+  ], []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {orbs.map((orb, index) => (
+        <AmbientOrb key={index} {...orb} />
+      ))}
+    </View>
+  );
 };
 
 // ============================================================================
@@ -2794,7 +2970,10 @@ export const TandyMeditationScreen: React.FC = () => {
         locations={[0, 0.5, 1]}
         style={styles.gradient}
       >
-        {/* Floating particles */}
+        {/* Premium ambient orbs - always visible for depth */}
+        <AmbientOrbs reduceMotion={reduceMotion} />
+
+        {/* Floating particles - during active meditation */}
         <FloatingParticles
           isActive={isActive}
           reduceMotion={reduceMotion}
@@ -2953,17 +3132,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   backButton: {
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   backButtonInner: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: MEDITATION_COLORS.surface.card,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: MEDITATION_COLORS.surface.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(20, 184, 166, 0.25)',
+    ...Platform.select({
+      ios: {
+        shadowColor: MEDITATION_COLORS.teal[600],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+    }),
   },
   headerCenter: {
     alignItems: 'center',
@@ -3056,9 +3243,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 1,
         shadowRadius: 12,
       },
-      android: {
-        elevation: 4,
-      },
     }),
   },
   durationCardSelected: {
@@ -3069,9 +3253,6 @@ const styles = StyleSheet.create({
         shadowColor: MEDITATION_COLORS.teal[600],
         shadowOpacity: 0.4,
         shadowRadius: 18,
-      },
-      android: {
-        elevation: 10,
       },
     }),
   },
@@ -3100,9 +3281,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
         shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
       },
     }),
   },
@@ -3173,9 +3351,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 24,
       },
-      android: {
-        elevation: 16,
-      },
     }),
   },
   beginGradient: {
@@ -3205,15 +3380,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 184, 166, 0.2)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.1,
         shadowRadius: 16,
-      },
-      android: {
-        elevation: 8,
       },
     }),
   },
@@ -3284,9 +3458,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.45,
         shadowRadius: 36,
       },
-      android: {
-        elevation: 28,
-      },
     }),
   },
   orbGradient: {
@@ -3326,9 +3497,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
@@ -3418,9 +3586,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.35,
         shadowRadius: 20,
       },
-      android: {
-        elevation: 12,
-      },
     }),
   },
   pauseIconGradient: {
@@ -3454,9 +3619,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.4,
         shadowRadius: 24,
-      },
-      android: {
-        elevation: 14,
       },
     }),
   },
@@ -3514,9 +3676,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.18,
         shadowRadius: 28,
       },
-      android: {
-        elevation: 14,
-      },
     }),
   },
   decorCircle1: {
@@ -3546,9 +3705,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.4,
         shadowRadius: 20,
-      },
-      android: {
-        elevation: 12,
       },
     }),
   },
@@ -3633,9 +3789,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.35,
         shadowRadius: 16,
-      },
-      android: {
-        elevation: 10,
       },
     }),
   },

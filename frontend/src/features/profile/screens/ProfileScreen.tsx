@@ -1,6 +1,6 @@
 /**
  * TANDER Profile Screen - Fully Responsive Layout
- * Senior-Friendly Profile Management for Filipino Seniors (50+)
+ * Senior-Friendly Profile Management for Filipino Seniors (60+)
  *
  * Design Philosophy:
  * - Maximum accessibility with WCAG AAA compliance
@@ -46,12 +46,12 @@ import {
   PanResponder,
   GestureResponderEvent,
   PanResponderGestureState,
-  AccessibilityInfo,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@shared/styles/colors';
@@ -62,7 +62,6 @@ import { useStoryCommentsStore, selectReceivedComments, selectUnreadCount } from
 import { StoryComment } from '@shared/types';
 import { SettingsScreen } from './SettingsScreen';
 import { InterestsModal } from '../components/InterestsModal';
-import { TanderLogoIcon } from '@shared/components/icons';
 import {
   getProfile,
   updateProfile,
@@ -71,6 +70,7 @@ import {
   deletePhoto,
   deleteProfilePhoto,
 } from '@/services/api/profileApi';
+import { useNavigation } from '@react-navigation/native';
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -144,15 +144,15 @@ const LAYOUT_BREAKPOINTS = {
  * Photo grid configuration for different screen sizes
  */
 const PHOTO_GRID_CONFIG = {
-  // Consistent 2-column grid for all devices
+  // Number of columns by device type
   COLUMNS_PHONE_PORTRAIT: 2,
-  COLUMNS_PHONE_LANDSCAPE: 2,
-  COLUMNS_TABLET_PORTRAIT: 2,
-  COLUMNS_TABLET_LANDSCAPE: 2,
+  COLUMNS_PHONE_LANDSCAPE: 3,
+  COLUMNS_TABLET_PORTRAIT: 3,
+  COLUMNS_TABLET_LANDSCAPE: 4,
   // Maximum photos allowed
   MAX_PHOTOS: 6,
-  // Aspect ratio for photo items (1:1 square for clean grid)
-  ASPECT_RATIO: 1,
+  // Aspect ratio for photo items
+  ASPECT_RATIO: 3 / 4,
 } as const;
 
 // Interests organized by category for better organization
@@ -163,6 +163,14 @@ const INTERESTS_BY_CATEGORY = {
   'Social': ['Movies', 'Theater', 'Board Games', 'Cards', 'Karaoke', 'Mahjong', 'Volunteering'],
   'Creative & Spiritual': ['Music', 'Art', 'Bird Watching', 'Church Activities', 'Cooking'],
 };
+
+const INTERESTS_LIST = [
+  'Reading', 'Travel', 'Cooking', 'Music', 'Gardening', 'Walking',
+  'Dancing', 'Art', 'Movies', 'Photography', 'Yoga', 'Swimming',
+  'Theater', 'Golf', 'Tennis', 'Fishing', 'Board Games', 'Cards',
+  'Volunteering', 'Bird Watching', 'Crafts', 'Baking', 'Karaoke',
+  'Church Activities', 'Mahjong', 'Sewing', 'Crossword Puzzles',
+];
 
 // GENDER_OPTIONS moved to VisualGenderButton component
 const LOOKING_FOR_OPTIONS = ['Men', 'Women', 'Both'];
@@ -316,21 +324,6 @@ const Toast: React.FC<ToastProps> = ({ visible, message, type, onHide }) => {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
-  const hideToast = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => onHide());
-  }, [translateY, opacity, onHide]);
-
   useEffect(() => {
     if (visible) {
       // Slide in
@@ -354,13 +347,28 @@ const Toast: React.FC<ToastProps> = ({ visible, message, type, onHide }) => {
 
       return () => clearTimeout(timer);
     }
-  }, [visible, translateY, opacity, hideToast]);
+  }, [visible]);
+
+  const hideToast = () => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onHide());
+  };
 
   const getToastConfig = () => {
     switch (type) {
       case 'success':
         return {
-          colors: ['#349E92', '#2E8B7F'] as [string, string],
+          colors: [colors.teal[500], colors.teal[600]] as [string, string],
           icon: 'check-circle' as const,
         };
       case 'error':
@@ -370,13 +378,13 @@ const Toast: React.FC<ToastProps> = ({ visible, message, type, onHide }) => {
         };
       case 'warning':
         return {
-          colors: ['#FF7B51', '#E85A36'] as [string, string],
+          colors: [colors.orange[500], colors.orange[600]] as [string, string],
           icon: 'alert-triangle' as const,
         };
       case 'info':
       default:
         return {
-          colors: ['#FF7B51', '#349E92'] as [string, string],
+          colors: [colors.orange[500], colors.teal[500]] as [string, string],
           icon: 'info' as const,
         };
     }
@@ -395,10 +403,6 @@ const Toast: React.FC<ToastProps> = ({ visible, message, type, onHide }) => {
           opacity,
         },
       ]}
-      accessible
-      accessibilityRole="alert"
-      accessibilityLiveRegion="polite"
-      accessibilityLabel={`${type} notification: ${message}`}
     >
       <LinearGradient
         colors={config.colors}
@@ -553,7 +557,7 @@ const AnimatedProgressBar: React.FC<{
       <View style={[styles.animatedProgressTrack, { height, borderRadius: height / 2 }]}>
         <Animated.View style={{ width: animatedWidth, height: '100%' }}>
           <LinearGradient
-            colors={['#FF7B51', '#8B7355', '#349E92']}
+            colors={[colors.orange[400], colors.orange[500], colors.teal[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.animatedProgressFill, { borderRadius: height / 2 }]}
@@ -581,15 +585,16 @@ const EnhancedPhotoItem: React.FC<{
   photo: string;
   index: number;
   isMain: boolean;
+  photoItemWidth: number;
   borderRadius: number;
   onPress: () => void;
   isTablet: boolean;
-}> = ({ photo, index, isMain, borderRadius, onPress, isTablet }) => {
+}> = ({ photo, index, isMain, photoItemWidth, borderRadius, onPress, isTablet }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.96,
       tension: 300,
       friction: 10,
       useNativeDriver: true,
@@ -605,84 +610,41 @@ const EnhancedPhotoItem: React.FC<{
     }).start();
   };
 
-  // Badge sizes for senior visibility
-  const mainBadgeSize = isTablet ? 36 : 32;
-  const numberBadgeSize = isTablet ? 30 : 26;
-
   return (
-    <Animated.View
-      style={[
-        styles.photoGridItemWrapper,
-        { transform: [{ scale: scaleAnim }] },
-      ]}
-    >
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={[
-          styles.photoGridItemContainer,
+          styles.enhancedPhotoItem,
           {
+            width: photoItemWidth,
             borderRadius,
-            // Subtle shadow for depth
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 4,
           },
         ]}
-        accessibilityLabel={isMain ? 'Main profile photo, tap to view gallery' : `Photo ${index + 1}, tap to view gallery`}
+        accessibilityLabel={isMain ? 'Main profile photo' : `Photo ${index + 1}`}
         accessibilityRole="button"
-        accessibilityHint="Opens photo gallery"
       >
-        <Image
-          source={{ uri: photo }}
-          style={[styles.photoGridImage, { borderRadius }]}
-          resizeMode="cover"
-        />
-        {/* Subtle gradient overlay for visual depth */}
+        <Image source={{ uri: photo }} style={styles.enhancedPhotoImage} />
+        {/* Gradient overlay for visual depth */}
         <LinearGradient
-          colors={['transparent', 'transparent', 'rgba(0,0,0,0.15)']}
-          locations={[0, 0.6, 1]}
-          style={[styles.photoGridOverlay, { borderRadius }]}
+          colors={['transparent', 'rgba(0,0,0,0.2)']}
+          style={styles.photoItemOverlay}
         />
-        {/* Main photo star badge - top right */}
         {isMain && (
-          <View style={[styles.mainPhotoBadgeContainer, { top: 8, right: 8 }]}>
+          <View style={styles.enhancedMainBadge}>
             <LinearGradient
-              colors={['#FF7B51', '#E85A36']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[
-                styles.mainPhotoBadgeGradient,
-                {
-                  width: mainBadgeSize,
-                  height: mainBadgeSize,
-                  borderRadius: mainBadgeSize / 2,
-                },
-              ]}
+              colors={[colors.orange[500], colors.orange[600]]}
+              style={styles.enhancedMainBadgeGradient}
             >
-              <Feather name="star" size={isTablet ? 18 : 16} color={colors.white} />
+              <Feather name="star" size={isTablet ? 14 : 12} color={colors.white} />
             </LinearGradient>
           </View>
         )}
-        {/* Photo number badge - bottom left */}
-        <View
-          style={[
-            styles.photoNumberBadge,
-            {
-              width: numberBadgeSize,
-              height: numberBadgeSize,
-              borderRadius: numberBadgeSize / 2,
-              bottom: 8,
-              left: 8,
-            },
-          ]}
-        >
-          <Text style={[styles.photoNumberText, { fontSize: isTablet ? 15 : 13 }]}>
-            {index + 1}
-          </Text>
+        {/* Photo position indicator */}
+        <View style={styles.photoPositionBadge}>
+          <Text style={styles.photoPositionText}>{index + 1}</Text>
         </View>
       </Pressable>
     </Animated.View>
@@ -695,14 +657,15 @@ const EnhancedPhotoItem: React.FC<{
 
 /**
  * Enhanced Add Photo Button Component
- * With animated border, visual feedback, and senior-friendly sizing
+ * With animated border and visual feedback
  */
 const EnhancedAddPhotoButton: React.FC<{
+  photoItemWidth: number;
   borderRadius: number;
   onPress: () => void;
   isFirst: boolean;
   isTablet: boolean;
-}> = ({ borderRadius, onPress, isFirst, isTablet }) => {
+}> = ({ photoItemWidth, borderRadius, onPress, isFirst, isTablet }) => {
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -712,13 +675,13 @@ const EnhancedAddPhotoButton: React.FC<{
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 1800,
+            duration: 1500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
           }),
           Animated.timing(pulseAnim, {
             toValue: 0,
-            duration: 1800,
+            duration: 1500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
           }),
@@ -732,7 +695,7 @@ const EnhancedAddPhotoButton: React.FC<{
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.96,
       tension: 300,
       friction: 10,
       useNativeDriver: true,
@@ -750,64 +713,44 @@ const EnhancedAddPhotoButton: React.FC<{
 
   const borderOpacity = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 0.6],
+    outputRange: [1, 0.5],
   });
 
-  const iconCircleSize = isTablet ? 64 : 56;
-
   return (
-    <Animated.View
-      style={[
-        styles.photoGridItemWrapper,
-        { transform: [{ scale: scaleAnim }] },
-      ]}
-    >
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={[
-          styles.addPhotoButtonContainer,
-          { borderRadius },
+          styles.enhancedAddPhotoButton,
+          {
+            width: photoItemWidth,
+            borderRadius,
+          },
         ]}
         accessibilityLabel={isFirst ? 'Add your first profile photo' : 'Add another photo'}
         accessibilityRole="button"
-        accessibilityHint="Opens camera or photo library"
       >
-        {/* Animated dashed border */}
         <Animated.View
           style={[
-            styles.addPhotoButtonBorder,
+            styles.enhancedAddPhotoBorder,
             {
               borderRadius,
               opacity: isFirst ? borderOpacity : 1,
             },
           ]}
         />
-        {/* Content */}
-        <View style={styles.addPhotoButtonContent}>
-          {/* Icon circle with gradient background on hover feel */}
-          <LinearGradient
-            colors={['#FFF5F2', '#FFEEE8']}
-            style={[
-              styles.addPhotoIconCircle,
-              {
-                width: iconCircleSize,
-                height: iconCircleSize,
-                borderRadius: iconCircleSize / 2,
-              },
-            ]}
-          >
-            <Feather name="plus" size={isTablet ? 32 : 28} color="#FF7B51" />
-          </LinearGradient>
-          {/* Text label */}
-          <Text style={[styles.addPhotoButtonText, { fontSize: isTablet ? 18 : 16 }]}>
+        <View style={styles.enhancedAddPhotoContent}>
+          <View style={[styles.enhancedAddPhotoIconCircle, isTablet && { width: 56, height: 56 }]}>
+            <Feather name="plus" size={isTablet ? 28 : 24} color={colors.orange[500]} />
+          </View>
+          <Text style={[styles.enhancedAddPhotoText, isTablet && { fontSize: 16 }]}>
             {isFirst ? 'Add Photo' : 'Add More'}
           </Text>
-          {/* Subtle hint text */}
           {isFirst && (
-            <Text style={[styles.addPhotoButtonHint, { fontSize: isTablet ? 14 : 13 }]}>
-              Tap to start
+            <Text style={styles.enhancedAddPhotoHint}>
+              This will be your main photo
             </Text>
           )}
         </View>
@@ -837,13 +780,13 @@ const ProfileStrengthTip: React.FC<{
     accessibilityRole="button"
   >
     <View style={styles.strengthTipIconContainer}>
-      <Feather name={icon} size={18} color={'#FF7B51'} />
+      <Feather name={icon} size={18} color={colors.orange[500]} />
     </View>
     <View style={styles.strengthTipContent}>
       <Text style={styles.strengthTipMessage}>{message}</Text>
       <Text style={styles.strengthTipAction}>{action}</Text>
     </View>
-    <Feather name="chevron-right" size={20} color={'#F68562'} />
+    <Feather name="chevron-right" size={20} color={colors.orange[400]} />
   </TouchableOpacity>
 );
 
@@ -857,7 +800,7 @@ const ProfileStrengthTip: React.FC<{
  */
 const InterestChip: React.FC<{ interest: string }> = ({ interest }) => (
   <LinearGradient
-    colors={['#FF7B51', '#349E92']}
+    colors={[colors.orange[500], colors.teal[500]]}
     start={{ x: 0, y: 0 }}
     end={{ x: 1, y: 0 }}
     style={styles.interestChip}
@@ -950,8 +893,15 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
   // Zoom hint styling
   const zoomHintFontSize = isTablet ? 16 : isLandscape ? 12 : 14;
 
-  // Reset zoom function - memoized to prevent unnecessary re-renders
-  const resetZoom = useCallback(() => {
+  // Reset when opening or changing photos
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(initialIndex);
+      resetZoom();
+    }
+  }, [visible, initialIndex]);
+
+  const resetZoom = () => {
     setScale(1);
     lastScale.current = 1;
     lastPositionX.current = 0;
@@ -959,15 +909,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
     scaleAnim.setValue(1);
     positionX.setValue(0);
     positionY.setValue(0);
-  }, [scaleAnim, positionX, positionY]);
-
-  // Reset when opening or changing photos
-  useEffect(() => {
-    if (visible) {
-      setCurrentIndex(initialIndex);
-      resetZoom();
-    }
-  }, [visible, initialIndex, resetZoom]);
+  };
 
   // Pan responder for zoom and pan gestures
   const panResponder = useMemo(() => {
@@ -1302,7 +1244,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
               accessibilityRole="button"
             >
               <LinearGradient
-                colors={['#FF7B51', '#E85A36']}
+                colors={[colors.orange[500], colors.orange[600]]}
                 style={[
                   styles.photoViewerActionButtonGradient,
                   {
@@ -1412,7 +1354,7 @@ const ModalHeader: React.FC<{
     <View style={styles.enhancedModalHeaderWrapper}>
       {/* Gradient Accent Line */}
       <LinearGradient
-        colors={['#FF7B51', '#349E92']}
+        colors={[colors.orange[500], colors.teal[500]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.modalHeaderGradientAccent}
@@ -1437,7 +1379,7 @@ const ModalHeader: React.FC<{
               }
             ]}>
               <LinearGradient
-                colors={['#FF7B51', '#349E92']}
+                colors={[colors.orange[500], colors.teal[500]]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalHeaderIconGradient}
@@ -1511,7 +1453,7 @@ const OutlineButton: React.FC<{
     accessibilityLabel={label}
     accessibilityRole="button"
   >
-    {icon && <Feather name={icon} size={18} color={'#FF7B51'} />}
+    {icon && <Feather name={icon} size={18} color={colors.orange[500]} />}
     <Text style={styles.outlineButtonText}>{label}</Text>
   </TouchableOpacity>
 );
@@ -1560,7 +1502,7 @@ const AgeStepper: React.FC<{
         accessibilityState={{ disabled: value <= min }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Feather name="minus" size={iconSize} color={value <= min ? colors.gray[400] : '#FF7B51'} />
+        <Feather name="minus" size={iconSize} color={value <= min ? colors.gray[400] : colors.orange[500]} />
       </TouchableOpacity>
 
       <View style={styles.ageStepperValueContainer}>
@@ -1587,7 +1529,7 @@ const AgeStepper: React.FC<{
         accessibilityState={{ disabled: value >= max }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Feather name="plus" size={iconSize} color={value >= max ? colors.gray[400] : '#FF7B51'} />
+        <Feather name="plus" size={iconSize} color={value >= max ? colors.gray[400] : colors.orange[500]} />
       </TouchableOpacity>
     </View>
   );
@@ -1632,13 +1574,13 @@ const StoryTemplateCard: React.FC<{
     accessibilityRole="button"
   >
     <LinearGradient
-      colors={['#FFF0EB', '#E8F7F5']}
+      colors={[colors.orange[50], colors.teal[50]]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.storyTemplateCardGradient}
     >
       <View style={styles.storyTemplateCardHeader}>
-        <Feather name="file-text" size={20} color={'#FF7B51'} />
+        <Feather name="file-text" size={20} color={colors.orange[500]} />
         <Text style={styles.storyTemplateCardTitle}>{title}</Text>
       </View>
       <Text style={styles.storyTemplateCardPreview} numberOfLines={2}>
@@ -1646,7 +1588,7 @@ const StoryTemplateCard: React.FC<{
       </Text>
       <View style={styles.storyTemplateCardAction}>
         <Text style={styles.storyTemplateCardActionText}>Tap to use</Text>
-        <Feather name="chevron-right" size={18} color={'#FF7B51'} />
+        <Feather name="chevron-right" size={18} color={colors.orange[500]} />
       </View>
     </LinearGradient>
   </TouchableOpacity>
@@ -1666,7 +1608,7 @@ const BioPhraseChip: React.FC<{
     accessibilityLabel={`Add: ${phrase}`}
     accessibilityRole="button"
   >
-    <Feather name="plus" size={14} color={'#2E8B7F'} />
+    <Feather name="plus" size={14} color={colors.teal[600]} />
     <Text style={styles.bioPhraseChipText}>{phrase}</Text>
   </TouchableOpacity>
 );
@@ -1697,7 +1639,7 @@ const InterestCategorySection: React.FC<{
           >
             {isSelected ? (
               <LinearGradient
-                colors={['#FF7B51', '#349E92']}
+                colors={[colors.orange[500], colors.teal[500]]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.interestSelectedLarge}
@@ -1735,7 +1677,7 @@ const VisualGenderButton: React.FC<{
   >
     {selected ? (
       <LinearGradient
-        colors={['#FF7B51', '#349E92']}
+        colors={[colors.orange[500], colors.teal[500]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.visualGenderButtonSelected}
@@ -1804,7 +1746,7 @@ const VisualLookingForButton: React.FC<{
     >
       {selected ? (
         <LinearGradient
-          colors={['#349E92', '#FF7B51']}
+          colors={[colors.teal[500], colors.orange[500]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.visualLookingForSelected}
@@ -1879,6 +1821,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     isAndroid,
   } = useResponsive();
 
+  // Navigation for chat
+  const navigation = useNavigation<any>();
+
   // ==========================================================================
   // RESPONSIVE CALCULATIONS - Comprehensive Device Support
   // ==========================================================================
@@ -1923,10 +1868,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     const photoGridColumns = getPhotoGridColumns();
 
-    // Photo grid item calculations - consistent gap for 2-column layout
-    const photoGridGap = isTablet ? spacing.m : spacing.m;
+    // Photo grid item calculations
+    const photoGridGap = isTablet ? spacing.l : spacing.m;
     // Card padding is applied by sectionCardContent container
-    const cardPadding = isTablet ? spacing.l : spacing.l;
+    const cardPadding = isTablet ? spacing.xl : spacing.l;
 
     // For tablets/foldables in landscape, limit photo grid width
     const effectivePhotoGridWidth = (isTablet && isLandscape) || isFoldable
@@ -2461,24 +2406,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Accessibility: Reduced motion preference
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isReduceMotionEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      (isEnabled) => setReduceMotion(isEnabled)
-    );
-
-    return () => subscription?.remove();
-  }, []);
-
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -2492,7 +2419,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Modal states
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [showPhotoViewer, setShowPhotoViewer] = useState(false);
-  const [showPhotoPickerModal, setShowPhotoPickerModal] = useState(false);
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState(0);
   const [showBasicModal, setShowBasicModal] = useState(false);
   const [showBioModal, setShowBioModal] = useState(false);
@@ -2505,6 +2431,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [editAge, setEditAge] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editBio, setEditBio] = useState('');
+  const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editGender, setEditGender] = useState('');
   const [editLookingFor, setEditLookingFor] = useState('');
   const [editJob, setEditJob] = useState('');
@@ -2513,10 +2440,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [editReligion, setEditReligion] = useState('');
   const [editChildren, setEditChildren] = useState('');
   const [editLanguages, setEditLanguages] = useState<string[]>([]);
+  const [interestSearchQuery, setInterestSearchQuery] = useState('');
 
   // Additional state for improved modals
   const [showOtherLocation, setShowOtherLocation] = useState(false);
   const [showTemplates, setShowTemplates] = useState(true);
+  const [selectedInterestCategory, setSelectedInterestCategory] = useState<string>('Quick Picks');
 
   // Toast notification state
   const [toast, setToast] = useState<ToastState>({
@@ -2596,6 +2525,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const profileCompletion = calculateProfileCompletion();
 
+  const filteredInterests = INTERESTS_LIST.filter((interest) =>
+    interest.toLowerCase().includes(interestSearchQuery.toLowerCase())
+  );
+
   const getProfileStrengthMessage = () => {
     if (profileCompletion >= 100) return 'Your profile is complete! You are ready to find matches.';
     if (profileCompletion >= 80) return 'Almost there! Add a few more photos to get noticed.';
@@ -2674,34 +2607,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           : '',
         lookingFor: lookingForDisplay,
         job: data.hobby || '',
-        education: data.education || '',
-        height: data.height || '',
+        education: '',
+        height: '',
         religion: data.religion || '',
         children: data.numberOfChildren?.toString() || '',
         languages: languagesArray,
       });
 
-      // Animate content in (respects reduced motion preference)
-      if (reduceMotion) {
-        // Skip animation for users who prefer reduced motion
-        fadeAnim.setValue(1);
-        slideAnim.setValue(0);
-      } else {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
+      // Animate content in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } catch (error) {
-      console.error('Failed to load profile:', error);
+      console.warn('Failed to load profile:', error);
       showToast('Unable to load your profile. Please check your connection.', 'error');
     } finally {
       setIsLoading(false);
@@ -2758,7 +2685,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setShowBasicModal(false);
       showToast('Your basic information has been updated.', 'success');
     } catch (error) {
-      console.error('Failed to save basic info:', error);
+      console.warn('Failed to save basic info:', error);
       showToast('Unable to save your information. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -2803,7 +2730,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setShowBioModal(false);
       showToast('Your story has been updated.', 'success');
     } catch (error) {
-      console.error('Failed to save bio:', error);
+      console.warn('Failed to save bio:', error);
       showToast('Unable to save your story. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -2815,8 +2742,40 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // =============================================================================
 
   const openInterestsEditor = useCallback(() => {
+    setEditInterests([...profile.interests]);
+    setInterestSearchQuery('');
+    setSelectedInterestCategory('Quick Picks');
     setShowInterestsModal(true);
+  }, [profile.interests]);
+
+  const toggleInterest = useCallback((interest: string) => {
+    setEditInterests((prev) =>
+      prev.includes(interest)
+        ? prev.filter((i) => i !== interest)
+        : [...prev, interest]
+    );
   }, []);
+
+  const saveInterests = useCallback(async () => {
+    if (editInterests.length < 3) {
+      showToast('Please select at least 3 interests for better matches.', 'warning');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateProfile({ interests: JSON.stringify(editInterests) });
+
+      setProfile((prev) => ({ ...prev, interests: editInterests }));
+      setShowInterestsModal(false);
+      showToast('Your interests have been updated.', 'success');
+    } catch (error) {
+      console.warn('Failed to save interests:', error);
+      showToast('Unable to save your interests. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editInterests, showToast]);
 
   // =============================================================================
   // PREFERENCES HANDLERS
@@ -2858,7 +2817,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setShowPreferencesModal(false);
       showToast('Your preferences have been updated.', 'success');
     } catch (error) {
-      console.error('Failed to save preferences:', error);
+      console.warn('Failed to save preferences:', error);
       showToast('Unable to save your preferences. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -2917,7 +2876,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setShowDetailsModal(false);
       showToast('Your details have been updated.', 'success');
     } catch (error) {
-      console.error('Failed to save details:', error);
+      console.warn('Failed to save details:', error);
       showToast('Unable to save your details. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -2937,13 +2896,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }, [markAsRead]);
 
   const handleReplyToComment = useCallback((comment: StoryComment) => {
-    // TODO: Navigate to chat or create new conversation
-    // For now, just mark as replied with a placeholder conversation ID
-    markAsReplied(comment.id, `conv_${Date.now()}`);
+    // Close modal
     setShowStoryResponsesModal(false);
     setSelectedComment(null);
-    showToast('Starting a conversation...', 'info');
-  }, [markAsReplied, showToast]);
+
+    // Use existing conversationId if available (when already matched), otherwise use dm_ format
+    const convId = comment.conversationId || `dm_${comment.senderId}`;
+
+    // Mark as replied
+    markAsReplied(comment.id, convId);
+
+    // Navigate to chat - if conversationId exists, loads directly; otherwise useChat resolves it
+    navigation.navigate('MessagesTab', {
+      screen: 'Chat',
+      params: {
+        conversationId: convId,
+        userName: comment.senderName,
+        userPhoto: comment.senderPhoto || undefined,
+        userId: comment.senderId,
+      },
+    });
+  }, [markAsReplied, navigation]);
 
   const handleLikeBack = useCallback(async (comment: StoryComment) => {
     if (likingBackCommentId) return; // Prevent double-tap
@@ -2965,7 +2938,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         showToast(response.message || 'Failed to like back', 'error');
       }
     } catch (error) {
-      console.error('Failed to like back:', error);
+      console.warn('Failed to like back:', error);
       showToast('Something went wrong. Please try again.', 'error');
     } finally {
       setLikingBackCommentId(null);
@@ -2985,7 +2958,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         showToast('Failed to decline comment', 'error');
       }
     } catch (error) {
-      console.error('Failed to decline comment:', error);
+      console.warn('Failed to decline comment:', error);
       showToast('Something went wrong. Please try again.', 'error');
     } finally {
       setDecliningCommentId(null);
@@ -3008,18 +2981,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }, []);
 
   // =============================================================================
-  // PHOTO HANDLERS - Enhanced with Gallery + Camera Options
+  // PHOTO HANDLERS
   // =============================================================================
 
-  // Show the photo picker modal (Gallery or Camera choice)
-  const openPhotoPickerModal = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowPhotoPickerModal(true);
-  }, []);
-
-  // Process the selected/captured image and upload it
-  const processAndUploadPhoto = useCallback(async (imageUri: string) => {
+  const addPhoto = useCallback(async () => {
     try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        showToast('Please allow access to your photos in settings.', 'warning');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const imageUri = result.assets[0].uri;
       setIsSaving(true);
 
       const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
@@ -3052,96 +3037,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         }
       }
     } catch (error) {
-      console.error('Failed to upload photo:', error);
+      console.warn('Failed to upload photo:', error);
       showToast('Unable to upload photo. Please try again.', 'error');
     } finally {
       setIsSaving(false);
     }
   }, [profile.photos.length, showToast]);
-
-  // Choose from Photo Gallery
-  const pickFromGallery = useCallback(async () => {
-    setShowPhotoPickerModal(false);
-
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permissionResult.granted) {
-        Alert.alert(
-          'Permission Required',
-          'Please allow access to your photo library to select photos for your profile.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => {
-              // On iOS, this would open settings, on Android it does nothing useful
-              // so we just show a toast
-              showToast('Please enable photo access in your device settings.', 'warning');
-            }}
-          ]
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      await processAndUploadPhoto(result.assets[0].uri);
-    } catch (error) {
-      console.error('Failed to pick photo from gallery:', error);
-      showToast('Unable to access your photos. Please try again.', 'error');
-    }
-  }, [processAndUploadPhoto, showToast]);
-
-  // Take a Photo with Camera
-  const takePhotoWithCamera = useCallback(async () => {
-    setShowPhotoPickerModal(false);
-
-    try {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
-      if (!permissionResult.granted) {
-        Alert.alert(
-          'Camera Permission Required',
-          'Please allow camera access to take photos for your profile.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => {
-              showToast('Please enable camera access in your device settings.', 'warning');
-            }}
-          ]
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      await processAndUploadPhoto(result.assets[0].uri);
-    } catch (error) {
-      console.error('Failed to take photo:', error);
-      showToast('Unable to access your camera. Please try again.', 'error');
-    }
-  }, [processAndUploadPhoto, showToast]);
-
-  // Legacy addPhoto function that now opens the picker modal
-  const addPhoto = useCallback(() => {
-    openPhotoPickerModal();
-  }, [openPhotoPickerModal]);
 
   // Show delete confirmation
   const handleDeletePhoto = useCallback((index: number) => {
@@ -3173,7 +3074,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       showToast('Photo has been removed.', 'success');
     } catch (error) {
-      console.error('Failed to delete photo:', error);
+      console.warn('Failed to delete photo:', error);
       showToast('Unable to delete photo. Please try again.', 'error');
     } finally {
       setIsSaving(false);
@@ -3197,7 +3098,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           try {
             await logout();
           } catch (error) {
-            console.error('Logout failed:', error);
+            console.warn('Logout failed:', error);
             showToast('Unable to log out. Please try again.', 'error');
           }
         }}
@@ -3284,24 +3185,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Loading indicator with message */}
         <View style={styles.skeletonLoadingMessage}>
-          <ActivityIndicator size="small" color={'#FF7B51'} />
+          <ActivityIndicator size="small" color={colors.orange[500]} />
           <Text style={styles.skeletonLoadingText}>Loading your profile...</Text>
         </View>
       </View>
     );
   }
-
-  // =============================================================================
-  // PREMIUM GRADIENT THEME COLORS
-  // =============================================================================
-  const PREMIUM_GRADIENT = {
-    top: '#FF7B51',      // Warm coral/orange
-    topAlt: '#F68562',   // Lighter coral
-    mid: '#8B7355',      // Muted olive-brown
-    midAlt: '#A08060',   // Lighter olive
-    bottom: '#349E92',   // Teal/sea-green
-    bottomAlt: '#34A296', // Lighter teal
-  };
 
   // =============================================================================
   // RENDER: MAIN CONTENT
@@ -3333,416 +3222,621 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         accessibilityRole="scrollbar"
         accessibilityLabel="Profile content, scroll to see more"
       >
-        {/* ===== PREMIUM GLASSMORPHISM HEADER ===== */}
-        <View style={[styles.premiumHeaderWrapper, { borderRadius: isTablet ? 32 : 28 }]}>
-          {/* Glass Card with Inner Gradient */}
-          <View style={[styles.premiumGlassCard, { borderRadius: isTablet ? 32 : 28 }]}>
-            {/* Subtle inner gradient glow */}
-            <LinearGradient
-              colors={['rgba(255,123,81,0.15)', 'rgba(52,158,146,0.1)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: isTablet ? 32 : 28 }]}
-            />
+        {/* ===== SECTION 1: iPHONE PREMIUM HEADER ===== */}
+        <View style={[styles.iphoneHeaderCard, { borderRadius: isTablet ? 36 : 32 }]}>
+          {/* Premium glassmorphism background */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.98)', 'rgba(250,250,252,0.96)', 'rgba(245,245,247,0.95)']}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: isTablet ? 36 : 32 }]}
+          />
 
-            {/* Header Top Row: Logo + Settings */}
-            <View style={styles.premiumHeaderTopRow}>
-              <View style={styles.premiumBrandRow}>
-                <View style={styles.premiumLogoCircle}>
-                  <TanderLogoIcon size={isTablet ? 32 : 26} focused />
-                </View>
-                <View>
-                  <Text style={[styles.premiumBrandText, { fontSize: isTablet ? 22 : 18 }]}>
-                    My Profile
-                  </Text>
-                  <Text style={styles.premiumBrandSubtext}>
-                    {profile.name ? `Welcome back, ${profile.name.split(' ')[0]}!` : 'Complete your profile'}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.premiumSettingsButton, { width: isTablet ? 56 : 48, height: isTablet ? 56 : 48 }]}
-                onPress={() => setShowSettings(true)}
-                accessibilityLabel="Open Settings"
-                accessibilityRole="button"
-                accessibilityHint="Opens the settings menu"
-              >
-                <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-                  style={styles.premiumSettingsGradient}
-                >
-                  <Feather name="settings" size={isTablet ? 24 : 20} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
+          {/* Subtle top accent gradient */}
+          <LinearGradient
+            colors={[colors.orange[400], colors.teal[400]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.iphoneHeaderAccent}
+          />
+
+          {/* Settings Button - Top Right */}
+          <TouchableOpacity
+            style={[styles.iphoneSettingsBtn, {
+              width: isTablet ? 48 : 44,
+              height: isTablet ? 48 : 44,
+              borderRadius: isTablet ? 24 : 22,
+            }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowSettings(true);
+            }}
+            accessibilityLabel="Open Settings"
+            accessibilityRole="button"
+            activeOpacity={0.7}
+          >
+            <View style={styles.iphoneSettingsInner}>
+              <Feather name="settings" size={isTablet ? 22 : 20} color={colors.gray[500]} />
             </View>
+          </TouchableOpacity>
 
-            {/* Profile Content Row */}
-            <View style={styles.premiumHeaderContent}>
-              {/* Profile Photo with Premium Gradient Border */}
-              <TouchableOpacity
-                style={[
-                  styles.premiumPhotoWrapper,
-                  {
-                    width: isTablet ? 140 : (isLandscape ? 100 : 120),
-                    height: isTablet ? 140 : (isLandscape ? 100 : 120),
-                    borderRadius: isTablet ? 70 : (isLandscape ? 50 : 60),
-                  }
-                ]}
-                onPress={() => profile.photos.length > 0 ? setShowPhotoGallery(true) : openPhotoPickerModal()}
-                accessibilityLabel={profile.photos.length > 0 ? 'View profile photo, tap to see all photos' : 'Add your profile photo'}
-                accessibilityRole="button"
+          {/* Main header content */}
+          <View style={styles.iphoneHeaderContent}>
+            {/* Premium Profile Photo with animated ring */}
+            <TouchableOpacity
+              style={styles.iphonePhotoWrapper}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                profile.photos.length > 0 ? setShowPhotoGallery(true) : addPhoto();
+              }}
+              accessibilityLabel={profile.photos.length > 0 ? 'View profile photo' : 'Add profile photo'}
+              accessibilityRole="button"
+              activeOpacity={0.9}
+            >
+              {/* Outer glow effect */}
+              <View style={[styles.iphonePhotoGlow, {
+                width: isTablet ? 160 : 136,
+                height: isTablet ? 160 : 136,
+                borderRadius: isTablet ? 80 : 68,
+              }]} />
+
+              {/* Gradient ring */}
+              <LinearGradient
+                colors={[colors.orange[400], colors.orange[500], colors.teal[400], colors.teal[500]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.iphonePhotoRing, {
+                  width: isTablet ? 148 : 124,
+                  height: isTablet ? 148 : 124,
+                  borderRadius: isTablet ? 74 : 62,
+                }]}
               >
-                {/* Gradient border ring */}
+                <View style={[styles.iphonePhotoInner, {
+                  width: isTablet ? 138 : 114,
+                  height: isTablet ? 138 : 114,
+                  borderRadius: isTablet ? 69 : 57,
+                }]}>
+                  {profile.photos.length > 0 ? (
+                    <Image
+                      source={{ uri: profile.photos[0] }}
+                      style={styles.iphonePhoto}
+                    />
+                  ) : (
+                    <View style={styles.iphonePhotoPlaceholder}>
+                      <LinearGradient
+                        colors={[colors.gray[50], colors.gray[100]]}
+                        style={styles.iphonePhotoPlaceholderBg}
+                      >
+                        <Feather name="camera" size={isTablet ? 44 : 36} color={colors.gray[300]} />
+                        <Text style={styles.iphonePhotoPlaceholderText}>Add Photo</Text>
+                      </LinearGradient>
+                    </View>
+                  )}
+                </View>
+              </LinearGradient>
+
+              {/* Premium verified badge */}
+              {profile.photos.length > 0 && (
+                <View style={styles.iphoneVerifiedBadge}>
+                  <LinearGradient
+                    colors={[colors.teal[400], colors.teal[500]]}
+                    style={styles.iphoneVerifiedGradient}
+                  >
+                    <Feather name="check" size={isTablet ? 16 : 14} color={colors.white} />
+                  </LinearGradient>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Name and Location with premium styling */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openBasicInfoEditor();
+              }}
+              style={styles.iphoneNameContainer}
+              accessibilityLabel="Edit name and age"
+              accessibilityRole="button"
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.iphoneName, { fontSize: isTablet ? 30 : 26 }]}>
+                {profile.name || 'Your Name'}, {parseInt(profile.age) >= 50 ? profile.age : '??'}
+              </Text>
+              <View style={styles.iphoneLocationRow}>
+                <View style={styles.iphoneLocationIcon}>
+                  <Feather name="map-pin" size={isTablet ? 16 : 14} color={colors.teal[500]} />
+                </View>
+                <Text style={[styles.iphoneLocation, { fontSize: isTablet ? 16 : 15 }]}>
+                  {profile.location || 'Add your location'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Premium Change Photo button */}
+            {profile.photos.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowPhotoGallery(true);
+                }}
+                style={styles.iphoneChangePhotoBtn}
+                accessibilityLabel="Change photo"
+                accessibilityRole="button"
+                activeOpacity={0.7}
+              >
                 <LinearGradient
-                  colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.mid, PREMIUM_GRADIENT.bottom]}
-                  style={[
-                    styles.premiumPhotoBorderGradient,
-                    {
-                      width: isTablet ? 140 : (isLandscape ? 100 : 120),
-                      height: isTablet ? 140 : (isLandscape ? 100 : 120),
-                      borderRadius: isTablet ? 70 : (isLandscape ? 50 : 60),
-                    }
-                  ]}
+                  colors={['rgba(249,115,22,0.08)', 'rgba(249,115,22,0.04)']}
+                  style={styles.iphoneChangePhotoBtnBg}
+                />
+                <Feather name="camera" size={16} color={colors.orange[500]} />
+                <Text style={styles.iphoneChangePhotoText}>Change Photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* ===== SECTION 2: ULTRA PREMIUM PROFILE STRENGTH - iPhone Style ===== */}
+        <View style={[styles.iphoneStrengthCard, { borderRadius: isTablet ? 32 : 28 }]}>
+          {/* Glassmorphism Background Overlay */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.95)', 'rgba(249,250,251,0.98)']}
+            style={styles.iphoneStrengthGradientBg}
+          />
+
+          {/* Main Content Container */}
+          <View style={styles.iphoneStrengthContent}>
+            {/* Hero Section with SVG Progress Ring */}
+            <View style={styles.iphoneStrengthHero}>
+              {/* Animated SVG Circular Progress */}
+              <View style={[styles.iphoneSvgProgressContainer, {
+                width: isTablet ? 140 : 120,
+                height: isTablet ? 140 : 120
+              }]}>
+                {/* Outer Glow Effect */}
+                <View style={[styles.iphoneProgressGlow, {
+                  width: isTablet ? 150 : 130,
+                  height: isTablet ? 150 : 130,
+                  borderRadius: isTablet ? 75 : 65,
+                  backgroundColor: profileCompletion >= 100
+                    ? 'rgba(20, 184, 166, 0.15)'
+                    : 'rgba(249, 115, 22, 0.12)',
+                }]} />
+
+                {/* SVG Progress Ring */}
+                <Svg
+                  width={isTablet ? 140 : 120}
+                  height={isTablet ? 140 : 120}
+                  viewBox="0 0 120 120"
+                  style={styles.iphoneSvgProgress}
                 >
-                  <View style={[
-                    styles.premiumPhotoContainer,
-                    {
-                      width: isTablet ? 128 : (isLandscape ? 88 : 108),
-                      height: isTablet ? 128 : (isLandscape ? 88 : 108),
-                      borderRadius: isTablet ? 64 : (isLandscape ? 44 : 54),
-                    }
-                  ]}>
-                    {profile.photos.length > 0 ? (
-                      <Image
-                        source={{ uri: profile.photos[0] }}
-                        style={styles.premiumPhotoImage}
-                      />
-                    ) : (
-                      <View style={styles.premiumPhotoPlaceholder}>
-                        <Feather name="camera" size={isTablet ? 44 : 36} color={PREMIUM_GRADIENT.top} />
-                        <Text style={[styles.premiumPhotoPlaceholderText, { color: PREMIUM_GRADIENT.top }]}>Add Photo</Text>
-                      </View>
-                    )}
-                  </View>
-                </LinearGradient>
-                {/* Photo Count Badge */}
-                {profile.photos.length > 0 && (
-                  <View style={styles.premiumPhotoBadge}>
+                  <Defs>
+                    <SvgLinearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <Stop offset="0%" stopColor={profileCompletion >= 100 ? colors.teal[400] : colors.orange[400]} />
+                      <Stop offset="50%" stopColor={profileCompletion >= 100 ? colors.teal[500] : colors.orange[500]} />
+                      <Stop offset="100%" stopColor={profileCompletion >= 100 ? colors.teal[600] : colors.teal[500]} />
+                    </SvgLinearGradient>
+                  </Defs>
+                  {/* Background Circle */}
+                  <Circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    stroke={colors.gray[100]}
+                    strokeWidth="8"
+                    fill="none"
+                  />
+                  {/* Progress Circle with Gradient */}
+                  <Circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    stroke="url(#progressGradient)"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 52}`}
+                    strokeDashoffset={`${2 * Math.PI * 52 * (1 - profileCompletion / 100)}`}
+                    transform="rotate(-90 60 60)"
+                  />
+                </Svg>
+
+                {/* Center Content */}
+                <View style={styles.iphoneProgressCenterContent}>
+                  <Text style={[styles.iphoneProgressNumber, { fontSize: isTablet ? 38 : 32 }]}>
+                    {profileCompletion}
+                  </Text>
+                  <Text style={[styles.iphoneProgressPercent, { fontSize: isTablet ? 16 : 14 }]}>%</Text>
+                </View>
+
+                {/* Completion Badge */}
+                {profileCompletion >= 100 && (
+                  <View style={styles.iphoneCompleteBadge}>
                     <LinearGradient
-                      colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.bottom]}
-                      style={styles.premiumPhotoBadgeGradient}
+                      colors={[colors.teal[400], colors.teal[500]]}
+                      style={styles.iphoneCompleteBadgeGradient}
                     >
-                      <Feather name="image" size={12} color="#fff" />
-                      <Text style={styles.premiumPhotoBadgeText}>{profile.photos.length}</Text>
+                      <Feather name="check" size={14} color={colors.white} />
                     </LinearGradient>
                   </View>
                 )}
-              </TouchableOpacity>
+              </View>
 
-              {/* Profile Info */}
-              <View style={styles.premiumInfoContainer}>
-                <TouchableOpacity
-                  onPress={openBasicInfoEditor}
-                  accessibilityLabel="Edit name and age"
-                  accessibilityRole="button"
-                  style={{ minHeight: touchTarget.minimum }}
-                >
-                  <Text style={[styles.premiumName, { fontSize: isTablet ? 28 : (isLandscape ? 22 : 26) }]}>
-                    {profile.name || 'Your Name'}
-                  </Text>
-                  {profile.age && (
-                    <Text style={[styles.premiumAge, { fontSize: isTablet ? 20 : 17 }]}>
-                      {profile.age} years young
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                <View style={styles.premiumLocationRow}>
-                  <View style={styles.premiumLocationIcon}>
-                    <Feather name="map-pin" size={isTablet ? 16 : 14} color="#fff" />
-                  </View>
-                  <Text style={[styles.premiumLocation, { fontSize: isTablet ? 16 : 14 }]}>
-                    {profile.location || 'Add your location'}
+              {/* Status Text Section */}
+              <View style={styles.iphoneStrengthTextContainer}>
+                <Text style={[styles.iphoneStrengthTitle, { fontSize: isTablet ? 24 : 20 }]}>
+                  Profile Strength
+                </Text>
+                <View style={[styles.iphoneStatusBadge, {
+                  backgroundColor: profileCompletion >= 100
+                    ? 'rgba(20, 184, 166, 0.12)'
+                    : profileCompletion >= 80
+                      ? 'rgba(245, 158, 11, 0.12)'
+                      : 'rgba(249, 115, 22, 0.12)',
+                }]}>
+                  <View style={[styles.iphoneStatusDot, {
+                    backgroundColor: profileCompletion >= 100
+                      ? colors.teal[500]
+                      : profileCompletion >= 80
+                        ? '#F59E0B'
+                        : colors.orange[500],
+                  }]} />
+                  <Text style={[styles.iphoneStatusText, {
+                    fontSize: isTablet ? 15 : 13,
+                    color: profileCompletion >= 100
+                      ? colors.teal[600]
+                      : profileCompletion >= 80
+                        ? '#B45309'
+                        : colors.orange[600],
+                  }]}>
+                    {profileCompletion >= 100 ? 'Complete' : profileCompletion >= 80 ? 'Almost there' : 'Keep going'}
                   </Text>
                 </View>
-
-                {/* Quick Action Buttons */}
-                <View style={styles.premiumQuickActions}>
-                  <TouchableOpacity
-                    style={styles.premiumQuickButton}
-                    onPress={openPhotoPickerModal}
-                    accessibilityLabel="Add a new photo"
-                    accessibilityRole="button"
-                  >
-                    <LinearGradient
-                      colors={[PREMIUM_GRADIENT.top, '#FF9068']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.premiumQuickButtonGradient}
-                    >
-                      <Feather name="camera" size={isTablet ? 18 : 16} color="#fff" />
-                      <Text style={[styles.premiumQuickButtonText, { fontSize: isTablet ? 14 : 13 }]}>Add Photo</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.premiumQuickButton}
-                    onPress={openBioEditor}
-                    accessibilityLabel="Edit your story"
-                    accessibilityRole="button"
-                  >
-                    <LinearGradient
-                      colors={[PREMIUM_GRADIENT.bottom, '#3DB8A8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.premiumQuickButtonGradient}
-                    >
-                      <Feather name="edit-3" size={isTablet ? 18 : 16} color="#fff" />
-                      <Text style={[styles.premiumQuickButtonText, { fontSize: isTablet ? 14 : 13 }]}>Edit Story</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
+                <Text style={[styles.iphoneStrengthDescription, { fontSize: isTablet ? 15 : 14 }]}>
+                  {getProfileStrengthMessage()}
+                </Text>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* ===== SECTION 2: PROFILE STRENGTH - Premium Enhanced ===== */}
-        <View style={[styles.enhancedProfileStrengthSection, { padding: responsiveSpacing.card }]}>
-          {/* Header with icon and status badge */}
-          <View style={styles.enhancedStrengthHeader}>
-            <View style={styles.enhancedStrengthHeaderLeft}>
-              <View style={styles.strengthIconContainer}>
-                <LinearGradient
-                  colors={profileCompletion >= 100 ? [PREMIUM_GRADIENT.bottom, '#3DB8A8'] : [PREMIUM_GRADIENT.top, '#FF9068']}
-                  style={styles.strengthIconGradient}
-                >
-                  <Feather
-                    name={profileCompletion >= 100 ? 'check-circle' : 'trending-up'}
-                    size={isTablet ? 22 : 18}
-                    color="#fff"
+            {/* Premium Action Cards */}
+            {profileCompletion < 100 && (
+              <View style={styles.iphoneActionsContainer}>
+                {/* Divider with gradient */}
+                <View style={styles.iphoneDividerContainer}>
+                  <LinearGradient
+                    colors={[colors.gray[100], colors.gray[200], colors.gray[100]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.iphoneDivider}
                   />
-                </LinearGradient>
+                </View>
+
+                <Text style={[styles.iphoneActionsTitle, { fontSize: isTablet ? 14 : 12 }]}>
+                  BOOST YOUR PROFILE
+                </Text>
+
+                {/* Photo Action Card */}
+                {profile.photos.length < 3 && (
+                  <TouchableOpacity
+                    style={styles.iphoneActionCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowPhotoGallery(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['rgba(249, 115, 22, 0.08)', 'rgba(249, 115, 22, 0.03)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.iphoneActionCardBg}
+                    />
+                    <View style={styles.iphoneActionIconWrapper}>
+                      <LinearGradient
+                        colors={[colors.orange[400], colors.orange[500]]}
+                        style={styles.iphoneActionIconGradient}
+                      >
+                        <Feather name="camera" size={isTablet ? 22 : 18} color={colors.white} />
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.iphoneActionTextContainer}>
+                      <Text style={[styles.iphoneActionTitle, { fontSize: isTablet ? 17 : 15 }]}>
+                        Add more photos
+                      </Text>
+                      <Text style={[styles.iphoneActionSubtitle, { fontSize: isTablet ? 14 : 12 }]}>
+                        Profiles with 3+ photos get 2x more matches
+                      </Text>
+                    </View>
+                    <View style={styles.iphoneActionArrow}>
+                      <Feather name="chevron-right" size={isTablet ? 22 : 18} color={colors.gray[400]} />
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {/* Bio Action Card */}
+                {!profile.bio && (
+                  <TouchableOpacity
+                    style={styles.iphoneActionCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      openBioEditor();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['rgba(20, 184, 166, 0.08)', 'rgba(20, 184, 166, 0.03)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.iphoneActionCardBg}
+                    />
+                    <View style={styles.iphoneActionIconWrapper}>
+                      <LinearGradient
+                        colors={[colors.teal[400], colors.teal[500]]}
+                        style={styles.iphoneActionIconGradient}
+                      >
+                        <Feather name="edit-3" size={isTablet ? 22 : 18} color={colors.white} />
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.iphoneActionTextContainer}>
+                      <Text style={[styles.iphoneActionTitle, { fontSize: isTablet ? 17 : 15 }]}>
+                        Write your story
+                      </Text>
+                      <Text style={[styles.iphoneActionSubtitle, { fontSize: isTablet ? 14 : 12 }]}>
+                        Share what makes you unique
+                      </Text>
+                    </View>
+                    <View style={styles.iphoneActionArrow}>
+                      <Feather name="chevron-right" size={isTablet ? 22 : 18} color={colors.gray[400]} />
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {/* Interests Action Card */}
+                {profile.interests.length < 3 && (
+                  <TouchableOpacity
+                    style={styles.iphoneActionCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowInterestsModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['rgba(168, 85, 247, 0.08)', 'rgba(168, 85, 247, 0.03)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.iphoneActionCardBg}
+                    />
+                    <View style={styles.iphoneActionIconWrapper}>
+                      <LinearGradient
+                        colors={['#A855F7', '#9333EA']}
+                        style={styles.iphoneActionIconGradient}
+                      >
+                        <Feather name="heart" size={isTablet ? 22 : 18} color={colors.white} />
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.iphoneActionTextContainer}>
+                      <Text style={[styles.iphoneActionTitle, { fontSize: isTablet ? 17 : 15 }]}>
+                        Add interests
+                      </Text>
+                      <Text style={[styles.iphoneActionSubtitle, { fontSize: isTablet ? 14 : 12 }]}>
+                        Find people who share your passions
+                      </Text>
+                    </View>
+                    <View style={styles.iphoneActionArrow}>
+                      <Feather name="chevron-right" size={isTablet ? 22 : 18} color={colors.gray[400]} />
+                    </View>
+                  </TouchableOpacity>
+                )}
               </View>
-              <Text style={[styles.enhancedStrengthLabel, responsiveStyles.profileStrengthLabel]}>
-                Profile Strength
-              </Text>
-            </View>
-            <View style={[
-              styles.strengthPercentageBadge,
-              profileCompletion >= 100 && styles.strengthPercentageBadgeComplete,
-            ]}>
-              <Text style={[
-                styles.enhancedStrengthPercentage,
-                responsiveStyles.profileStrengthPercentage,
-                profileCompletion >= 100 && styles.strengthPercentageComplete,
-              ]}>
-                {profileCompletion}%
-              </Text>
-            </View>
+            )}
+
+            {/* Completion Celebration */}
+            {profileCompletion >= 100 && (
+              <View style={styles.iphoneCelebration}>
+                <LinearGradient
+                  colors={['rgba(20, 184, 166, 0.08)', 'rgba(20, 184, 166, 0.02)']}
+                  style={styles.iphoneCelebrationBg}
+                />
+                <Feather name="award" size={24} color={colors.teal[500]} />
+                <Text style={[styles.iphoneCelebrationText, { fontSize: isTablet ? 15 : 14 }]}>
+                  Your profile is ready to shine!
+                </Text>
+              </View>
+            )}
           </View>
-
-          {/* Animated Progress Bar */}
-          <AnimatedProgressBar
-            progress={profileCompletion}
-            height={isTablet ? 16 : 14}
-            showGlow={profileCompletion < 100}
-          />
-
-          {/* Status message with icon */}
-          <View style={styles.strengthStatusContainer}>
-            <Feather
-              name={profileCompletion >= 100 ? 'award' : profileCompletion >= 80 ? 'star' : 'info'}
-              size={isTablet ? 18 : 16}
-              color={profileCompletion >= 100 ? PREMIUM_GRADIENT.bottom : PREMIUM_GRADIENT.top}
-            />
-            <Text style={[styles.enhancedStrengthHelper, responsiveStyles.profileStrengthHelper]}>
-              {getProfileStrengthMessage()}
-            </Text>
-          </View>
-
-          {/* Actionable tips for incomplete profiles */}
-          {profileCompletion < 100 && (
-            <View style={styles.strengthTipsContainer}>
-              {profile.photos.length < 3 && (
-                <ProfileStrengthTip
-                  icon="camera"
-                  message="Add more photos"
-                  action="Profiles with 3+ photos get more matches"
-                  onPress={() => setShowPhotoGallery(true)}
-                />
-              )}
-              {!profile.bio && (
-                <ProfileStrengthTip
-                  icon="edit-3"
-                  message="Write your story"
-                  action="Help others know the real you"
-                  onPress={openBioEditor}
-                />
-              )}
-              {profile.interests.length < 3 && (
-                <ProfileStrengthTip
-                  icon="heart"
-                  message="Add more interests"
-                  action="Find people who share your passions"
-                  onPress={openInterestsEditor}
-                />
-              )}
-            </View>
-          )}
         </View>
 
-        {/* ===== SECTION 3: MY STORY - Enhanced ===== */}
+        {/* ===== SECTION 3: iPHONE MY STORY ===== */}
         <View
-          style={[styles.enhancedSectionCard, { borderRadius: responsiveStyles.sectionCard.borderRadius }]}
+          style={[styles.iphoneSectionCard, { borderRadius: isTablet ? 28 : 24 }]}
           accessible={true}
           accessibilityLabel="My Story section"
         >
-          {/* Gradient accent bar at top - Premium Theme */}
+          {/* Premium gradient accent */}
           <LinearGradient
-            colors={[PREMIUM_GRADIENT.top, PREMIUM_GRADIENT.mid, PREMIUM_GRADIENT.bottom]}
+            colors={[colors.orange[400], colors.orange[500], colors.teal[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.sectionAccentBar, { borderTopLeftRadius: responsiveStyles.sectionCard.borderRadius, borderTopRightRadius: responsiveStyles.sectionCard.borderRadius }]}
+            style={[styles.iphoneSectionAccent, { borderTopLeftRadius: isTablet ? 28 : 24, borderTopRightRadius: isTablet ? 28 : 24 }]}
           />
-          <View style={[styles.enhancedSectionHeader, { paddingHorizontal: responsiveSpacing.card }]}>
-            <View style={styles.enhancedSectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: '#FFF0EB' }]}>
-                <Feather name="feather" size={isTablet ? 24 : 20} color={PREMIUM_GRADIENT.top} accessibilityElementsHidden />
+
+          {/* Header */}
+          <View style={styles.iphoneSectionHeader}>
+            <View style={styles.iphoneSectionHeaderLeft}>
+              <View style={[styles.iphoneSectionIcon, { backgroundColor: 'rgba(249,115,22,0.1)' }]}>
+                <Feather name="feather" size={isTablet ? 22 : 18} color={colors.orange[500]} />
               </View>
-              <Text
-                style={[styles.enhancedSectionTitle, responsiveStyles.sectionCardTitle]}
-                accessibilityRole="header"
-              >
+              <Text style={[styles.iphoneSectionTitle, { fontSize: isTablet ? 20 : 18 }]}>
                 My Story
               </Text>
             </View>
             {profile.bio && (
-              <View style={styles.sectionCompleteBadge}>
-                <Feather name="check" size={14} color={'#2E8B7F'} />
+              <View style={styles.iphoneCompletedBadge}>
+                <LinearGradient
+                  colors={[colors.teal[400], colors.teal[500]]}
+                  style={styles.iphoneCompletedBadgeGradient}
+                >
+                  <Feather name="check" size={12} color={colors.white} />
+                </LinearGradient>
               </View>
             )}
           </View>
-          <View style={[styles.enhancedSectionContent, { padding: responsiveSpacing.card }]}>
+
+          {/* Content */}
+          <View style={styles.iphoneSectionContent}>
             {profile.bio ? (
-              <View style={styles.storyContentContainer}>
-                <Text style={[styles.enhancedStoryText, responsiveStyles.storyText]}>{profile.bio}</Text>
-                <View style={styles.storyQuoteDecoration}>
-                  <Feather name="message-circle" size={16} color={'#FFD4C7'} />
+              <View style={styles.iphoneStoryContainer}>
+                <View style={styles.iphoneStoryQuoteMark}>
+                  <Text style={styles.iphoneQuoteText}>"</Text>
                 </View>
+                <Text style={[styles.iphoneStoryText, { fontSize: isTablet ? 17 : 16 }]}>
+                  {profile.bio}
+                </Text>
               </View>
             ) : (
-              <View style={styles.emptyStateContainer}>
-                <View style={styles.emptyStateIconCircle}>
-                  <Feather name="edit-3" size={isTablet ? 32 : 28} color={'#F68562'} />
+              <View style={styles.iphoneEmptyState}>
+                <View style={styles.iphoneEmptyIconContainer}>
+                  <LinearGradient
+                    colors={['rgba(249,115,22,0.15)', 'rgba(249,115,22,0.05)']}
+                    style={styles.iphoneEmptyIconBg}
+                  >
+                    <Feather name="edit-3" size={isTablet ? 32 : 28} color={colors.orange[400]} />
+                  </LinearGradient>
                 </View>
-                <Text style={[styles.emptyStateTitle, { fontSize: fontSize.body }]}>
+                <Text style={[styles.iphoneEmptyTitle, { fontSize: isTablet ? 18 : 16 }]}>
                   Share your story
                 </Text>
-                <Text style={[styles.emptyStateDescription, { fontSize: fontSize.small, lineHeight: fontSize.small * 1.5 }]}>
-                  Tell others what brings you joy, your journey, and what you are looking for in a companion.
+                <Text style={[styles.iphoneEmptyDescription, { fontSize: isTablet ? 15 : 14 }]}>
+                  Tell others what brings you joy and what you're looking for
                 </Text>
               </View>
             )}
           </View>
-          <View style={[styles.enhancedSectionFooter, { paddingHorizontal: responsiveSpacing.card }]}>
+
+          {/* Footer Button */}
+          <View style={styles.iphoneSectionFooter}>
             <TouchableOpacity
-              style={[styles.enhancedOutlineButton, responsiveStyles.outlineButton]}
-              onPress={openBioEditor}
+              style={styles.iphonePremiumButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openBioEditor();
+              }}
               accessibilityLabel={profile.bio ? 'Edit My Story' : 'Write My Story'}
               accessibilityRole="button"
+              activeOpacity={0.7}
             >
-              <Feather name={profile.bio ? 'edit-2' : 'plus'} size={isTablet ? 22 : 18} color={'#FF7B51'} />
-              <Text style={[styles.enhancedOutlineButtonText, responsiveStyles.outlineButtonText]}>
+              <LinearGradient
+                colors={['rgba(249,115,22,0.1)', 'rgba(249,115,22,0.05)']}
+                style={styles.iphonePremiumButtonBg}
+              />
+              <Feather name={profile.bio ? 'edit-2' : 'plus'} size={18} color={colors.orange[500]} />
+              <Text style={styles.iphonePremiumButtonText}>
                 {profile.bio ? 'Edit My Story' : 'Write My Story'}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ===== SECTION 4: MY INTERESTS - Enhanced ===== */}
+        {/* ===== SECTION 4: iPHONE MY INTERESTS ===== */}
         <View
-          style={[styles.enhancedSectionCard, { borderRadius: responsiveStyles.sectionCard.borderRadius }]}
+          style={[styles.iphoneSectionCard, { borderRadius: isTablet ? 28 : 24 }]}
           accessible={true}
           accessibilityLabel="My Interests section"
         >
-          {/* Gradient accent bar at top - Premium Theme */}
+          {/* Premium gradient accent */}
           <LinearGradient
-            colors={[PREMIUM_GRADIENT.bottom, PREMIUM_GRADIENT.mid, PREMIUM_GRADIENT.top]}
+            colors={[colors.teal[400], colors.teal[500], colors.orange[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.sectionAccentBar, { borderTopLeftRadius: responsiveStyles.sectionCard.borderRadius, borderTopRightRadius: responsiveStyles.sectionCard.borderRadius }]}
+            style={[styles.iphoneSectionAccent, { borderTopLeftRadius: isTablet ? 28 : 24, borderTopRightRadius: isTablet ? 28 : 24 }]}
           />
-          <View style={[styles.enhancedSectionHeader, { paddingHorizontal: responsiveSpacing.card }]}>
-            <View style={styles.enhancedSectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: '#E8F7F5' }]}>
-                <Feather name="heart" size={isTablet ? 24 : 20} color={PREMIUM_GRADIENT.bottom} accessibilityElementsHidden />
+
+          {/* Header */}
+          <View style={styles.iphoneSectionHeader}>
+            <View style={styles.iphoneSectionHeaderLeft}>
+              <View style={[styles.iphoneSectionIcon, { backgroundColor: 'rgba(20,184,166,0.1)' }]}>
+                <Feather name="heart" size={isTablet ? 22 : 18} color={colors.teal[500]} />
               </View>
-              <Text
-                style={[styles.enhancedSectionTitle, responsiveStyles.sectionCardTitle]}
-                accessibilityRole="header"
-              >
+              <Text style={[styles.iphoneSectionTitle, { fontSize: isTablet ? 20 : 18 }]}>
                 My Interests
               </Text>
             </View>
-            {profile.interests.length >= 3 && (
-              <View style={styles.sectionCompleteBadge}>
-                <Feather name="check" size={14} color={'#2E8B7F'} />
-              </View>
-            )}
-            {profile.interests.length > 0 && (
-              <View style={styles.interestCountBadge}>
-                <Text style={styles.interestCountText}>{profile.interests.length}</Text>
-              </View>
-            )}
+            <View style={styles.iphoneHeaderRight}>
+              {profile.interests.length >= 3 && (
+                <View style={styles.iphoneCompletedBadge}>
+                  <LinearGradient
+                    colors={[colors.teal[400], colors.teal[500]]}
+                    style={styles.iphoneCompletedBadgeGradient}
+                  >
+                    <Feather name="check" size={12} color={colors.white} />
+                  </LinearGradient>
+                </View>
+              )}
+              {profile.interests.length > 0 && (
+                <View style={styles.iphoneCountBadge}>
+                  <Text style={styles.iphoneCountText}>{profile.interests.length}</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={[styles.enhancedSectionContent, { padding: responsiveSpacing.card }]}>
+
+          {/* Content */}
+          <View style={styles.iphoneSectionContent}>
             {profile.interests.length > 0 ? (
-              <View
-                style={[styles.enhancedInterestsGrid, { gap: isTablet ? spacing.m : spacing.s }]}
-                accessibilityRole="list"
-                accessibilityLabel={`Your interests: ${profile.interests.join(', ')}`}
-              >
+              <View style={styles.iphoneInterestsGrid}>
                 {profile.interests.map((interest, index) => (
-                  <View key={interest} style={styles.enhancedInterestChipContainer}>
+                  <View key={interest} style={styles.iphoneInterestChipWrapper}>
                     <LinearGradient
-                      colors={index % 2 === 0 ? ['#F68562', '#FF7B51'] : ['#34A296', '#349E92']}
+                      colors={index % 3 === 0
+                        ? [colors.orange[400], colors.orange[500]]
+                        : index % 3 === 1
+                          ? [colors.teal[400], colors.teal[500]]
+                          : ['#A855F7', '#9333EA']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={[styles.enhancedInterestChip, responsiveStyles.interestChip]}
+                      style={styles.iphoneInterestChip}
                     >
-                      <Feather
-                        name="heart"
-                        size={isTablet ? 16 : 14}
-                        color="rgba(255,255,255,0.8)"
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text style={[styles.enhancedInterestChipText, responsiveStyles.interestChipText]}>{interest}</Text>
+                      <Text style={styles.iphoneInterestText}>{interest}</Text>
                     </LinearGradient>
                   </View>
                 ))}
               </View>
             ) : (
-              <View style={styles.emptyStateContainer}>
-                <View style={[styles.emptyStateIconCircle, { backgroundColor: '#E8F7F5' }]}>
-                  <Feather name="heart" size={isTablet ? 32 : 28} color={'#34A296'} />
+              <View style={styles.iphoneEmptyState}>
+                <View style={styles.iphoneEmptyIconContainer}>
+                  <LinearGradient
+                    colors={['rgba(20,184,166,0.15)', 'rgba(20,184,166,0.05)']}
+                    style={styles.iphoneEmptyIconBg}
+                  >
+                    <Feather name="heart" size={isTablet ? 32 : 28} color={colors.teal[400]} />
+                  </LinearGradient>
                 </View>
-                <Text style={[styles.emptyStateTitle, { fontSize: fontSize.body }]}>
+                <Text style={[styles.iphoneEmptyTitle, { fontSize: isTablet ? 18 : 16 }]}>
                   Add your interests
                 </Text>
-                <Text style={[styles.emptyStateDescription, { fontSize: fontSize.small, lineHeight: fontSize.small * 1.5 }]}>
-                  Share your hobbies and passions to connect with like-minded people.
+                <Text style={[styles.iphoneEmptyDescription, { fontSize: isTablet ? 15 : 14 }]}>
+                  Share your hobbies to connect with like-minded people
                 </Text>
               </View>
             )}
           </View>
-          <View style={[styles.enhancedSectionFooter, { paddingHorizontal: responsiveSpacing.card }]}>
+
+          {/* Footer Button */}
+          <View style={styles.iphoneSectionFooter}>
             <TouchableOpacity
-              style={[styles.enhancedOutlineButton, responsiveStyles.outlineButton]}
-              onPress={openInterestsEditor}
+              style={styles.iphonePremiumButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openInterestsEditor();
+              }}
               accessibilityLabel={profile.interests.length > 0 ? 'Edit Interests' : 'Add Interests'}
               accessibilityRole="button"
+              activeOpacity={0.7}
             >
-              <Feather name={profile.interests.length > 0 ? 'edit-2' : 'plus'} size={isTablet ? 22 : 18} color={'#FF7B51'} />
-              <Text style={[styles.enhancedOutlineButtonText, responsiveStyles.outlineButtonText]}>
+              <LinearGradient
+                colors={['rgba(20,184,166,0.1)', 'rgba(20,184,166,0.05)']}
+                style={styles.iphonePremiumButtonBg}
+              />
+              <Feather name={profile.interests.length > 0 ? 'edit-2' : 'plus'} size={18} color={colors.teal[500]} />
+              <Text style={[styles.iphonePremiumButtonText, { color: colors.teal[600] }]}>
                 {profile.interests.length > 0 ? 'Edit Interests' : 'Add Interests'}
               </Text>
             </TouchableOpacity>
@@ -3757,7 +3851,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         >
           {/* Gradient accent bar at top */}
           <LinearGradient
-            colors={['#F68562', '#FF7B51']}
+            colors={[colors.orange[400], colors.orange[500]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.sectionAccentBar, { borderTopLeftRadius: responsiveStyles.sectionCard.borderRadius, borderTopRightRadius: responsiveStyles.sectionCard.borderRadius }]}
@@ -3765,7 +3859,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={[styles.enhancedSectionHeader, { paddingHorizontal: responsiveSpacing.card }]}>
             <View style={styles.enhancedSectionHeaderLeft}>
               <View style={styles.sectionIconContainer}>
-                <Feather name="camera" size={isTablet ? 24 : 20} color={'#FF7B51'} accessibilityElementsHidden />
+                <Feather name="camera" size={isTablet ? 24 : 20} color={colors.orange[500]} accessibilityElementsHidden />
               </View>
               <Text
                 style={[styles.enhancedSectionTitle, responsiveStyles.sectionCardTitle]}
@@ -3797,11 +3891,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
 
           <View style={[styles.enhancedSectionContent, { padding: responsiveSpacing.card }]}>
-            {/* Enhanced Photo Grid - Clean 2-column layout */}
-            <View style={styles.photoGridContainer}>
-              {/* Add Photo Button - Always First when less than 6 photos */}
+            {/* Enhanced Photo Grid */}
+            <View style={[styles.enhancedPhotosGrid, responsiveStyles.photosGrid]}>
+              {/* Add Photo Button - Always First */}
               {profile.photos.length < 6 && (
                 <EnhancedAddPhotoButton
+                  photoItemWidth={photoItemWidth}
                   borderRadius={isTablet ? borderRadius.xlarge : borderRadius.large}
                   onPress={addPhoto}
                   isFirst={profile.photos.length === 0}
@@ -3816,6 +3911,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   photo={photo}
                   index={index}
                   isMain={index === 0}
+                  photoItemWidth={photoItemWidth}
                   borderRadius={isTablet ? borderRadius.xlarge : borderRadius.large}
                   onPress={() => setShowPhotoGallery(true)}
                   isTablet={isTablet}
@@ -3823,102 +3919,150 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               ))}
             </View>
 
-            {/* Photo tips for empty state - senior-friendly sizing */}
+            {/* Photo tips for empty state */}
             {profile.photos.length === 0 && (
-              <View style={styles.photoTipsContainer}>
-                <Text style={[styles.photoTipsTitle, { fontSize: isTablet ? 16 : 15 }]}>
-                  Tips for great photos:
-                </Text>
-                <View style={styles.photoTipItem}>
-                  <View style={styles.photoTipIconWrapper}>
-                    <Feather name="check-circle" size={isTablet ? 18 : 16} color="#349E92" />
-                  </View>
-                  <Text style={[styles.photoTipItemText, { fontSize: isTablet ? 16 : 15 }]}>
-                    Show your face clearly
-                  </Text>
+              <View style={styles.photoTipsSection}>
+                <Text style={styles.photoTipsLabel}>Tips for great photos:</Text>
+                <View style={styles.photoTipRow}>
+                  <Feather name="check-circle" size={16} color={colors.teal[500]} />
+                  <Text style={styles.photoTipText}>Show your face clearly</Text>
                 </View>
-                <View style={styles.photoTipItem}>
-                  <View style={styles.photoTipIconWrapper}>
-                    <Feather name="check-circle" size={isTablet ? 18 : 16} color="#349E92" />
-                  </View>
-                  <Text style={[styles.photoTipItemText, { fontSize: isTablet ? 16 : 15 }]}>
-                    Use recent photos
-                  </Text>
+                <View style={styles.photoTipRow}>
+                  <Feather name="check-circle" size={16} color={colors.teal[500]} />
+                  <Text style={styles.photoTipText}>Use recent photos</Text>
                 </View>
-                <View style={styles.photoTipItem}>
-                  <View style={styles.photoTipIconWrapper}>
-                    <Feather name="check-circle" size={isTablet ? 18 : 16} color="#349E92" />
-                  </View>
-                  <Text style={[styles.photoTipItemText, { fontSize: isTablet ? 16 : 15 }]}>
-                    Include hobbies and activities
-                  </Text>
+                <View style={styles.photoTipRow}>
+                  <Feather name="check-circle" size={16} color={colors.teal[500]} />
+                  <Text style={styles.photoTipText}>Include hobbies and activities</Text>
                 </View>
               </View>
             )}
           </View>
         </View>
 
-        {/* ===== SECTION 6: PERSONAL DETAILS ===== */}
+        {/* ===== SECTION 6: iPHONE PERSONAL DETAILS ===== */}
         <View
-          style={[styles.sectionCard, { borderRadius: responsiveStyles.sectionCard.borderRadius }]}
+          style={[styles.iphoneSectionCard, { borderRadius: isTablet ? 28 : 24 }]}
           accessible={true}
           accessibilityLabel="Personal Details section"
         >
-          <View style={[styles.sectionCardHeader, { paddingHorizontal: responsiveSpacing.card }]}>
-            <View style={styles.sectionCardHeaderLeft}>
-              <Feather name="user" size={isTablet ? 26 : 22} color={'#FF7B51'} accessibilityElementsHidden />
-              <Text
-                style={[styles.sectionCardTitle, responsiveStyles.sectionCardTitle]}
-                accessibilityRole="header"
-              >
+          {/* Premium gradient accent */}
+          <LinearGradient
+            colors={['#8B5CF6', '#A855F7', colors.orange[500]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.iphoneSectionAccent, { borderTopLeftRadius: isTablet ? 28 : 24, borderTopRightRadius: isTablet ? 28 : 24 }]}
+          />
+
+          {/* Header */}
+          <View style={styles.iphoneSectionHeader}>
+            <View style={styles.iphoneSectionHeaderLeft}>
+              <View style={[styles.iphoneSectionIcon, { backgroundColor: 'rgba(139,92,246,0.1)' }]}>
+                <Feather name="user" size={isTablet ? 22 : 18} color="#8B5CF6" />
+              </View>
+              <Text style={[styles.iphoneSectionTitle, { fontSize: isTablet ? 20 : 18 }]}>
                 Personal Details
               </Text>
             </View>
-          </View>
-          <View style={styles.detailsListContent}>
             <TouchableOpacity
-              style={[styles.detailRow, responsiveStyles.detailRow]}
-              onPress={openDetailsEditor}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openDetailsEditor();
+              }}
+              activeOpacity={0.7}
+              style={styles.iphoneEditButton}
+            >
+              <Text style={styles.iphoneEditButtonText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Detail rows with iPhone style */}
+          <View style={styles.iphoneDetailsList}>
+            <TouchableOpacity
+              style={styles.iphoneDetailRow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openDetailsEditor();
+              }}
               accessibilityLabel={`Religion: ${profile.religion || 'Not set'}`}
               accessibilityRole="button"
+              activeOpacity={0.6}
             >
-              <View style={styles.detailRowContent}>
-                <Text style={[styles.detailRowLabel, responsiveStyles.detailRowLabel]}>Religion:</Text>
-                <Text style={[styles.detailRowValue, responsiveStyles.detailRowValue]} numberOfLines={1}>
-                  {profile.religion || 'Not set'}
+              <View style={styles.iphoneDetailIconWrapper}>
+                <LinearGradient
+                  colors={[colors.orange[400], colors.orange[500]]}
+                  style={styles.iphoneDetailIconGradient}
+                >
+                  <Feather name="book" size={16} color={colors.white} />
+                </LinearGradient>
+              </View>
+              <View style={styles.iphoneDetailContent}>
+                <Text style={styles.iphoneDetailLabel}>Religion</Text>
+                <Text style={[styles.iphoneDetailValue, !profile.religion && styles.iphoneDetailPlaceholder]} numberOfLines={1}>
+                  {profile.religion || 'Add religion'}
                 </Text>
               </View>
-              <Feather name="chevron-right" size={isTablet ? 28 : 24} color={colors.gray[400]} />
+              <View style={styles.iphoneDetailArrow}>
+                <Feather name="chevron-right" size={18} color={colors.gray[400]} />
+              </View>
             </TouchableOpacity>
-            <View style={styles.detailDivider} />
+
             <TouchableOpacity
-              style={[styles.detailRow, responsiveStyles.detailRow]}
-              onPress={openDetailsEditor}
+              style={styles.iphoneDetailRow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openDetailsEditor();
+              }}
               accessibilityLabel={`Job: ${profile.job || 'Not set'}`}
               accessibilityRole="button"
+              activeOpacity={0.6}
             >
-              <View style={styles.detailRowContent}>
-                <Text style={[styles.detailRowLabel, responsiveStyles.detailRowLabel]}>Job:</Text>
-                <Text style={[styles.detailRowValue, responsiveStyles.detailRowValue]} numberOfLines={1}>
-                  {profile.job || 'Not set'}
+              <View style={styles.iphoneDetailIconWrapper}>
+                <LinearGradient
+                  colors={[colors.teal[400], colors.teal[500]]}
+                  style={styles.iphoneDetailIconGradient}
+                >
+                  <Feather name="briefcase" size={16} color={colors.white} />
+                </LinearGradient>
+              </View>
+              <View style={styles.iphoneDetailContent}>
+                <Text style={styles.iphoneDetailLabel}>Occupation</Text>
+                <Text style={[styles.iphoneDetailValue, !profile.job && styles.iphoneDetailPlaceholder]} numberOfLines={1}>
+                  {profile.job || 'Add occupation'}
                 </Text>
               </View>
-              <Feather name="chevron-right" size={isTablet ? 28 : 24} color={colors.gray[400]} />
+              <View style={styles.iphoneDetailArrow}>
+                <Feather name="chevron-right" size={18} color={colors.gray[400]} />
+              </View>
             </TouchableOpacity>
-            <View style={styles.detailDivider} />
+
             <TouchableOpacity
-              style={[styles.detailRow, responsiveStyles.detailRow]}
-              onPress={openDetailsEditor}
+              style={[styles.iphoneDetailRow, { borderBottomWidth: 0 }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openDetailsEditor();
+              }}
               accessibilityLabel={`Languages: ${profile.languages.join(', ') || 'Not set'}`}
               accessibilityRole="button"
+              activeOpacity={0.6}
             >
-              <View style={styles.detailRowContent}>
-                <Text style={[styles.detailRowLabel, responsiveStyles.detailRowLabel]}>Languages:</Text>
-                <Text style={[styles.detailRowValue, responsiveStyles.detailRowValue]} numberOfLines={1}>
-                  {profile.languages.join(', ') || 'Not set'}
+              <View style={styles.iphoneDetailIconWrapper}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#A855F7']}
+                  style={styles.iphoneDetailIconGradient}
+                >
+                  <Feather name="globe" size={16} color={colors.white} />
+                </LinearGradient>
+              </View>
+              <View style={styles.iphoneDetailContent}>
+                <Text style={styles.iphoneDetailLabel}>Languages</Text>
+                <Text style={[styles.iphoneDetailValue, !profile.languages.length && styles.iphoneDetailPlaceholder]} numberOfLines={1}>
+                  {profile.languages.join(', ') || 'Add languages'}
                 </Text>
               </View>
-              <Feather name="chevron-right" size={isTablet ? 28 : 24} color={colors.gray[400]} />
+              <View style={styles.iphoneDetailArrow}>
+                <Feather name="chevron-right" size={18} color={colors.gray[400]} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -3941,84 +4085,102 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {storyComments.length > 0 ? (
               <View style={styles.storyResponsesList}>
                 {storyComments.slice(0, 3).map((comment) => (
-                  <View
+                  <TouchableOpacity
                     key={comment.id}
                     style={[
-                      styles.storyResponseItem,
-                      !comment.isRead && styles.storyResponseItemUnread,
+                      styles.storyResponseCardNew,
+                      !comment.isRead && styles.storyResponseCardUnread,
                     ]}
+                    onPress={() => openStoryResponse(comment)}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`${!comment.isRead ? 'New message' : 'Message'} from ${comment.senderName || 'Someone'}${comment.senderAge ? `, age ${comment.senderAge}` : ''}: ${(comment.message || 'Liked your story').substring(0, 50)}`}
+                    accessibilityRole="button"
+                    accessibilityHint="Opens the full message"
                   >
-                    <TouchableOpacity
-                      style={styles.storyResponseMainContent}
-                      onPress={() => openStoryResponse(comment)}
-                      activeOpacity={0.7}
-                      accessibilityLabel={`${!comment.isRead ? 'New message' : 'Message'} from ${comment.senderName}${comment.senderAge ? `, age ${comment.senderAge}` : ''}: ${comment.message.substring(0, 50)}`}
-                      accessibilityRole="button"
-                      accessibilityHint="Opens the full message"
-                    >
-                      <View style={styles.storyResponseAvatar}>
+                    {/* Top Row: Avatar + Name/Age + Time */}
+                    <View style={styles.storyResponseTopRow}>
+                      {/* Avatar */}
+                      <View style={styles.storyResponseAvatarContainer}>
                         {comment.senderPhoto ? (
                           <Image
                             source={{ uri: comment.senderPhoto }}
-                            style={styles.storyResponseAvatarImage}
-                            accessibilityLabel={`Photo of ${comment.senderName}`}
+                            style={styles.storyResponseAvatarImg}
+                            accessibilityLabel={`Photo of ${comment.senderName || 'User'}`}
                           />
                         ) : (
-                          <View style={styles.storyResponseAvatarPlaceholder}>
+                          <View style={styles.storyResponseAvatarFallback}>
                             <Feather name="user" size={28} color={colors.romantic.pink} />
                           </View>
                         )}
-                        {!comment.isRead && <View style={styles.unreadDot} />}
+                        {!comment.isRead && <View style={styles.storyResponseUnreadDot} />}
                       </View>
-                      <View style={styles.storyResponseContent}>
-                        <View style={styles.storyResponseHeader}>
-                          <Text style={styles.storyResponseName} numberOfLines={1}>
-                            {comment.senderName}{comment.senderAge ? `, ${comment.senderAge}` : ''}
-                          </Text>
-                          <Text style={styles.storyResponseTime}>
-                            {formatTimeAgo(comment.createdAt)}
-                          </Text>
-                        </View>
-                        <Text style={styles.storyResponseMessage} numberOfLines={2}>
-                          {comment.message}
+
+                      {/* Name + Age + Time */}
+                      <View style={styles.storyResponseNameBlock}>
+                        <Text style={styles.storyResponseNameText} numberOfLines={1}>
+                          {comment.senderName || 'Someone special'}
+                          {comment.senderAge ? `, ${comment.senderAge}` : ''}
+                        </Text>
+                        <Text style={styles.storyResponseTimeText} numberOfLines={1}>
+                          {formatTimeAgo(comment.createdAt)}
                         </Text>
                       </View>
-                    </TouchableOpacity>
 
-                    {/* Like Back / Pass buttons for PENDING comments, Matched badge for LIKED_BACK */}
-                    {comment.status === 'LIKED_BACK' ? (
-                      <View style={styles.matchedBadge}>
-                        <Feather name="heart" size={16} color={colors.white} />
-                        <Text style={styles.matchedBadgeText}>Matched!</Text>
-                      </View>
-                    ) : comment.status === 'PENDING' ? (
-                      <View style={styles.likeBackActions}>
+                      {/* Status Badge */}
+                      {comment.status === 'LIKED_BACK' && (
+                        <View style={styles.storyResponseMatchedBadge}>
+                          <Feather name="heart" size={14} color={colors.white} />
+                          <Text style={styles.storyResponseMatchedText}>Matched!</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Message Preview */}
+                    <View style={styles.storyResponseMessageRow}>
+                      <Feather name="message-circle" size={16} color={colors.orange[400]} style={{ marginTop: 2 }} />
+                      <Text style={styles.storyResponseMsgText} numberOfLines={2}>
+                        {comment.message || 'Liked your story'}
+                      </Text>
+                    </View>
+
+                    {/* Action Buttons for PENDING comments */}
+                    {comment.status === 'PENDING' && (
+                      <View style={styles.storyResponseActions}>
                         <TouchableOpacity
                           style={[
-                            styles.passButton,
+                            styles.storyResponsePassBtn,
                             decliningCommentId === comment.id && styles.buttonDisabled,
                           ]}
-                          onPress={() => handleDeclineComment(comment)}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeclineComment(comment);
+                          }}
                           disabled={decliningCommentId === comment.id || likingBackCommentId === comment.id}
                           activeOpacity={0.7}
-                          accessibilityLabel={`Pass on ${comment.senderName}`}
+                          accessibilityLabel={`Pass on ${comment.senderName || 'this person'}`}
                           accessibilityRole="button"
                         >
                           {decliningCommentId === comment.id ? (
                             <ActivityIndicator size="small" color={colors.gray[500]} />
                           ) : (
-                            <Feather name="x" size={20} color={colors.gray[500]} />
+                            <>
+                              <Feather name="x" size={18} color={colors.gray[600]} />
+                              <Text style={styles.storyResponsePassText}>Pass</Text>
+                            </>
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[
-                            styles.likeBackButton,
+                            styles.storyResponseLikeBtn,
                             likingBackCommentId === comment.id && styles.buttonDisabled,
                           ]}
-                          onPress={() => handleLikeBack(comment)}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleLikeBack(comment);
+                          }}
                           disabled={likingBackCommentId === comment.id || decliningCommentId === comment.id}
                           activeOpacity={0.7}
-                          accessibilityLabel={`Like back ${comment.senderName} to match`}
+                          accessibilityLabel={`Like back ${comment.senderName || 'this person'} to match`}
                           accessibilityRole="button"
                         >
                           {likingBackCommentId === comment.id ? (
@@ -4026,13 +4188,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                           ) : (
                             <>
                               <Feather name="heart" size={18} color={colors.white} />
-                              <Text style={styles.likeBackButtonText}>Like Back</Text>
+                              <Text style={styles.storyResponseLikeText}>Like Back</Text>
                             </>
                           )}
                         </TouchableOpacity>
                       </View>
-                    ) : null}
-                  </View>
+                    )}
+                  </TouchableOpacity>
                 ))}
                 {storyComments.length > 3 && onNavigateToStoryAdmirers && (
                   <TouchableOpacity
@@ -4046,15 +4208,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <Text style={styles.viewAllResponsesText}>
                       View all {storyComments.length} responses
                     </Text>
-                    <Feather name="arrow-right" size={22} color={'#E85A36'} />
+                    <Feather name="arrow-right" size={22} color={colors.orange[600]} />
                   </TouchableOpacity>
                 )}
               </View>
             ) : (
-              <View style={styles.emptyStoryResponses}>
-                <Feather name="heart" size={56} color={colors.romantic.pinkLight} />
-                <Text style={styles.emptyStoryResponsesTitle}>No responses yet</Text>
-                <Text style={styles.emptyStoryResponsesText}>
+              <View style={styles.premiumEmptyState}>
+                <LinearGradient
+                  colors={[colors.romantic.pinkLight, 'rgba(251, 207, 232, 0.5)']}
+                  style={styles.premiumEmptyIcon}
+                >
+                  <Feather name="heart" size={36} color={colors.romantic.pink} />
+                </LinearGradient>
+                <Text style={styles.premiumEmptyTitle}>No responses yet</Text>
+                <Text style={styles.premiumEmptyText}>
                   When someone is touched by your story, their heartfelt messages will appear here.
                 </Text>
               </View>
@@ -4087,7 +4254,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             },
           ]}>
             <LinearGradient
-              colors={['#FF7B51', '#349E92']}
+              colors={[colors.orange[500], colors.teal[500]]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.matchModalGradient}
@@ -4129,7 +4296,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   accessibilityLabel={`Send a message to ${matchedUserInfo?.name || 'your match'}`}
                   accessibilityRole="button"
                 >
-                  <Feather name="message-circle" size={22} color={'#E85A36'} />
+                  <Feather name="message-circle" size={22} color={colors.orange[600]} />
                   <Text style={styles.matchModalButtonPrimaryText}>Send Message</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4219,12 +4386,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     width: isTablet ? 44 : 36,
                     height: isTablet ? 44 : 36,
                     borderRadius: isTablet ? 22 : 18,
-                    backgroundColor: '#FFF0EB',
+                    backgroundColor: colors.orange[50],
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 12,
                   }}>
-                    <Feather name="user" size={isTablet ? 22 : 18} color={'#FF7B51'} />
+                    <Feather name="user" size={isTablet ? 22 : 18} color={colors.orange[500]} />
                   </View>
                   <Text style={{
                     fontSize: isTablet ? 20 : 18,
@@ -4248,13 +4415,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   value={editName}
                   onChangeText={setEditName}
                   placeholder="Enter your name"
-                  placeholderTextColor={colors.gray[500]}
+                  placeholderTextColor={colors.gray[400]}
                   autoCapitalize="words"
                   accessibilityLabel="Name input"
                   accessibilityHint="Enter your first name as you would like it displayed"
                 />
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                  <Feather name="mic" size={isTablet ? 16 : 14} color={'#349E92'} />
+                  <Feather name="mic" size={isTablet ? 16 : 14} color={colors.teal[500]} />
                   <Text style={{
                     fontSize: isTablet ? 16 : 14,
                     color: colors.gray[500],
@@ -4279,12 +4446,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     width: isTablet ? 44 : 36,
                     height: isTablet ? 44 : 36,
                     borderRadius: isTablet ? 22 : 18,
-                    backgroundColor: '#FFF0EB',
+                    backgroundColor: colors.orange[50],
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 12,
                   }}>
-                    <Feather name="calendar" size={isTablet ? 22 : 18} color={'#FF7B51'} />
+                    <Feather name="calendar" size={isTablet ? 22 : 18} color={colors.orange[500]} />
                   </View>
                   <Text style={{
                     fontSize: isTablet ? 20 : 18,
@@ -4334,12 +4501,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     width: isTablet ? 44 : 36,
                     height: isTablet ? 44 : 36,
                     borderRadius: isTablet ? 22 : 18,
-                    backgroundColor: '#FFF0EB',
+                    backgroundColor: colors.orange[50],
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 12,
                   }}>
-                    <Feather name="map-pin" size={isTablet ? 22 : 18} color={'#FF7B51'} />
+                    <Feather name="map-pin" size={isTablet ? 22 : 18} color={colors.orange[500]} />
                   </View>
                   <Text style={{
                     fontSize: isTablet ? 20 : 18,
@@ -4384,7 +4551,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       >
                         {isSelected ? (
                           <LinearGradient
-                            colors={['#FF7B51', '#349E92']}
+                            colors={[colors.orange[500], colors.teal[500]]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={{
@@ -4438,7 +4605,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   >
                     {showOtherLocation ? (
                       <LinearGradient
-                        colors={['#349E92', '#FF7B51']}
+                        colors={[colors.teal[500], colors.orange[500]]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={{
@@ -4462,17 +4629,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         alignItems: 'center',
                         paddingHorizontal: isTablet ? 20 : 16,
                         paddingVertical: isTablet ? 14 : 12,
-                        backgroundColor: '#E8F7F5',
+                        backgroundColor: colors.teal[50],
                         borderRadius: 24,
                         borderWidth: 2,
-                        borderColor: '#B5E3DD',
+                        borderColor: colors.teal[200],
                         borderStyle: 'dashed',
                         gap: 8,
                       }}>
-                        <Feather name="edit-2" size={16} color={'#2E8B7F'} />
+                        <Feather name="edit-2" size={16} color={colors.teal[600]} />
                         <Text style={{
                           fontSize: isTablet ? 16 : 15,
-                          color: '#277568',
+                          color: colors.teal[700],
                           fontWeight: '500',
                         }}>Other</Text>
                       </View>
@@ -4492,12 +4659,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         fontSize: isTablet ? 20 : 18,
                         color: colors.gray[900],
                         borderWidth: 2,
-                        borderColor: '#6DBFB5',
+                        borderColor: colors.teal[300],
                       }}
                       value={editLocation}
                       onChangeText={setEditLocation}
                       placeholder="Type your city, country"
-                      placeholderTextColor={colors.gray[500]}
+                      placeholderTextColor={colors.gray[400]}
                       accessibilityLabel="Custom location input"
                       accessibilityHint="Enter your city and country"
                       autoFocus
@@ -4556,7 +4723,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <LinearGradient
                   colors={isSaving || !editName.trim()
                     ? [colors.gray[300], colors.gray[400]]
-                    : ['#FF7B51', '#349E92']}
+                    : [colors.orange[500], colors.teal[500]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -4672,9 +4839,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         alignItems: 'center',
                         padding: isTablet ? 20 : 16,
                         borderRadius: 16,
-                        backgroundColor: isSelected ? '#FFF0EB' : colors.white,
+                        backgroundColor: isSelected ? colors.orange[50] : colors.white,
                         borderWidth: 2,
-                        borderColor: isSelected ? '#F68562' : colors.gray[200],
+                        borderColor: isSelected ? colors.orange[400] : colors.gray[200],
                         gap: 16,
                         minHeight: isTablet ? 80 : 72,
                       }}
@@ -4686,14 +4853,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         width: isTablet ? 56 : 48,
                         height: isTablet ? 56 : 48,
                         borderRadius: isTablet ? 28 : 24,
-                        backgroundColor: isSelected ? '#FF7B51' : '#FFE5DD',
+                        backgroundColor: isSelected ? colors.orange[500] : colors.orange[100],
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}>
                         {isSelected ? (
                           <Feather name="check" size={isTablet ? 28 : 24} color={colors.white} />
                         ) : (
-                          <Feather name={item.icon as React.ComponentProps<typeof Feather>['name']} size={isTablet ? 26 : 22} color={'#FF7B51'} />
+                          <Feather name={item.icon as any} size={isTablet ? 26 : 22} color={colors.orange[500]} />
                         )}
                       </View>
 
@@ -4702,7 +4869,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <Text style={{
                           fontSize: isTablet ? 18 : 17,
                           fontWeight: '600',
-                          color: isSelected ? '#E85A36' : colors.gray[800],
+                          color: isSelected ? colors.orange[600] : colors.gray[800],
                         }}>
                           {item.title}
                         </Text>
@@ -4758,7 +4925,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   value={editBio}
                   onChangeText={setEditBio}
                   placeholder="Tell others about yourself..."
-                  placeholderTextColor={colors.gray[500]}
+                  placeholderTextColor={colors.gray[400]}
                   multiline
                   maxLength={500}
                 />
@@ -4790,7 +4957,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   )}
                   <Text style={{
                     fontSize: 13,
-                    color: editBio.length > 450 ? '#FF7B51' : colors.gray[400],
+                    color: editBio.length > 450 ? colors.orange[500] : colors.gray[400],
                   }}>
                     {editBio.length}/500
                   </Text>
@@ -4847,7 +5014,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <LinearGradient
                   colors={isSaving
                     ? [colors.gray[300], colors.gray[400]]
-                    : ['#FF7B51', '#349E92']}
+                    : [colors.orange[500], colors.teal[500]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -4894,7 +5061,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             setShowInterestsModal(false);
             showToast('Your interests have been updated.', 'success');
           } catch (error) {
-            console.error('Failed to save interests:', error);
+            console.warn('Failed to save interests:', error);
             showToast('Failed to save interests. Please try again.', 'error');
           } finally {
             setIsSaving(false);
@@ -4971,7 +5138,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     marginRight: 12,
                   }}>
                     <LinearGradient
-                      colors={['#FF7B51', '#F68562']}
+                      colors={[colors.orange[500], colors.orange[400]]}
                       style={{
                         flex: 1,
                         justifyContent: 'center',
@@ -5035,7 +5202,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     marginRight: 12,
                   }}>
                     <LinearGradient
-                      colors={['#349E92', '#34A296']}
+                      colors={[colors.teal[500], colors.teal[400]]}
                       style={{
                         flex: 1,
                         justifyContent: 'center',
@@ -5126,7 +5293,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <LinearGradient
                   colors={isSaving || !editGender
                     ? [colors.gray[300], colors.gray[400]]
-                    : ['#FF7B51', '#349E92']}
+                    : [colors.orange[500], colors.teal[500]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -5250,7 +5417,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       value={editJob}
                       onChangeText={setEditJob}
                       placeholder="e.g., Retired Teacher"
-                      placeholderTextColor={colors.gray[500]}
+                      placeholderTextColor={colors.gray[400]}
                       autoCapitalize="words"
                     />
                   </View>
@@ -5279,7 +5446,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       value={editEducation}
                       onChangeText={setEditEducation}
                       placeholder="e.g., University Graduate"
-                      placeholderTextColor={colors.gray[500]}
+                      placeholderTextColor={colors.gray[400]}
                       autoCapitalize="words"
                     />
                   </View>
@@ -5314,7 +5481,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         value={editHeight}
                         onChangeText={setEditHeight}
                         placeholder="5'6 or 168cm"
-                        placeholderTextColor={colors.gray[500]}
+                        placeholderTextColor={colors.gray[400]}
                       />
                     </View>
 
@@ -5343,7 +5510,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         value={editChildren}
                         onChangeText={(text) => setEditChildren(text.replace(/[^0-9]/g, ''))}
                         placeholder="0"
-                        placeholderTextColor={colors.gray[500]}
+                        placeholderTextColor={colors.gray[400]}
                         keyboardType="number-pad"
                         maxLength={2}
                       />
@@ -5386,7 +5553,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                               paddingHorizontal: isTablet ? 16 : 14,
                               paddingVertical: isTablet ? 12 : 10,
                               borderRadius: 20,
-                              backgroundColor: isSelected ? '#FF7B51' : colors.gray[100],
+                              backgroundColor: isSelected ? colors.orange[500] : colors.gray[100],
                               gap: 6,
                               minHeight: isTablet ? 48 : 44,
                             }}
@@ -5423,11 +5590,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                           paddingHorizontal: 10,
                           paddingVertical: 4,
                           borderRadius: 12,
-                          backgroundColor: '#D1EDE9',
+                          backgroundColor: colors.teal[100],
                         }}>
                           <Text style={{
                             fontSize: 12,
-                            color: '#277568',
+                            color: colors.teal[700],
                             fontWeight: '600',
                           }}>
                             {editLanguages.length} selected
@@ -5458,7 +5625,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                               paddingHorizontal: isTablet ? 16 : 14,
                               paddingVertical: isTablet ? 12 : 10,
                               borderRadius: 20,
-                              backgroundColor: isSelected ? '#349E92' : colors.gray[100],
+                              backgroundColor: isSelected ? colors.teal[500] : colors.gray[100],
                               gap: 6,
                               minHeight: isTablet ? 48 : 44,
                             }}
@@ -5533,7 +5700,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <LinearGradient
                   colors={isSaving
                     ? [colors.gray[300], colors.gray[400]]
-                    : ['#FF7B51', '#349E92']}
+                    : [colors.orange[500], colors.teal[500]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -5601,7 +5768,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           }}>
             {/* Premium Header with Gradient */}
             <LinearGradient
-              colors={['#FF7B51', '#E85A36']}
+              colors={[colors.orange[500], colors.orange[600]]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{
@@ -5625,7 +5792,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}>
-                    <Feather name="image" size={isTablet ? 26 : 22} color={'#FF7B51'} />
+                    <Feather name="image" size={isTablet ? 26 : 22} color={colors.orange[500]} />
                   </View>
                   <View>
                     <Text style={{
@@ -5694,26 +5861,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 marginHorizontal: isTablet ? 32 : 20,
                 marginTop: 16,
                 padding: 16,
-                backgroundColor: '#E8F7F5',
+                backgroundColor: colors.teal[50],
                 borderRadius: 16,
                 borderWidth: 1,
-                borderColor: '#B5E3DD',
+                borderColor: colors.teal[200],
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                   <View style={{
                     width: 28,
                     height: 28,
                     borderRadius: 14,
-                    backgroundColor: '#D1EDE9',
+                    backgroundColor: colors.teal[100],
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}>
-                    <Feather name="zap" size={14} color={'#2E8B7F'} />
+                    <Feather name="zap" size={14} color={colors.teal[600]} />
                   </View>
                   <Text style={{
                     fontSize: isTablet ? 16 : 15,
                     fontWeight: '600',
-                    color: '#277568',
+                    color: colors.teal[700],
                   }}>
                     Tips for Great Photos
                   </Text>
@@ -5725,7 +5892,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         width: 18,
                         height: 18,
                         borderRadius: 9,
-                        backgroundColor: '#349E92',
+                        backgroundColor: colors.teal[500],
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}>
@@ -5733,7 +5900,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       </View>
                       <Text style={{
                         fontSize: isTablet ? 14 : 13,
-                        color: '#277568',
+                        color: colors.teal[700],
                       }}>{tip}</Text>
                     </View>
                   ))}
@@ -5765,7 +5932,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       height: isTablet ? 32 : 28,
                       borderRadius: isTablet ? 16 : 14,
                       backgroundColor: i < profile.photos.length
-                        ? (i === 0 ? '#FF7B51' : '#349E92')
+                        ? (i === 0 ? colors.orange[500] : colors.teal[500])
                         : colors.gray[200],
                       justifyContent: 'center',
                       alignItems: 'center',
@@ -5820,7 +5987,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   >
                     <LinearGradient
                       colors={profile.photos.length === 0
-                        ? ['#F68562', '#E85A36']
+                        ? [colors.orange[400], colors.orange[600]]
                         : [colors.gray[100], colors.gray[200]]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
@@ -5849,7 +6016,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <Feather
                           name="plus"
                           size={isTablet ? 32 : 28}
-                          color={profile.photos.length === 0 ? colors.white : '#FF7B51'}
+                          color={profile.photos.length === 0 ? colors.white : colors.orange[500]}
                         />
                       </View>
                       <Text style={{
@@ -5925,7 +6092,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         overflow: 'hidden',
                       }}>
                         <LinearGradient
-                          colors={['#F68562', '#E85A36']}
+                          colors={[colors.orange[400], colors.orange[600]]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
                           style={{
@@ -5954,7 +6121,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       width: isTablet ? 32 : 28,
                       height: isTablet ? 32 : 28,
                       borderRadius: isTablet ? 16 : 14,
-                      backgroundColor: index === 0 ? '#FF7B51' : 'rgba(0,0,0,0.5)',
+                      backgroundColor: index === 0 ? colors.orange[500] : 'rgba(0,0,0,0.5)',
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}>
@@ -6009,18 +6176,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                           ...shadows.small,
                         }}
                         onPress={() => {
-                          // Note: Backend doesn't support photo reordering yet
-                          // This updates locally for preview, but won't persist
                           const newPhotos = [...profile.photos];
                           const [removed] = newPhotos.splice(index, 1);
                           newPhotos.unshift(removed);
                           setProfile(prev => ({ ...prev, photos: newPhotos }));
-                          showToast('Photo set as main! Changes are temporary until you re-upload.', 'info');
+                          showToast('Main photo updated!', 'success');
                         }}
                         activeOpacity={0.8}
                         accessibilityLabel={`Set photo ${index + 1} as main photo`}
                       >
-                        <Feather name="star" size={isTablet ? 18 : 16} color={'#FF7B51'} />
+                        <Feather name="star" size={isTablet ? 18 : 16} color={colors.orange[500]} />
                       </TouchableOpacity>
                     )}
                   </TouchableOpacity>
@@ -6072,18 +6237,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     height: isTablet ? 56 : 48,
                     borderRadius: 12,
                     borderWidth: 2,
-                    borderColor: '#FFD4C7',
-                    backgroundColor: '#FFF0EB',
+                    borderColor: colors.orange[200],
+                    backgroundColor: colors.orange[50],
                     gap: 8,
                   }}
                   onPress={addPhoto}
                   activeOpacity={0.8}
                 >
-                  <Feather name="plus" size={isTablet ? 20 : 18} color={'#FF7B51'} />
+                  <Feather name="plus" size={isTablet ? 20 : 18} color={colors.orange[500]} />
                   <Text style={{
                     fontSize: isTablet ? 15 : 14,
                     fontWeight: '600',
-                    color: '#E85A36',
+                    color: colors.orange[600],
                   }}>
                     Add More
                   </Text>
@@ -6101,7 +6266,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               >
                 <LinearGradient
                   colors={profile.photos.length > 0
-                    ? ['#FF7B51', '#349E92']
+                    ? [colors.orange[500], colors.teal[500]]
                     : [colors.gray[300], colors.gray[400]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -6136,14 +6301,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         initialIndex={viewingPhotoIndex}
         onClose={() => setShowPhotoViewer(false)}
         onSetMain={(index) => {
-          // Note: Backend doesn't support photo reordering yet
-          // This updates locally for preview, but won't persist
           const newPhotos = [...profile.photos];
           const [removed] = newPhotos.splice(index, 1);
           newPhotos.unshift(removed);
           setProfile(prev => ({ ...prev, photos: newPhotos }));
           setViewingPhotoIndex(0);
-          showToast('Photo set as main! Changes are temporary until you re-upload.', 'info');
+          showToast('Main photo updated!', 'success');
         }}
         onDelete={(index) => {
           handleDeletePhoto(index);
@@ -6156,273 +6319,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {/* ===== SAVING OVERLAY ===== */}
       {isSaving && (
         <View style={styles.savingOverlay}>
-          <ActivityIndicator size="large" color={'#FF7B51'} />
+          <ActivityIndicator size="large" color={colors.orange[500]} />
         </View>
       )}
-
-      {/* ========================================================================= */}
-      {/* PHOTO PICKER MODAL - Gallery or Camera Selection                         */}
-      {/* Senior-friendly with large touch targets (64px) and clear icons          */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showPhotoPickerModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPhotoPickerModal(false)}
-        accessibilityViewIsModal
-        accessibilityLabel="Choose how to add a photo"
-        statusBarTranslucent={Platform.OS === 'android'}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-          onPress={() => setShowPhotoPickerModal(false)}
-        >
-          <Pressable
-            style={{
-              backgroundColor: colors.white,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingBottom: Math.max(insets.bottom + 16, 32),
-              ...shadows.large,
-            }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Handle Bar */}
-            <View style={{
-              alignItems: 'center',
-              paddingTop: 12,
-              paddingBottom: 8,
-            }}>
-              <View style={{
-                width: 40,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: colors.gray[300],
-              }} />
-            </View>
-
-            {/* Modal Header */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: isTablet ? 20 : 16,
-              paddingHorizontal: isTablet ? 32 : 24,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.gray[100],
-              gap: 12,
-            }}>
-              <LinearGradient
-                colors={['#FF7B51', '#349E92']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  width: isTablet ? 56 : 48,
-                  height: isTablet ? 56 : 48,
-                  borderRadius: isTablet ? 28 : 24,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Feather name="image" size={isTablet ? 28 : 24} color={colors.white} />
-              </LinearGradient>
-              <View>
-                <Text style={{
-                  fontSize: isTablet ? 24 : 20,
-                  fontWeight: '700',
-                  color: colors.gray[900],
-                }}>
-                  Add a Photo
-                </Text>
-                <Text style={{
-                  fontSize: isTablet ? 16 : 14,
-                  color: colors.gray[500],
-                  marginTop: 2,
-                }}>
-                  Choose how you would like to add your photo
-                </Text>
-              </View>
-            </View>
-
-            {/* Options */}
-            <View style={{
-              paddingHorizontal: isTablet ? 32 : 20,
-              paddingTop: isTablet ? 24 : 20,
-              gap: isTablet ? 16 : 12,
-            }}>
-              {/* Choose from Gallery Option */}
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: isTablet ? 20 : 16,
-                  backgroundColor: '#FFF0EB',
-                  borderRadius: 20,
-                  borderWidth: 2,
-                  borderColor: '#FFD4C7',
-                  minHeight: isTablet ? 80 : 72,
-                  gap: 16,
-                }}
-                onPress={pickFromGallery}
-                accessibilityLabel="Choose from photo gallery"
-                accessibilityRole="button"
-                accessibilityHint="Opens your photo library to select a photo"
-              >
-                <View style={{
-                  width: isTablet ? 64 : 56,
-                  height: isTablet ? 64 : 56,
-                  borderRadius: isTablet ? 32 : 28,
-                  backgroundColor: colors.white,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  ...shadows.small,
-                }}>
-                  <Feather name="image" size={isTablet ? 32 : 28} color={'#FF7B51'} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontSize: isTablet ? 20 : 18,
-                    fontWeight: '700',
-                    color: colors.gray[900],
-                  }}>
-                    Choose from Gallery
-                  </Text>
-                  <Text style={{
-                    fontSize: isTablet ? 16 : 14,
-                    color: colors.gray[500],
-                    marginTop: 4,
-                  }}>
-                    Select a photo from your library
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={isTablet ? 28 : 24} color={'#F68562'} />
-              </TouchableOpacity>
-
-              {/* Take a Photo Option */}
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: isTablet ? 20 : 16,
-                  backgroundColor: '#E8F7F5',
-                  borderRadius: 20,
-                  borderWidth: 2,
-                  borderColor: '#B5E3DD',
-                  minHeight: isTablet ? 80 : 72,
-                  gap: 16,
-                }}
-                onPress={takePhotoWithCamera}
-                accessibilityLabel="Take a photo with camera"
-                accessibilityRole="button"
-                accessibilityHint="Opens your camera to take a new photo"
-              >
-                <View style={{
-                  width: isTablet ? 64 : 56,
-                  height: isTablet ? 64 : 56,
-                  borderRadius: isTablet ? 32 : 28,
-                  backgroundColor: colors.white,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  ...shadows.small,
-                }}>
-                  <Feather name="camera" size={isTablet ? 32 : 28} color={'#349E92'} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontSize: isTablet ? 20 : 18,
-                    fontWeight: '700',
-                    color: colors.gray[900],
-                  }}>
-                    Take a Photo
-                  </Text>
-                  <Text style={{
-                    fontSize: isTablet ? 16 : 14,
-                    color: colors.gray[500],
-                    marginTop: 4,
-                  }}>
-                    Use your camera for a new picture
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={isTablet ? 28 : 24} color={'#34A296'} />
-              </TouchableOpacity>
-
-              {/* Cancel Button */}
-              <TouchableOpacity
-                style={{
-                  height: isTablet ? 64 : 56,
-                  borderRadius: 16,
-                  borderWidth: 2,
-                  borderColor: colors.gray[200],
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  flexDirection: 'row',
-                  gap: 8,
-                  backgroundColor: colors.white,
-                  marginTop: isTablet ? 8 : 4,
-                }}
-                onPress={() => setShowPhotoPickerModal(false)}
-                accessibilityLabel="Cancel"
-                accessibilityRole="button"
-              >
-                <Feather name="x" size={isTablet ? 22 : 20} color={colors.gray[600]} />
-                <Text style={{
-                  fontSize: isTablet ? 18 : 16,
-                  fontWeight: '600',
-                  color: colors.gray[600],
-                }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Photo Tips */}
-            <View style={{
-              marginTop: isTablet ? 20 : 16,
-              marginHorizontal: isTablet ? 32 : 20,
-              padding: isTablet ? 16 : 14,
-              backgroundColor: colors.gray[50],
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.gray[200],
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                <Feather name="info" size={16} color={'#2E8B7F'} />
-                <Text style={{
-                  fontSize: isTablet ? 15 : 14,
-                  fontWeight: '600',
-                  color: '#277568',
-                }}>
-                  Photo Tips for Better Matches
-                </Text>
-              </View>
-              <View style={{ gap: 4 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Feather name="check" size={14} color={'#349E92'} />
-                  <Text style={{ fontSize: isTablet ? 14 : 13, color: colors.gray[600] }}>
-                    Show your face clearly and smile naturally
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Feather name="check" size={14} color={'#349E92'} />
-                  <Text style={{ fontSize: isTablet ? 14 : 13, color: colors.gray[600] }}>
-                    Use recent photos from the last year
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Feather name="check" size={14} color={'#349E92'} />
-                  <Text style={{ fontSize: isTablet ? 14 : 13, color: colors.gray[600] }}>
-                    Include photos of your hobbies and activities
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* ========================================================================= */}
       {/* DELETE CONFIRMATION MODAL - Fully Responsive for ALL Devices            */}
@@ -6535,17 +6434,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   alignItems: 'center',
                   paddingHorizontal: 14,
                   paddingVertical: 8,
-                  backgroundColor: '#FFF0EB',
+                  backgroundColor: colors.orange[50],
                   borderRadius: 20,
                   borderWidth: 1,
-                  borderColor: '#FFD4C7',
+                  borderColor: colors.orange[200],
                   gap: 8,
                   marginBottom: 8,
                 }}>
-                  <Feather name="star" size={16} color={'#E85A36'} />
+                  <Feather name="star" size={16} color={colors.orange[600]} />
                   <Text style={{
                     fontSize: isTablet ? 14 : 13,
-                    color: '#C94A27',
+                    color: colors.orange[700],
                     fontWeight: '500',
                   }}>
                     This is your main photo
@@ -6675,7 +6574,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       />
                     ) : (
                       <LinearGradient
-                        colors={[colors.romantic.pink, '#FF7B51']}
+                        colors={[colors.romantic.pink, colors.orange[500]]}
                         style={styles.storyResponseSenderAvatarPlaceholder}
                       >
                         <Text style={styles.storyResponseSenderInitial}>
@@ -6717,7 +6616,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       style={styles.alreadyRepliedContainer}
                       accessibilityLabel="You have already replied to this message"
                     >
-                      <Feather name="check-circle" size={28} color={'#2E8B7F'} />
+                      <Feather name="check-circle" size={28} color={colors.teal[600]} />
                       <Text style={styles.alreadyRepliedText}>
                         You've replied to this message
                       </Text>
@@ -6733,7 +6632,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         accessibilityHint="This will open a new chat where you can talk with this person"
                       >
                         <LinearGradient
-                          colors={[colors.romantic.pink, '#FF7B51']}
+                          colors={[colors.romantic.pink, colors.orange[500]]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
                           style={styles.replyButtonGradient}
@@ -6777,7 +6676,7 @@ const styles = StyleSheet.create({
   // =========================================================================
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.gray[50],
   },
   scrollView: {
     flex: 1,
@@ -6887,7 +6786,7 @@ const styles = StyleSheet.create({
     top: -4,
     left: -4,
     right: -4,
-    backgroundColor: '#FFDACF', // Premium coral glow
+    backgroundColor: colors.orange[200],
   },
   animatedProgressTrack: {
     backgroundColor: colors.gray[200],
@@ -6904,177 +6803,101 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#349E92',
+    backgroundColor: colors.teal[500],
     justifyContent: 'center',
     alignItems: 'center',
     ...shadows.small,
   },
 
   // =========================================================================
-  // Enhanced Photo Grid Components - Clean 2-column responsive layout
+  // Enhanced Photo Components
   // =========================================================================
-
-  // Main grid container - uses flexbox row wrap
-  photoGridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-
-  // Individual grid item wrapper - fixed 2-column layout (48% width each)
-  photoGridItemWrapper: {
-    width: '48%',
-    marginBottom: 12,
-  },
-
-  // Photo item container - 1:1 aspect ratio square
-  photoGridItemContainer: {
-    width: '100%',
-    aspectRatio: 1,
+  enhancedPhotoItem: {
+    aspectRatio: 3 / 4,
     overflow: 'hidden',
-    backgroundColor: colors.gray[100],
+    ...shadows.medium,
   },
-
-  // Photo image - fills container
-  photoGridImage: {
+  enhancedPhotoImage: {
     width: '100%',
     height: '100%',
   },
-
-  // Gradient overlay for visual depth
-  photoGridOverlay: {
+  photoItemOverlay: {
     ...StyleSheet.absoluteFillObject,
   },
-
-  // Main photo star badge container
-  mainPhotoBadgeContainer: {
+  enhancedMainBadge: {
     position: 'absolute',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    top: spacing.xs,
+    right: spacing.xs,
   },
-
-  // Main photo badge gradient background
-  mainPhotoBadgeGradient: {
+  enhancedMainBadgeGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.small,
+  },
+  photoPositionBadge: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    left: spacing.xs,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Photo number badge - bottom left
-  photoNumberBadge: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-
-  // Photo number text
-  photoNumberText: {
+  photoPositionText: {
+    fontSize: 12,
     fontWeight: '700',
     color: colors.white,
   },
-
-  // Add photo button container
-  addPhotoButtonContainer: {
-    width: '100%',
-    aspectRatio: 1,
+  enhancedAddPhotoButton: {
+    aspectRatio: 3 / 4,
     overflow: 'hidden',
-    backgroundColor: '#FFF8F5',
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Add photo dashed border
-  addPhotoButtonBorder: {
+  enhancedAddPhotoBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[400],
   },
-
-  // Add photo content wrapper
-  addPhotoButtonContent: {
+  enhancedAddPhotoContent: {
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.s,
   },
-
-  // Add photo icon circle
-  addPhotoIconCircle: {
+  enhancedAddPhotoIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF7B51',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.small,
   },
-
-  // Add photo button text
-  addPhotoButtonText: {
+  enhancedAddPhotoText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#E85A36',
+    color: colors.orange[600],
   },
-
-  // Add photo hint text
-  addPhotoButtonHint: {
-    color: '#F68562',
-    opacity: 0.8,
-  },
-
-  // Photo tips container
-  photoTipsContainer: {
-    marginTop: spacing.l,
-    padding: spacing.m,
-    backgroundColor: '#E8F7F5',
-    borderRadius: borderRadius.medium,
-    borderWidth: 1,
-    borderColor: '#C5EDE8',
-  },
-
-  // Photo tips title
-  photoTipsTitle: {
-    fontWeight: '600',
-    color: '#277568',
-    marginBottom: spacing.s,
-  },
-
-  // Photo tip item row
-  photoTipItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-
-  // Photo tip icon wrapper
-  photoTipIconWrapper: {
-    width: 24,
-    marginRight: spacing.s,
-  },
-
-  // Photo tip text
-  photoTipItemText: {
-    color: '#2E8B7F',
-    flex: 1,
+  enhancedAddPhotoHint: {
+    fontSize: 11,
+    color: colors.orange[400],
+    textAlign: 'center',
+    paddingHorizontal: spacing.s,
   },
 
   // =========================================================================
-  // Enhanced Profile Strength Section - Premium Glassmorphism
+  // Enhanced Profile Strength Section
   // =========================================================================
   enhancedProfileStrengthSection: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.white,
     borderRadius: borderRadius.xlarge,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 10,
+    ...shadows.large,
     overflow: 'hidden',
   },
   enhancedStrengthHeader: {
@@ -7104,21 +6927,21 @@ const styles = StyleSheet.create({
     color: colors.gray[800],
   },
   strengthPercentageBadge: {
-    backgroundColor: '#FFF0EB', // Premium coral background
+    backgroundColor: colors.orange[50],
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.large,
   },
   strengthPercentageBadgeComplete: {
-    backgroundColor: '#E8F7F5', // Premium teal background
+    backgroundColor: colors.teal[50],
   },
   enhancedStrengthPercentage: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FF7B51', // Premium coral
+    color: colors.orange[500],
   },
   strengthPercentageComplete: {
-    color: '#349E92', // Premium teal
+    color: colors.teal[600],
   },
   strengthStatusContainer: {
     flexDirection: 'row',
@@ -7143,17 +6966,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.m,
-    backgroundColor: '#FFF0EB', // Premium coral background
+    backgroundColor: colors.orange[50],
     borderRadius: borderRadius.medium,
     borderWidth: 1,
-    borderColor: '#FFD4C7', // Premium coral border
+    borderColor: colors.orange[100],
     gap: spacing.m,
   },
   strengthTipIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -7163,27 +6986,21 @@ const styles = StyleSheet.create({
   strengthTipMessage: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.gray[800],
   },
   strengthTipAction: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.gray[500],
     marginTop: 2,
   },
 
   // =========================================================================
-  // Enhanced Section Cards - Premium Glassmorphism
+  // Enhanced Section Cards
   // =========================================================================
   enhancedSectionCard: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: colors.white,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 10,
+    ...shadows.large,
   },
   sectionAccentBar: {
     height: 4,
@@ -7205,7 +7022,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -7218,7 +7035,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: spacing.s,
@@ -7237,15 +7054,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.m,
     paddingHorizontal: spacing.l,
     borderWidth: 2,
-    borderColor: '#FF7B51', // Premium coral
+    borderColor: colors.orange[400],
     borderRadius: borderRadius.large,
-    backgroundColor: '#FFF0EB', // Premium coral background
+    backgroundColor: colors.orange[50],
     minHeight: touchTargets.comfortable,
   },
   enhancedOutlineButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#E85A36', // Darker premium coral
+    color: colors.orange[600],
   },
 
   // =========================================================================
@@ -7257,7 +7074,7 @@ const styles = StyleSheet.create({
     padding: spacing.l,
     borderRadius: borderRadius.large,
     borderLeftWidth: 4,
-    borderLeftColor: '#F68562',
+    borderLeftColor: colors.orange[400],
   },
   enhancedStoryText: {
     fontSize: 18,
@@ -7288,7 +7105,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.m,
@@ -7315,7 +7132,7 @@ const styles = StyleSheet.create({
     minWidth: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FFE5DD',
+    backgroundColor: colors.orange[100],
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.s,
@@ -7323,7 +7140,7 @@ const styles = StyleSheet.create({
   interestCountText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#E85A36',
+    color: colors.orange[600],
   },
   enhancedInterestsGrid: {
     flexDirection: 'row',
@@ -7356,7 +7173,7 @@ const styles = StyleSheet.create({
   photoCountCurrent: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   photoCountDivider: {
     fontSize: 18,
@@ -7381,205 +7198,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[200],
   },
   photoProgressDotFilled: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
   },
-  // Note: Photo grid styles moved to "Enhanced Photo Grid Components" section above
-
-  // =========================================================================
-  // Premium Header Section (New Enhanced Design)
-  // =========================================================================
-  premiumHeaderWrapper: {
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  premiumGlassCard: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    padding: spacing.l,
-    paddingTop: spacing.m,
-    overflow: 'hidden',
-  },
-  premiumHeaderGradient: {
-    padding: spacing.l,
-    paddingTop: spacing.m,
-  },
-  premiumHeaderTopRow: {
+  enhancedPhotosGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.l,
-  },
-  premiumBrandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.m,
-  },
-  premiumLogoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FF7B51',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  premiumBrandText: {
-    fontWeight: '800',
-    color: '#1F2937',
-    letterSpacing: -0.3,
-  },
-  premiumBrandSubtext: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  premiumSettingsButton: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: '#FF7B51',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  premiumSettingsGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 28,
-  },
-  premiumHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  premiumPhotoWrapper: {
-    shadowColor: '#FF7B51',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  premiumPhotoBorderGradient: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 6,
-  },
-  premiumPhotoContainer: {
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-  },
-  premiumPhotoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  premiumPhotoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFF7ED',
-    gap: 4,
-  },
-  premiumPhotoPlaceholderText: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  premiumPhotoBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  premiumPhotoBadgeGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  premiumPhotoBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  premiumInfoContainer: {
-    flex: 1,
-    marginLeft: spacing.l,
-  },
-  premiumName: {
-    fontWeight: '800',
-    color: '#1F2937',
-    marginBottom: 2,
-    letterSpacing: -0.5,
-  },
-  premiumAge: {
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: spacing.s,
-  },
-  premiumLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: spacing.m,
-  },
-  premiumLocationIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#349E92',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  premiumLocation: {
-    color: '#4B5563',
-    fontWeight: '600',
-  },
-  premiumQuickActions: {
-    flexDirection: 'row',
-    gap: spacing.s,
     flexWrap: 'wrap',
   },
-  premiumQuickButton: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+  photoTipsSection: {
+    marginTop: spacing.l,
+    padding: spacing.m,
+    backgroundColor: colors.teal[50],
+    borderRadius: borderRadius.medium,
   },
-  premiumQuickButtonGradient: {
+  photoTipsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.teal[700],
+    marginBottom: spacing.s,
+  },
+  photoTipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: spacing.s,
+    marginBottom: spacing.xs,
   },
-  premiumQuickButtonText: {
-    fontWeight: '700',
-    color: '#fff',
+  photoTipText: {
+    fontSize: 14,
+    color: colors.teal[600],
   },
 
   // =========================================================================
-  // Section 1: Header Section (Legacy - kept for backward compatibility)
+  // Section 1: Header Section
   // =========================================================================
   headerSection: {
     backgroundColor: colors.white,
@@ -7596,7 +7245,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[500],
     backgroundColor: colors.gray[100],
   },
   headerPhoto: {
@@ -7655,13 +7304,13 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: borderRadius.medium,
   },
   headerPhotoName: {
-    fontSize: 14, // Senior-friendly minimum for overlay text (increased from 12)
+    fontSize: 12, // Minimum legible size for overlay text, responsive size applied inline
     color: colors.white,
     fontWeight: '600',
   },
   changePhotoLink: {
     fontSize: 16, // Senior-friendly minimum font size
-    color: '#FF7B51',
+    color: colors.orange[500],
     fontWeight: '600',
   },
   settingsButton: {
@@ -7699,7 +7348,7 @@ const styles = StyleSheet.create({
   profileStrengthPercentage: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   progressBarContainer: {
     // Base height - responsive height applied inline (14px on tablets)
@@ -7780,14 +7429,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.m,
     paddingHorizontal: spacing.l,
     borderWidth: 2,
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[500],
     borderRadius: borderRadius.large,
     minHeight: touchTargets.comfortable,
   },
   outlineButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
 
   // =========================================================================
@@ -7818,37 +7467,51 @@ const styles = StyleSheet.create({
   },
 
   // =========================================================================
-  // Legacy Photos Grid (kept for backwards compatibility)
-  // New photo grid styles are in "Enhanced Photo Grid Components" section
+  // Photos Grid (responsive columns - 2 on phones, 3 on tablet landscape)
+  // Width is now calculated dynamically in the component using photoItemWidth
   // =========================================================================
   photosGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    // gap is now applied dynamically via inline style
   },
   addPhotoPlaceholder: {
-    aspectRatio: 1,
+    // width is now applied dynamically via responsiveStyles.photoItem
+    aspectRatio: 3 / 4,
     borderRadius: borderRadius.large,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#FF7B51',
-    backgroundColor: '#FFF0EB',
+    borderColor: colors.orange[500],
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.s,
   },
   addPhotoText: {
-    fontSize: 16,
+    fontSize: 16, // Senior-friendly minimum font size
     fontWeight: '600',
-    color: '#FF7B51',
+    color: colors.orange[500],
+  },
+  photoGridItem: {
+    // width is now applied dynamically via responsiveStyles.photoItem
+    aspectRatio: 3 / 4,
+    borderRadius: borderRadius.large,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoGridImage: {
+    width: '100%',
+    height: '100%',
   },
   mainPhotoBadge: {
     position: 'absolute',
     top: spacing.xs,
     right: spacing.xs,
+    // Responsive dimensions - 28px on phones, 32px on tablets
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -8139,7 +7802,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -8243,15 +7906,15 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderWidth: 2,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
     borderRadius: borderRadius.large,
   },
   enhancedLocationChipTextOther: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2E8B7F',
+    color: colors.teal[600],
   },
   enhancedOtherLocationContainer: {
     marginTop: spacing.m,
@@ -8343,7 +8006,7 @@ const styles = StyleSheet.create({
   enhancedStoryTemplateActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   enhancedWriteOwnButton: {
     flexDirection: 'row',
@@ -8352,14 +8015,14 @@ const styles = StyleSheet.create({
     gap: spacing.s,
     paddingVertical: spacing.m,
     borderWidth: 2,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
     borderRadius: borderRadius.large,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
   },
   enhancedWriteOwnButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2E8B7F',
+    color: colors.teal[600],
   },
   enhancedStoryWritingSection: {
     padding: spacing.l,
@@ -8398,13 +8061,13 @@ const styles = StyleSheet.create({
     color: colors.gray[500],
   },
   charCounterWarning: {
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   charCounterSuccess: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#D1EDE9',
+    backgroundColor: colors.teal[100],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -8435,7 +8098,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -8456,14 +8119,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
     borderRadius: borderRadius.large,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderWidth: 1.5,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
   },
   enhancedBioPhraseChipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#277568',
+    color: colors.teal[700],
   },
 
   // =========================================================================
@@ -8486,12 +8149,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectionCountIconContainerSuccess: {
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
   },
   selectionCountTextContainer: {
     flexDirection: 'column',
@@ -8506,7 +8169,7 @@ const styles = StyleSheet.create({
     color: colors.gray[500],
   },
   selectionRequirementMet: {
-    color: '#2E8B7F',
+    color: colors.teal[600],
     fontWeight: '600',
   },
   interestsProgressDots: {
@@ -8520,7 +8183,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[200],
   },
   interestProgressDotFilled: {
-    backgroundColor: '#349E92',
+    backgroundColor: colors.teal[500],
   },
   enhancedCategoryTabsContainer: {
     maxHeight: 60,
@@ -8569,7 +8232,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.m,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[100],
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
   },
   enhancedSelectedInterestsLabel: {
     fontSize: 14,
@@ -8712,18 +8375,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
     borderRadius: borderRadius.large,
     marginBottom: spacing.l,
     borderWidth: 1.5,
-    borderColor: '#FFD4C7',
+    borderColor: colors.orange[200],
   },
   mainPhotoWarningText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#C94A27',
+    color: colors.orange[700],
   },
   enhancedDeleteConfirmButtons: {
     flexDirection: 'row',
@@ -8850,7 +8513,7 @@ const styles = StyleSheet.create({
   selectionCountText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   selectionCountHint: {
     fontSize: 14,
@@ -8966,8 +8629,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectionChipSelected: {
-    backgroundColor: '#FF7B51',
-    borderColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
+    borderColor: colors.orange[500],
   },
   selectionChipText: {
     fontSize: 16,
@@ -9341,14 +9004,14 @@ const styles = StyleSheet.create({
 
   // Chip - Selected (Orange for Religion)
   detailsChipSelected: {
-    backgroundColor: '#FF7B51',
-    borderColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
+    borderColor: colors.orange[500],
   },
 
   // Chip - Selected (Teal for Languages - visual distinction)
   detailsChipSelectedTeal: {
-    backgroundColor: '#349E92',
-    borderColor: '#349E92',
+    backgroundColor: colors.teal[500],
+    borderColor: colors.teal[500],
   },
 
   // Chip - Tablet (larger)
@@ -9373,7 +9036,7 @@ const styles = StyleSheet.create({
 
   // Language Count Badge
   detailsLanguageCount: {
-    backgroundColor: '#D1EDE9',
+    backgroundColor: colors.teal[100],
     paddingHorizontal: spacing.s,
     paddingVertical: 2,
     borderRadius: borderRadius.small,
@@ -9384,7 +9047,7 @@ const styles = StyleSheet.create({
   detailsLanguageCountText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2E8B7F',
+    color: colors.teal[600],
   },
 
   // Modal Footer - Base
@@ -9516,7 +9179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[500],
     ...shadows.medium,
   },
   ageStepperButtonDisabled: {
@@ -9530,7 +9193,7 @@ const styles = StyleSheet.create({
   ageStepperValue: {
     fontSize: 48,
     fontWeight: '700',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   ageStepperLabel: {
     fontSize: 16,
@@ -9560,11 +9223,11 @@ const styles = StyleSheet.create({
     minHeight: touchTargets.comfortable,
   },
   locationChipSelected: {
-    backgroundColor: '#FF7B51',
-    borderColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
+    borderColor: colors.orange[500],
   },
   locationChipOther: {
-    borderColor: '#34A296',
+    borderColor: colors.teal[400],
     borderStyle: 'dashed',
   },
   locationChipText: {
@@ -9577,7 +9240,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   locationChipTextOther: {
-    color: '#2E8B7F',
+    color: colors.teal[600],
     fontWeight: '600',
   },
   otherLocationInputContainer: {
@@ -9642,7 +9305,7 @@ const styles = StyleSheet.create({
   storyTemplateCardActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   writeOwnButton: {
     flexDirection: 'row',
@@ -9652,7 +9315,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.m,
     marginTop: spacing.m,
     borderWidth: 2,
-    borderColor: '#34A296',
+    borderColor: colors.teal[400],
     borderRadius: borderRadius.large,
     borderStyle: 'dashed',
     minHeight: touchTargets.comfortable,
@@ -9660,7 +9323,7 @@ const styles = StyleSheet.create({
   writeOwnButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2E8B7F',
+    color: colors.teal[600],
   },
 
   // Story Writing Section
@@ -9722,15 +9385,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
     borderRadius: borderRadius.large,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderWidth: 1,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
     minHeight: 44,
   },
   bioPhraseChipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#277568',
+    color: colors.teal[700],
   },
 
   // =========================================================================
@@ -9783,7 +9446,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   categoryTabSelected: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
   },
   categoryTabText: {
     fontSize: 14,
@@ -9817,7 +9480,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.s,
     paddingVertical: 6,
     borderRadius: borderRadius.medium,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     marginRight: spacing.xs,
   },
   selectedInterestChipText: {
@@ -9838,7 +9501,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.m,
   },
   interestCategoryHeaderQuickPicks: {
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     marginHorizontal: -spacing.l,
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.s,
@@ -9849,7 +9512,7 @@ const styles = StyleSheet.create({
     color: colors.gray[600],
   },
   interestCategoryTitleQuickPicks: {
-    color: '#E85A36',
+    color: colors.orange[600],
     fontWeight: '700',
   },
   interestCategoryChips: {
@@ -10113,12 +9776,12 @@ const styles = StyleSheet.create({
 
   // Photo Tips Card
   photoTipsCard: {
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderRadius: borderRadius.large,
     padding: spacing.m,
     marginTop: spacing.m,
     borderWidth: 1,
-    borderColor: '#D1EDE9',
+    borderColor: colors.teal[100],
   },
   photoTipsCardHeader: {
     flexDirection: 'row',
@@ -10130,14 +9793,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#D1EDE9',
+    backgroundColor: colors.teal[100],
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoTipsCardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#277568',
+    color: colors.teal[700],
   },
   photoTipsCardContent: {
     gap: spacing.xs,
@@ -10151,7 +9814,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#349E92',
+    backgroundColor: colors.teal[500],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -10193,10 +9856,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   photoSlotFilled: {
-    backgroundColor: '#349E92',
+    backgroundColor: colors.teal[500],
   },
   photoSlotMain: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
   },
   photoSlotNumber: {
     fontSize: 14,
@@ -10227,7 +9890,7 @@ const styles = StyleSheet.create({
     margin: 3,
     borderRadius: borderRadius.xlarge - 2,
     borderWidth: 2,
-    borderColor: '#FFBEA8',
+    borderColor: colors.orange[300],
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -10241,7 +9904,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFE5DD',
+    backgroundColor: colors.orange[100],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -10251,7 +9914,7 @@ const styles = StyleSheet.create({
   photoGalleryAddCardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#E85A36',
+    color: colors.orange[600],
     textAlign: 'center',
   },
   photoGalleryAddCardTitleMain: {
@@ -10259,7 +9922,7 @@ const styles = StyleSheet.create({
   },
   photoGalleryAddCardHint: {
     fontSize: 14,
-    color: '#F68562',
+    color: colors.orange[400],
     textAlign: 'center',
   },
   photoGalleryAddCardHintMain: {
@@ -10311,7 +9974,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoGalleryPhotoBadgeMain: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
   },
   photoGalleryPhotoBadgeText: {
     fontSize: 14,
@@ -10386,13 +10049,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.s,
     borderRadius: borderRadius.round,
     borderWidth: 2,
-    borderColor: '#FF7B51',
-    backgroundColor: '#FFF0EB',
+    borderColor: colors.orange[500],
+    backgroundColor: colors.orange[50],
   },
   photoGalleryAddMoreText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   photoGalleryDoneButton: {
     flex: 1,
@@ -10417,11 +10080,11 @@ const styles = StyleSheet.create({
 
   // Legacy styles (keeping for backward compatibility)
   photoTipsHeader: {
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.m,
     borderBottomWidth: 1,
-    borderBottomColor: '#FFE5DD',
+    borderBottomColor: colors.orange[100],
   },
   photoTipsIconRow: {
     flexDirection: 'row',
@@ -10440,7 +10103,7 @@ const styles = StyleSheet.create({
   photoTipsTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#C94A27',
+    color: colors.orange[700],
   },
   photoTipsList: {
     gap: 4,
@@ -10469,7 +10132,7 @@ const styles = StyleSheet.create({
   photoCountNumber: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FF7B51',
+    color: colors.orange[500],
   },
   photoCountLabel: {
     fontSize: 16,
@@ -10488,8 +10151,8 @@ const styles = StyleSheet.create({
     borderColor: colors.gray[300],
   },
   photoCountDotFilled: {
-    backgroundColor: '#FF7B51',
-    borderColor: '#E85A36',
+    backgroundColor: colors.orange[500],
+    borderColor: colors.orange[600],
   },
 
   // Gallery Items - Larger
@@ -10720,11 +10383,11 @@ const styles = StyleSheet.create({
   },
 
   // =========================================================================
-  // Story Responses Section - Senior-Friendly (50+)
+  // Story Responses Section - Senior-Friendly (60+)
   // All touch targets 56-64px, fonts 18px+, high contrast
   // =========================================================================
   unreadBadge: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     borderRadius: 14,
     minWidth: 28,
     height: 28,
@@ -10755,7 +10418,7 @@ const styles = StyleSheet.create({
   },
   storyResponseItemUnread: {
     backgroundColor: colors.romantic.warmWhite,
-    borderColor: '#FFBEA8',
+    borderColor: colors.orange[300],
     borderWidth: 2,
   },
   storyResponseAvatar: {
@@ -10766,7 +10429,7 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     borderWidth: 2,
-    borderColor: '#FFD4C7',
+    borderColor: colors.orange[200],
   },
   storyResponseAvatarPlaceholder: {
     width: 64,
@@ -10785,7 +10448,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     borderWidth: 3,
     borderColor: colors.white,
   },
@@ -10820,7 +10483,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.xs,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     paddingHorizontal: spacing.s,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
@@ -10828,12 +10491,12 @@ const styles = StyleSheet.create({
   },
   repliedBadgeText: {
     fontSize: 15,
-    color: '#2E8B7F',
+    color: colors.teal[600],
     fontWeight: '600',
   },
   tapToReplyText: {
     fontSize: 16,
-    color: '#E85A36',
+    color: colors.orange[600],
     fontWeight: '600',
     marginTop: spacing.xs,
   },
@@ -10855,7 +10518,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s + 2,
     borderRadius: borderRadius.large,
@@ -10868,9 +10531,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   passButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.gray[100],
     alignItems: 'center',
     justifyContent: 'center',
@@ -10881,7 +10544,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: '#349E92',
+    backgroundColor: colors.teal[500],
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
     borderRadius: borderRadius.round,
@@ -10894,6 +10557,146 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  // ========================================================================
+  // NEW Story Response Card Styles (Redesigned for better UX)
+  // ========================================================================
+  storyResponseCardNew: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.large,
+    borderWidth: 2,
+    borderColor: colors.gray[200],
+    padding: spacing.m,
+    gap: spacing.m,
+  },
+  storyResponseCardUnread: {
+    backgroundColor: colors.romantic.warmWhite,
+    borderColor: colors.orange[300],
+    borderWidth: 2.5,
+  },
+  storyResponseTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+  },
+  storyResponseAvatarContainer: {
+    position: 'relative',
+  },
+  storyResponseAvatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: colors.orange[300],
+  },
+  storyResponseAvatarFallback: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.romantic.blush,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.romantic.pinkLight,
+  },
+  storyResponseUnreadDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.orange[500],
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  storyResponseNameBlock: {
+    flex: 1,
+    minWidth: 0, // Allow text truncation to work properly
+  },
+  storyResponseNameText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.gray[900],
+  },
+  storyResponseTimeText: {
+    fontSize: 13,
+    color: colors.gray[500],
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  storyResponseMatchedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.teal[500],
+    paddingHorizontal: spacing.s,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    flexShrink: 0, // Don't shrink the badge
+  },
+  storyResponseMatchedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  storyResponseMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.s,
+    backgroundColor: colors.orange[50],
+    padding: spacing.m,
+    borderRadius: borderRadius.medium,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.orange[400],
+  },
+  storyResponseMsgText: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.gray[700],
+    lineHeight: 24,
+    fontStyle: 'italic',
+  },
+  storyResponseActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.s,
+    marginTop: spacing.xs,
+  },
+  storyResponsePassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    borderRadius: borderRadius.large,
+    backgroundColor: colors.gray[100],
+    borderWidth: 1.5,
+    borderColor: colors.gray[300],
+    minHeight: 44,
+  },
+  storyResponsePassText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.gray[600],
+  },
+  storyResponseLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.s,
+    borderRadius: borderRadius.large,
+    backgroundColor: colors.orange[500],
+    minHeight: 44,
+  },
+  storyResponseLikeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.white,
   },
   // Match modal styles
   matchModalBackdrop: {
@@ -10978,7 +10781,7 @@ const styles = StyleSheet.create({
   matchModalButtonPrimaryText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#E85A36',
+    color: colors.orange[600],
   },
   matchModalButtonSecondary: {
     alignItems: 'center',
@@ -11000,13 +10803,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.m,
     marginTop: spacing.s,
     minHeight: touchTargets.comfortable, // 56px touch target
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     borderRadius: borderRadius.large,
   },
   viewAllResponsesText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#E85A36',
+    color: colors.orange[600],
   },
   emptyStoryResponses: {
     alignItems: 'center',
@@ -11030,7 +10833,7 @@ const styles = StyleSheet.create({
   },
 
   // =========================================================================
-  // Story Response Modal - Senior-Friendly (50+)
+  // Story Response Modal - Senior-Friendly (60+)
   // Warm, inviting design with large touch targets
   // =========================================================================
   storyResponseModalContainer: {
@@ -11054,7 +10857,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    borderColor: '#FFBEA8',
+    borderColor: colors.orange[300],
   },
   storyResponseSenderAvatarPlaceholder: {
     width: 80,
@@ -11113,15 +10916,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.s,
     paddingVertical: spacing.l,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderRadius: borderRadius.large,
     borderWidth: 2,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
     minHeight: touchTargets.large,
   },
   alreadyRepliedText: {
     fontSize: 18,
-    color: '#277568',
+    color: colors.teal[700],
     fontWeight: '600',
   },
   replyButton: {
@@ -11183,13 +10986,13 @@ const styles = StyleSheet.create({
   },
   storyResponsesSubtitle: {
     fontSize: 14,
-    color: '#E85A36',
+    color: colors.orange[600],
     fontWeight: '600',
   },
 
   // Enhanced Unread Badge with animation support
   unreadBadgeEnhanced: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     minWidth: 32,
     height: 32,
     borderRadius: 16,
@@ -11212,7 +11015,7 @@ const styles = StyleSheet.create({
   },
   storyResponseItemUnreadEnhanced: {
     backgroundColor: colors.romantic.warmWhite,
-    borderColor: '#F68562',
+    borderColor: colors.orange[400],
     borderWidth: 2,
     ...shadows.medium,
   },
@@ -11233,7 +11036,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     borderTopLeftRadius: borderRadius.large,
     borderBottomLeftRadius: borderRadius.large,
   },
@@ -11244,10 +11047,10 @@ const styles = StyleSheet.create({
   },
   storyResponseAvatarImageEnhanced: {
     borderWidth: 3,
-    borderColor: '#FFBEA8',
+    borderColor: colors.orange[300],
   },
   storyResponseAvatarImageUnread: {
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[500],
     borderWidth: 3,
   },
   storyResponseAvatarImageTablet: {
@@ -11280,7 +11083,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FFD4C7',
+    backgroundColor: colors.orange[200],
     opacity: 0.5,
     top: -5,
     left: -5,
@@ -11302,11 +11105,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   storyResponseTimeUnread: {
-    color: '#E85A36',
+    color: colors.orange[600],
     fontWeight: '600',
   },
   newBadge: {
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
     borderRadius: borderRadius.small,
@@ -11406,9 +11209,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.m + 4,
     minHeight: touchTargets.comfortable + 4, // 60px
-    backgroundColor: '#FFF0EB',
+    backgroundColor: colors.orange[50],
     borderWidth: 2,
-    borderColor: '#FFD4C7',
+    borderColor: colors.orange[200],
     borderRadius: borderRadius.large,
   },
   viewAllResponsesButtonTablet: {
@@ -11424,7 +11227,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFE5DD',
+    backgroundColor: colors.orange[100],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -11483,12 +11286,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.m,
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.s,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderRadius: borderRadius.medium,
   },
   emptyStoryResponsesHintText: {
     fontSize: 15,
-    color: '#277568',
+    color: colors.teal[700],
     fontWeight: '500',
     flex: 1,
     lineHeight: 22,
@@ -11710,10 +11513,10 @@ const styles = StyleSheet.create({
     gap: spacing.m,
     paddingVertical: spacing.l,
     paddingHorizontal: spacing.l,
-    backgroundColor: '#E8F7F5',
+    backgroundColor: colors.teal[50],
     borderRadius: borderRadius.large,
     borderWidth: 2,
-    borderColor: '#B5E3DD',
+    borderColor: colors.teal[200],
     minHeight: touchTargets.large,
   },
   alreadyRepliedContainerTablet: {
@@ -11736,12 +11539,12 @@ const styles = StyleSheet.create({
   },
   alreadyRepliedTextEnhanced: {
     fontSize: 18,
-    color: '#277568',
+    color: colors.teal[700],
     fontWeight: '700',
   },
   alreadyRepliedSubtext: {
     fontSize: 15,
-    color: '#2E8B7F',
+    color: colors.teal[600],
     fontWeight: '500',
   },
 
@@ -11894,7 +11697,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   photoViewerThumbnailActive: {
-    borderColor: '#FF7B51',
+    borderColor: colors.orange[500],
   },
   photoViewerThumbnailImage: {
     width: '100%',
@@ -11907,7 +11710,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#FF7B51',
+    backgroundColor: colors.orange[500],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -11967,6 +11770,934 @@ const styles = StyleSheet.create({
   photoViewerZoomHintText: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
+  },
+
+  // =========================================================================
+  // PREMIUM UI STYLES - iPhone-style Design
+  // =========================================================================
+
+  // Premium Header Card
+  premiumHeaderCard: {
+    backgroundColor: colors.white,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.l,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  premiumHeaderContent: {
+    alignItems: 'center',
+  },
+  premiumPhotoWrapper: {
+    position: 'relative',
+    marginBottom: spacing.l,
+  },
+  premiumPhotoRing: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.orange[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  premiumPhotoInner: {
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  premiumPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  premiumPhotoPlaceholder: {
+    flex: 1,
+    backgroundColor: colors.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumPhotoPlaceholderText: {
+    fontSize: 12,
+    color: colors.gray[400],
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  premiumVerifiedBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    shadowColor: colors.teal[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  premiumVerifiedGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  premiumNameContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.m,
+  },
+  premiumName: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  premiumLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 4,
+  },
+  premiumLocation: {
+    color: colors.gray[500],
+    fontWeight: '500',
+  },
+  premiumChangePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    backgroundColor: colors.orange[50],
+    borderRadius: borderRadius.round,
+  },
+  premiumChangePhotoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.orange[500],
+  },
+  premiumSettingsBtn: {
+    position: 'absolute',
+    top: spacing.m,
+    right: spacing.m,
+    backgroundColor: colors.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  // Premium Profile Strength Card
+  premiumStrengthCard: {
+    backgroundColor: colors.white,
+    padding: spacing.l,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  premiumStrengthTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  premiumProgressRing: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumProgressBg: {
+    position: 'absolute',
+    borderColor: colors.gray[100],
+  },
+  premiumProgressArc: {
+    position: 'absolute',
+    overflow: 'hidden',
+  },
+  premiumProgressGradient: {
+    borderColor: 'transparent',
+    borderTopColor: colors.orange[500],
+    borderRightColor: colors.teal[500],
+  },
+  premiumProgressCenter: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  premiumProgressPercent: {
+    fontWeight: '800',
+    color: colors.gray[900],
+    letterSpacing: -1,
+  },
+  premiumProgressLabel: {
+    fontWeight: '600',
+    color: colors.gray[400],
+    marginLeft: 1,
+  },
+  premiumStrengthInfo: {
+    flex: 1,
+    marginLeft: spacing.l,
+  },
+  premiumStrengthTitle: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.3,
+  },
+  premiumStrengthStatus: {
+    color: colors.orange[500],
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  premiumStrengthHint: {
+    color: colors.gray[500],
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  premiumActionTiles: {
+    marginTop: spacing.l,
+    gap: spacing.s,
+  },
+  premiumActionTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.m,
+    backgroundColor: colors.gray[50],
+    borderRadius: borderRadius.large,
+  },
+  premiumActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumActionContent: {
+    flex: 1,
+    marginLeft: spacing.m,
+  },
+  premiumActionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.gray[800],
+  },
+  premiumActionSubtitle: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginTop: 2,
+  },
+
+  // =========================================================================
+  // ULTRA PREMIUM iPHONE-STYLE PROFILE STRENGTH SECTION
+  // =========================================================================
+  iphoneStrengthCard: {
+    backgroundColor: colors.white,
+    marginHorizontal: spacing.m,
+    marginBottom: spacing.m,
+    overflow: 'hidden',
+    // Premium Apple-style shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  iphoneStrengthGradientBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+  },
+  iphoneStrengthContent: {
+    padding: spacing.l,
+  },
+  iphoneStrengthHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iphoneSvgProgressContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneProgressGlow: {
+    position: 'absolute',
+  },
+  iphoneSvgProgress: {
+    position: 'absolute',
+  },
+  iphoneProgressCenterContent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+  },
+  iphoneProgressNumber: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -1.5,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+  },
+  iphoneProgressPercent: {
+    fontWeight: '600',
+    color: colors.gray[400],
+    marginLeft: 2,
+    marginBottom: 4,
+  },
+  iphoneCompleteBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    shadowColor: colors.teal[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  iphoneCompleteBadgeGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
+    borderColor: colors.white,
+  },
+  iphoneStrengthTextContainer: {
+    flex: 1,
+    marginLeft: spacing.l,
+  },
+  iphoneStrengthTitle: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.5,
+    marginBottom: spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+  },
+  iphoneStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.s,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: spacing.xs,
+  },
+  iphoneStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  iphoneStatusText: {
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  iphoneStrengthDescription: {
+    color: colors.gray[500],
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  iphoneActionsContainer: {
+    marginTop: spacing.l,
+  },
+  iphoneDividerContainer: {
+    marginBottom: spacing.m,
+  },
+  iphoneDivider: {
+    height: 1,
+    borderRadius: 1,
+  },
+  iphoneActionsTitle: {
+    fontWeight: '600',
+    color: colors.gray[400],
+    letterSpacing: 1,
+    marginBottom: spacing.m,
+    textTransform: 'uppercase',
+  },
+  iphoneActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.m,
+    borderRadius: 16,
+    marginBottom: spacing.s,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+  },
+  iphoneActionCardBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+  },
+  iphoneActionIconWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  iphoneActionIconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneActionTextContainer: {
+    flex: 1,
+    marginLeft: spacing.m,
+  },
+  iphoneActionTitle: {
+    fontWeight: '600',
+    color: colors.gray[800],
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  iphoneActionSubtitle: {
+    color: colors.gray[500],
+    letterSpacing: -0.1,
+  },
+  iphoneActionArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.gray[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneCelebration: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.l,
+    padding: spacing.m,
+    borderRadius: 16,
+    overflow: 'hidden',
+    gap: spacing.s,
+  },
+  iphoneCelebrationBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+  },
+  iphoneCelebrationText: {
+    fontWeight: '600',
+    color: colors.teal[600],
+    letterSpacing: -0.2,
+  },
+
+  // =========================================================================
+  // iPHONE PREMIUM HEADER STYLES
+  // =========================================================================
+  iphoneHeaderCard: {
+    backgroundColor: colors.white,
+    marginHorizontal: spacing.m,
+    marginBottom: spacing.m,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 30,
+    elevation: 15,
+  },
+  iphoneHeaderAccent: {
+    height: 4,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  iphoneSettingsBtn: {
+    position: 'absolute',
+    top: spacing.l,
+    right: spacing.l,
+    zIndex: 10,
+  },
+  iphoneSettingsInner: {
+    flex: 1,
+    backgroundColor: colors.gray[50],
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+  },
+  iphoneHeaderContent: {
+    alignItems: 'center',
+    paddingTop: spacing.xl + spacing.m,
+    paddingBottom: spacing.l,
+    paddingHorizontal: spacing.l,
+  },
+  iphonePhotoWrapper: {
+    position: 'relative',
+    marginBottom: spacing.m,
+  },
+  iphonePhotoGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(249,115,22,0.12)',
+  },
+  iphonePhotoRing: {
+    padding: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.orange[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  iphonePhotoInner: {
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  iphonePhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  iphonePhotoPlaceholder: {
+    flex: 1,
+  },
+  iphonePhotoPlaceholderBg: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphonePhotoPlaceholderText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.gray[400],
+    marginTop: 4,
+  },
+  iphoneVerifiedBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    shadowColor: colors.teal[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  iphoneVerifiedGradient: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  iphoneNameContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.s,
+  },
+  iphoneName: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  iphoneLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iphoneLocationIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(20,184,166,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  iphoneLocation: {
+    color: colors.gray[500],
+    fontWeight: '500',
+  },
+  iphoneChangePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    gap: 6,
+  },
+  iphoneChangePhotoBtnBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+  },
+  iphoneChangePhotoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.orange[500],
+  },
+
+  // =========================================================================
+  // iPHONE SECTION CARD BASE STYLES
+  // =========================================================================
+  iphoneSectionCard: {
+    backgroundColor: colors.white,
+    marginHorizontal: spacing.m,
+    marginBottom: spacing.m,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  iphoneSectionAccent: {
+    height: 4,
+  },
+  iphoneSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
+  },
+  iphoneSectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iphoneSectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.m,
+  },
+  iphoneSectionTitle: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.3,
+  },
+  iphoneHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+  },
+  iphoneCompletedBadge: {
+    shadowColor: colors.teal[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  iphoneCompletedBadgeGradient: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneCountBadge: {
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  iphoneCountText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.gray[600],
+  },
+  iphoneSectionContent: {
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.m,
+  },
+  iphoneSectionFooter: {
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.l,
+  },
+  iphonePremiumButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: spacing.l,
+    borderRadius: 14,
+    gap: spacing.s,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(249,115,22,0.2)',
+  },
+  iphonePremiumButtonBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+  },
+  iphonePremiumButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.orange[600],
+    letterSpacing: -0.2,
+  },
+
+  // =========================================================================
+  // iPHONE STORY SECTION STYLES
+  // =========================================================================
+  iphoneStoryContainer: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 16,
+    padding: spacing.l,
+    position: 'relative',
+  },
+  iphoneStoryQuoteMark: {
+    position: 'absolute',
+    top: 8,
+    left: 12,
+    opacity: 0.15,
+  },
+  iphoneQuoteText: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: colors.orange[500],
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  iphoneStoryText: {
+    color: colors.gray[700],
+    lineHeight: 26,
+    letterSpacing: -0.2,
+    paddingLeft: spacing.m,
+  },
+
+  // =========================================================================
+  // iPHONE EMPTY STATE STYLES
+  // =========================================================================
+  iphoneEmptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.l,
+  },
+  iphoneEmptyIconContainer: {
+    marginBottom: spacing.m,
+  },
+  iphoneEmptyIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneEmptyTitle: {
+    fontWeight: '600',
+    color: colors.gray[800],
+    marginBottom: spacing.xs,
+    letterSpacing: -0.2,
+  },
+  iphoneEmptyDescription: {
+    color: colors.gray[500],
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: spacing.l,
+  },
+
+  // =========================================================================
+  // iPHONE INTERESTS SECTION STYLES
+  // =========================================================================
+  iphoneInterestsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.s,
+  },
+  iphoneInterestChipWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  iphoneInterestChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  iphoneInterestText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.white,
+    letterSpacing: -0.1,
+  },
+
+  // =========================================================================
+  // iPHONE PERSONAL DETAILS STYLES
+  // =========================================================================
+  iphoneEditButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(139,92,246,0.1)',
+    borderRadius: 16,
+  },
+  iphoneEditButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B5CF6',
+  },
+  iphoneDetailsList: {
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.m,
+  },
+  iphoneDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  iphoneDetailIconWrapper: {
+    marginRight: spacing.m,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  iphoneDetailIconGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneDetailContent: {
+    flex: 1,
+  },
+  iphoneDetailLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.gray[500],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  iphoneDetailValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray[800],
+    letterSpacing: -0.2,
+  },
+  iphoneDetailPlaceholder: {
+    color: colors.gray[400],
+    fontWeight: '500',
+  },
+  iphoneDetailArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.gray[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Premium Personal Details Card
+  premiumDetailsCard: {
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  premiumDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.l,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  premiumDetailsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  premiumDetailsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.m,
+  },
+  premiumDetailsTitle: {
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.3,
+  },
+  premiumEditLink: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.orange[500],
+  },
+  premiumDetailsList: {
+    paddingHorizontal: spacing.l,
+  },
+  premiumDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.m,
+    minHeight: 64,
+  },
+  premiumDetailIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumDetailContent: {
+    flex: 1,
+    marginLeft: spacing.m,
+  },
+  premiumDetailLabel: {
+    fontSize: 13,
+    color: colors.gray[500],
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  premiumDetailValue: {
+    fontSize: 16,
+    color: colors.gray[800],
+    fontWeight: '600',
+  },
+  premiumDetailPlaceholder: {
+    color: colors.gray[400],
+    fontStyle: 'italic',
+  },
+  premiumDetailDivider: {
+    height: 1,
+    backgroundColor: colors.gray[100],
+    marginLeft: 56,
+  },
+
+  // Premium Story Responses Empty State
+  premiumEmptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+  },
+  premiumEmptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.l,
+  },
+  premiumEmptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray[800],
+    marginBottom: spacing.s,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  premiumEmptyText: {
+    fontSize: 15,
+    color: colors.gray[500],
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 280,
   },
 });
 

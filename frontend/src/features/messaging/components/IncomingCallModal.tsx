@@ -9,8 +9,9 @@
  * 🎯 Simple, intuitive layout
  * 💫 Clear visual hierarchy
  * ♿ WCAG AAA accessibility
- * 🔊 Vibration alerts
  * ⚡ Optimized performance
+ *
+ * Note: Vibration and ringtone are handled by WebSocketProvider to prevent duplicates
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
@@ -21,10 +22,9 @@ import {
   Image,
   Modal,
   Animated,
-  Vibration,
-  Platform,
   Easing,
 } from 'react-native';
+// ✅ FIX: Removed expo-av Audio - ringtone handled by WebSocketProvider via InCallManager
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -131,7 +131,8 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   const slideUp = useRef(new Animated.Value(50)).current;
 
   // Refs
-  const vibrationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // ✅ FIX: Removed vibration and ringtone - ALL audio/vibration handled by WebSocketProvider
+  // This prevents duplicate vibrations and ringtones from playing simultaneously
   const isMountedRef = useRef(true);
 
   // Mount/unmount
@@ -139,33 +140,16 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (vibrationIntervalRef.current) {
-        clearInterval(vibrationIntervalRef.current);
-        vibrationIntervalRef.current = null;
-      }
-      Vibration.cancel();
     };
   }, []);
 
   // Handle visibility
+  // ✅ FIX: Removed vibration & ringtone - ALL audio/vibration handled by WebSocketProvider
   useEffect(() => {
     const isVisible = visible !== undefined ? visible : !!call;
 
     if (isVisible && call) {
-      // Start vibration
-      const pattern = Platform.OS === 'android'
-        ? [0, 400, 200, 400, 200, 400]
-        : [400, 200, 400, 200];
-
-      Vibration.vibrate(pattern);
-
-      vibrationIntervalRef.current = setInterval(() => {
-        if (isMountedRef.current) {
-          Vibration.vibrate(pattern);
-        }
-      }, 3000);
-
-      // Entrance animation
+      // Entrance animation only - audio/vibration handled by WebSocketProvider
       Animated.parallel([
         Animated.timing(fadeIn, {
           toValue: 1,
@@ -179,35 +163,15 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         }),
       ]).start();
     } else {
-      // Cleanup
-      if (vibrationIntervalRef.current) {
-        clearInterval(vibrationIntervalRef.current);
-        vibrationIntervalRef.current = null;
-      }
-      Vibration.cancel();
+      // Reset animations
       fadeIn.setValue(0);
       slideUp.setValue(50);
     }
-
-    return () => {
-      if (!isVisible) {
-        if (vibrationIntervalRef.current) {
-          clearInterval(vibrationIntervalRef.current);
-          vibrationIntervalRef.current = null;
-        }
-        Vibration.cancel();
-      }
-    };
   }, [visible, call, fadeIn, slideUp]);
 
   // Dismiss handler
+  // ✅ FIX: Removed vibration/ringtone handling - WebSocketProvider handles all audio/vibration
   const handleDismiss = useCallback((callback: () => void) => {
-    if (vibrationIntervalRef.current) {
-      clearInterval(vibrationIntervalRef.current);
-      vibrationIntervalRef.current = null;
-    }
-    Vibration.cancel();
-
     Animated.parallel([
       Animated.timing(fadeIn, {
         toValue: 0,

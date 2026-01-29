@@ -208,7 +208,7 @@ export function useTwilioCall(): UseTwilioCallReturn {
       const enabled = twilioVideoService.toggleAudio();
       setIsAudioMuted(!enabled);
     } catch (e: any) {
-      console.error('[useTwilioCall] Failed to toggle audio:', e);
+      console.warn('[useTwilioCall] Failed to toggle audio:', e);
       setError(e.message || 'Failed to toggle audio');
     }
   }, []);
@@ -218,7 +218,7 @@ export function useTwilioCall(): UseTwilioCallReturn {
       const enabled = twilioVideoService.toggleVideo();
       setIsVideoMuted(!enabled);
     } catch (e: any) {
-      console.error('[useTwilioCall] Failed to toggle video:', e);
+      console.warn('[useTwilioCall] Failed to toggle video:', e);
       setError(e.message || 'Failed to toggle video');
     }
   }, []);
@@ -228,7 +228,7 @@ export function useTwilioCall(): UseTwilioCallReturn {
       const on = twilioVideoService.toggleSpeaker();
       setIsSpeakerOn(on);
     } catch (e: any) {
-      console.error('[useTwilioCall] Failed to toggle speaker:', e);
+      console.warn('[useTwilioCall] Failed to toggle speaker:', e);
       setError(e.message || 'Failed to toggle speaker');
     }
   }, []);
@@ -238,7 +238,7 @@ export function useTwilioCall(): UseTwilioCallReturn {
       await twilioVideoService.switchCamera();
       setIsFrontCamera(twilioVideoService.isFrontCameraActive());
     } catch (e: any) {
-      console.error('[useTwilioCall] Failed to switch camera:', e);
+      console.warn('[useTwilioCall] Failed to switch camera:', e);
       setError(e.message || 'Failed to switch camera');
     }
   }, []);

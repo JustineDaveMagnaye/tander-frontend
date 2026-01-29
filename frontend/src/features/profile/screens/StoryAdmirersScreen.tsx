@@ -146,7 +146,7 @@ export const StoryAdmirersScreen: React.FC<StoryAdmirersScreenProps> = ({
           setShowMatchModal(true);
         }
       } catch (error) {
-        console.error('Failed to like back:', error);
+        console.warn('Failed to like back:', error);
       } finally {
         setLikingBackId(null);
       }
@@ -163,7 +163,7 @@ export const StoryAdmirersScreen: React.FC<StoryAdmirersScreenProps> = ({
       try {
         await declineComment(comment.id);
       } catch (error) {
-        console.error('Failed to decline:', error);
+        console.warn('Failed to decline:', error);
       } finally {
         setDecliningId(null);
       }

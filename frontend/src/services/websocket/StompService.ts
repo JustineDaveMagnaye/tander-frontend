@@ -93,11 +93,26 @@ class StompService {
   private config: StompConfig | null = null;
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 10;
+  // ✅ PREMIUM: Removed max reconnect limit - keep trying forever with exponential backoff
+  // private maxReconnectAttempts: number = 10;
 
   // QA-003: Exponential backoff for reconnection
   private readonly BASE_RECONNECT_DELAY = 1000; // Start at 1 second
   private readonly MAX_RECONNECT_DELAY = 30000; // Max 30 seconds
+
+  // ✅ PREMIUM: Connection state for UI feedback
+  private _connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
+  private connectionStateCallbacks: Set<(state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting') => void> = new Set();
+
+  // ✅ FIX: Debounce connection state changes to prevent UI spam during rapid reconnection attempts
+  private connectionStateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly CONNECTION_STATE_DEBOUNCE_MS = 500; // Wait 500ms before notifying state change
+
+  // ✅ PREMIUM: Heartbeat watchdog for silent disconnect detection
+  private lastHeartbeatReceived: number = 0;
+  private heartbeatWatchdogId: ReturnType<typeof setInterval> | null = null;
+  private readonly HEARTBEAT_WATCHDOG_INTERVAL = 10000; // Check every 10 seconds
+  private readonly HEARTBEAT_TIMEOUT = 35000; // 35 seconds (server sends every 30s)
 
   // Callbacks
   private messageCallbacks: Set<MessageCallback> = new Set();
@@ -219,8 +234,10 @@ class StompService {
           console.log('[StompService] Connected successfully');
           this.isConnected = true;
           this.reconnectAttempts = 0;
+          this.setConnectionState('connected'); // ✅ PREMIUM: Update connection state
           this.setupUserSubscriptions();
           this.startHeartbeat(); // Start application-level heartbeat
+          this.startHeartbeatWatchdog(); // ✅ PREMIUM: Start watchdog for silent disconnects
           this.flushOfflineMessageQueue(); // ✅ FIX: Send queued messages on reconnect
           this.notifyConnectionChange(true);
           resolve(true);
@@ -229,7 +246,9 @@ class StompService {
         onDisconnect: () => {
           console.log('[StompService] Disconnected');
           this.stopHeartbeat(); // R7-008: Stop heartbeat to prevent orphaned intervals
+          this.stopHeartbeatWatchdog(); // ✅ PREMIUM: Stop watchdog
           this.isConnected = false;
+          this.setConnectionState('disconnected'); // ✅ PREMIUM: Update connection state
           this.notifyConnectionChange(false);
         },
 
@@ -244,16 +263,15 @@ class StompService {
           // Use warn instead of error to avoid red screen in dev mode
           console.warn('[StompService] WebSocket connection failed - backend may be offline');
           this.reconnectAttempts++;
+          // ✅ PREMIUM: Update connection state for UI
+          this.setConnectionState('reconnecting');
           // QA-003: Log exponential backoff delay
           const nextDelay = Math.min(
             this.BASE_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
             this.MAX_RECONNECT_DELAY
           );
-          console.log(`[StompService] QA-003: Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}, next delay: ${nextDelay}ms`);
-          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.warn('[StompService] Max reconnect attempts reached, stopping reconnection');
-            this.disconnect();
-          }
+          // ✅ PREMIUM: Removed max attempts limit - keep reconnecting forever
+          console.log(`[StompService] Reconnect attempt ${this.reconnectAttempts}, next delay: ${nextDelay}ms`);
         },
       });
 
@@ -267,6 +285,12 @@ class StompService {
   disconnect(): void {
     // Stop heartbeat first
     this.stopHeartbeat();
+
+    // ✅ FIX: Stop connection state debounce timer
+    if (this.connectionStateDebounceTimer) {
+      clearTimeout(this.connectionStateDebounceTimer);
+      this.connectionStateDebounceTimer = null;
+    }
 
     // ✅ FIX: Stop delivery receipt cleanup timer
     if (this.deliveredMessageCleanupTimer) {
@@ -312,6 +336,12 @@ class StompService {
    */
   private setupUserSubscriptions(): void {
     if (!this.client || !this.currentUsername) return;
+
+    console.log('[StompService] 🔔 Setting up subscriptions for username:', this.currentUsername, 'userId:', this.currentUserId);
+    console.log('[StompService] 🔔 Will subscribe to:');
+    console.log('[StompService] 🔔   - /user/' + this.currentUsername + '/queue/messages');
+    console.log('[StompService] 🔔   - /user/' + this.currentUsername + '/queue/calls');
+    console.log('[StompService] 🔔   - /topic/calls.' + this.currentUsername);
 
     // Subscribe to personal message queue
     this.subscribe(
@@ -427,13 +457,19 @@ class StompService {
       'user-presence'
     );
 
-    // Subscribe to read receipts
+    // Subscribe to read receipts (user queue)
     this.subscribe(
       `/user/${this.currentUsername}/queue/read-receipts`,
       (message) => {
         const data = JSON.parse(message.body);
-        // Handle read receipts - update message status
-        console.log('[StompService] Read receipt:', data);
+        console.log('[StompService] Read receipt (user queue):', data);
+        // ✅ FIX: Actually notify callbacks about read receipt!
+        this.notifyReadReceipt({
+          roomId: data.roomId || data.roomName || '',
+          conversationId: data.conversationId,
+          readBy: data.readBy || data.userId,
+          timestamp: data.timestamp || Date.now(),
+        });
       },
       'user-read-receipts'
     );
@@ -757,14 +793,16 @@ class StompService {
 
   /**
    * Mark messages as read
+   * ✅ FIX: Include roomId for proper read receipt broadcasting
    */
-  markMessagesAsRead(conversationId: string): void {
+  markMessagesAsRead(conversationId: string, roomId?: string): void {
     if (!this.client || !this.connected) return;
 
     this.client.publish({
       destination: '/app/chat.read',
       body: JSON.stringify({
         conversationId,
+        roomId: roomId || conversationId, // Include roomId for broadcast targeting
       }),
     });
   }
@@ -839,14 +877,25 @@ class StompService {
   }
 
   /**
-   * Reject a call
+   * Reject a call - sends hangup to caller with reason 'declined'
+   * Uses /webrtc.hangup since backend has no /call.reject handler
    */
-  rejectCall(roomId: string, reason: string = 'rejected'): void {
-    if (!this.client || !this.connected) return;
+  rejectCall(roomId: string, callerId: number, reason: string = 'declined'): void {
+    if (!this.client || !this.connected) {
+      console.warn('[StompService] Cannot reject call - not connected');
+      return;
+    }
 
+    console.log(`[StompService] 📞 Rejecting call ${roomId} from user ${callerId}, reason: ${reason}`);
+
+    // Use webrtc.hangup which backend handles - it will notify the caller
     this.client.publish({
-      destination: '/app/call.reject',
-      body: JSON.stringify({ roomId, reason }),
+      destination: '/app/webrtc.hangup',
+      body: JSON.stringify({
+        roomName: roomId,
+        targetUserId: callerId,
+        reason: reason,
+      }),
     });
   }
 
@@ -1075,7 +1124,20 @@ class StompService {
   // ============================================================================
 
   private subscribe(destination: string, callback: (message: IMessage) => void, key: string): void {
-    if (!this.client || this.subscriptions.has(key)) return;
+    if (!this.client) return;
+
+    // FIX: If subscription already exists, unsubscribe first (handles reconnection with stale subscriptions)
+    if (this.subscriptions.has(key)) {
+      try {
+        const existingSub = this.subscriptions.get(key);
+        existingSub?.unsubscribe();
+        console.log('[StompService] Cleared stale subscription for:', destination);
+      } catch (e) {
+        // Ignore unsubscribe errors for stale subscriptions (connection may have dropped)
+        console.log('[StompService] Could not unsubscribe stale subscription (expected on reconnect):', destination);
+      }
+      this.subscriptions.delete(key);
+    }
 
     // Check if client is connected before subscribing
     if (!this.client.connected) {
@@ -1280,7 +1342,7 @@ class StompService {
           }),
         });
       } catch (error) {
-        console.error('[StompService] R4-002: Failed to send queued message:', error);
+        console.warn('[StompService] R4-002: Failed to send queued message:', error);
         // R4-002: Re-queue failed message
         failedMessages.push(msg);
       }
@@ -1327,6 +1389,153 @@ class StompService {
 
   getCurrentUsername(): string | null {
     return this.currentUsername;
+  }
+
+  // ============================================================================
+  // ✅ PREMIUM: CONNECTION STATE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get current connection state for UI display
+   */
+  getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting' {
+    return this._connectionState;
+  }
+
+  /**
+   * Subscribe to connection state changes
+   */
+  onConnectionState(callback: (state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting') => void): () => void {
+    this.connectionStateCallbacks.add(callback);
+    // Immediately notify with current state
+    callback(this._connectionState);
+    return () => this.connectionStateCallbacks.delete(callback);
+  }
+
+  /**
+   * Set connection state and notify subscribers
+   * ✅ FIX: Debounces non-connected states to prevent UI spam during rapid reconnection attempts
+   */
+  private setConnectionState(state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting'): void {
+    if (this._connectionState === state) {
+      return; // No change
+    }
+
+    // Clear any pending debounce
+    if (this.connectionStateDebounceTimer) {
+      clearTimeout(this.connectionStateDebounceTimer);
+      this.connectionStateDebounceTimer = null;
+    }
+
+    // 'connected' state should notify immediately - user wants to know they're connected
+    if (state === 'connected') {
+      console.log(`[StompService] Connection state: ${this._connectionState} -> ${state}`);
+      this._connectionState = state;
+      this.connectionStateCallbacks.forEach((cb) => cb(state));
+      return;
+    }
+
+    // For non-connected states (connecting, reconnecting, disconnected), debounce to prevent spam
+    // This prevents rapid "Connecting..." -> "No connection" -> "Connecting..." UI flicker
+    this.connectionStateDebounceTimer = setTimeout(() => {
+      if (this._connectionState !== state) {
+        console.log(`[StompService] Connection state: ${this._connectionState} -> ${state}`);
+        this._connectionState = state;
+        this.connectionStateCallbacks.forEach((cb) => cb(state));
+      }
+      this.connectionStateDebounceTimer = null;
+    }, this.CONNECTION_STATE_DEBOUNCE_MS);
+  }
+
+  // ============================================================================
+  // ✅ PREMIUM: HEARTBEAT WATCHDOG FOR SILENT DISCONNECT DETECTION
+  // ============================================================================
+
+  /**
+   * Start watchdog that detects silent disconnections
+   * If no heartbeat received from server in HEARTBEAT_TIMEOUT, trigger reconnect
+   */
+  private startHeartbeatWatchdog(): void {
+    this.lastHeartbeatReceived = Date.now();
+
+    // Stop existing watchdog if any
+    this.stopHeartbeatWatchdog();
+
+    this.heartbeatWatchdogId = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastHeartbeat = now - this.lastHeartbeatReceived;
+
+      if (timeSinceLastHeartbeat > this.HEARTBEAT_TIMEOUT && this.isConnected) {
+        console.warn(`[StompService] Heartbeat timeout (${timeSinceLastHeartbeat}ms) - triggering reconnect`);
+        this.handleSilentDisconnect();
+      }
+    }, this.HEARTBEAT_WATCHDOG_INTERVAL);
+
+    console.log('[StompService] Heartbeat watchdog started');
+  }
+
+  /**
+   * Stop the heartbeat watchdog
+   */
+  private stopHeartbeatWatchdog(): void {
+    if (this.heartbeatWatchdogId) {
+      clearInterval(this.heartbeatWatchdogId);
+      this.heartbeatWatchdogId = null;
+      console.log('[StompService] Heartbeat watchdog stopped');
+    }
+  }
+
+  /**
+   * Record heartbeat received from server
+   * Call this when any server message/pong is received
+   */
+  recordHeartbeat(): void {
+    this.lastHeartbeatReceived = Date.now();
+  }
+
+  /**
+   * Handle silent disconnect - reconnect without waiting for error
+   */
+  private handleSilentDisconnect(): void {
+    console.log('[StompService] Handling silent disconnect');
+    this.isConnected = false;
+    this.setConnectionState('reconnecting');
+    this.notifyConnectionChange(false);
+
+    // Deactivate and reactivate to trigger reconnection
+    if (this.client) {
+      this.client.deactivate().then(() => {
+        console.log('[StompService] Deactivated, will reconnect via built-in mechanism');
+        // The STOMP client's reconnect logic will handle reconnection
+        if (this.client && this.config) {
+          this.client.activate();
+        }
+      });
+    }
+  }
+
+  /**
+   * ✅ PREMIUM: Public method to trigger manual reconnection
+   * Uses stored credentials from initial connect()
+   */
+  reconnect(): void {
+    if (this.isConnected) {
+      console.log('[StompService] Already connected, skipping reconnect');
+      return;
+    }
+
+    console.log('[StompService] Manual reconnect triggered');
+    this.setConnectionState('reconnecting');
+
+    // If we have stored credentials, use them
+    if (this.currentUserId && this.currentUsername && this.config) {
+      this.connect(this.currentUserId, this.currentUsername);
+    } else if (this.client && this.config) {
+      // Otherwise just reactivate the existing client
+      this.client.activate();
+    } else {
+      console.warn('[StompService] Cannot reconnect - no stored credentials or config');
+    }
   }
 }
 

@@ -126,7 +126,7 @@ async function getIceServers(): Promise<RTCConfiguration> {
     
     return cachedIceServers;
   } catch (error: any) {
-    console.error('[TwilioVideo] Failed to fetch ICE servers, using defaults:', error.message);
+    console.warn('[TwilioVideo] Failed to fetch ICE servers, using defaults:', error.message);
     return DEFAULT_ICE_SERVERS;
   }
 }
@@ -352,7 +352,7 @@ class TwilioVideoService {
     // R7-005: Validate signal before processing
     const validationError = this.validateSignal(signal);
     if (validationError) {
-      console.error('[TwilioVideo] R7-005: Invalid signal received:', validationError, signal.type);
+      console.warn('[TwilioVideo] R7-005: Invalid signal received:', validationError, signal.type);
       return;
     }
 
@@ -433,12 +433,12 @@ class TwilioVideoService {
           this.handleRemoteHangup(signal);
           break;
         case 'error':
-          console.error('[TwilioVideo] WebRTC signaling error:', signal.error);
+          console.warn('[TwilioVideo] WebRTC signaling error:', signal.error);
           this.notifyError(signal.error || 'Signaling error');
           break;
       }
     } catch (error: any) {
-      console.error('[TwilioVideo] Error handling WebRTC signal:', error);
+      console.warn('[TwilioVideo] Error handling WebRTC signal:', error);
     }
   }
 
@@ -514,7 +514,7 @@ class TwilioVideoService {
         console.log('[TwilioVideo] 📡 Sent WebRTC answer to', signal.fromUserId, 'session:', this.currentCall.callSessionId);
       }
     } catch (error) {
-      console.error('[TwilioVideo] Error handling remote offer:', error);
+      console.warn('[TwilioVideo] Error handling remote offer:', error);
     }
   }
 
@@ -544,7 +544,7 @@ class TwilioVideoService {
       // Process any pending ICE candidates
       await this.processPendingIceCandidates();
     } catch (error) {
-      console.error('[TwilioVideo] Error handling remote answer:', error);
+      console.warn('[TwilioVideo] Error handling remote answer:', error);
     }
   }
 
@@ -608,7 +608,7 @@ class TwilioVideoService {
       await this.peerConnection.addIceCandidate(candidate);
       console.log('[TwilioVideo] Added remote ICE candidate');
     } catch (error) {
-      console.error('[TwilioVideo] Error adding ICE candidate:', error);
+      console.warn('[TwilioVideo] Error adding ICE candidate:', error);
     }
   }
 
@@ -627,7 +627,7 @@ class TwilioVideoService {
         const candidate = new RTCIceCandidate(candidateInit);
         await this.peerConnection.addIceCandidate(candidate);
       } catch (error) {
-        console.error('[TwilioVideo] Error adding pending ICE candidate:', error);
+        console.warn('[TwilioVideo] Error adding pending ICE candidate:', error);
       }
     }
 
@@ -969,7 +969,7 @@ class TwilioVideoService {
 
       return this.currentCall;
     } catch (error: any) {
-      console.error('[TwilioVideo] Failed to initiate call:', error);
+      console.warn('[TwilioVideo] Failed to initiate call:', error);
       this.isInitiatingCall = false; // Reset lock on failure
       this.setCallState('failed');
       this.notifyError(error.message || 'Failed to initiate call');
@@ -1053,7 +1053,7 @@ class TwilioVideoService {
       // State will transition to 'connected' when ICE connection completes
       console.log('[TwilioVideo] Waiting for WebRTC connection...');
     } catch (error: any) {
-      console.error('[TwilioVideo] Failed to accept call:', error);
+      console.warn('[TwilioVideo] Failed to accept call:', error);
       this.setCallState('failed');
       this.notifyError(error.message || 'Failed to accept call');
       this.cleanup();
@@ -1072,7 +1072,7 @@ class TwilioVideoService {
       this.setCallState('ended');
       this.cleanup();
     } catch (error: any) {
-      console.error('[TwilioVideo] Failed to decline call:', error);
+      console.warn('[TwilioVideo] Failed to decline call:', error);
       this.notifyError(error.message || 'Failed to decline call');
     }
   }
@@ -1091,7 +1091,7 @@ class TwilioVideoService {
       await twilioApi.declineCall(roomName);
       // Don't change state or cleanup since we're not the active call
     } catch (error: any) {
-      console.error('[TwilioVideo] Failed to decline call with reason:', error);
+      console.warn('[TwilioVideo] Failed to decline call with reason:', error);
     }
   }
 
@@ -1134,7 +1134,7 @@ class TwilioVideoService {
     try {
       await twilioApi.endCall(this.currentCall.roomName, reason);
     } catch (error) {
-      console.error('[TwilioVideo] Error ending call on backend:', error);
+      console.warn('[TwilioVideo] Error ending call on backend:', error);
     }
 
     this.setCallState('ended');
@@ -1309,6 +1309,21 @@ class TwilioVideoService {
   }
 
   /**
+   * Set audio mute state explicitly
+   * Used by CallKit/CallKeep for native mute control
+   */
+  setMuted(muted: boolean): void {
+    this.isAudioEnabled = !muted;
+    console.log('[TwilioVideo] Audio muted:', muted);
+
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach((track: MediaStreamTrack) => {
+        track.enabled = this.isAudioEnabled;
+      });
+    }
+  }
+
+  /**
    * Toggle video (show/hide)
    */
   toggleVideo(): boolean {
@@ -1421,7 +1436,7 @@ class TwilioVideoService {
             console.log('[TwilioVideo] R1-009: replaceTrack succeeded');
           } catch (replaceError) {
             // R1-009: replaceTrack failed - stop new track and abort
-            console.error('[TwilioVideo] R1-009: replaceTrack failed, keeping old camera:', replaceError);
+            console.warn('[TwilioVideo] R1-009: replaceTrack failed, keeping old camera:', replaceError);
             newVideoTrack.stop();
             this.notifyError('Failed to switch camera - keeping current camera');
             this.isSwitchingCamera = false;
@@ -1447,7 +1462,7 @@ class TwilioVideoService {
       console.log('[TwilioVideo] Camera switched to:', targetCamera ? 'front' : 'back');
 
     } catch (error) {
-      console.error('[TwilioVideo] Failed to switch camera:', error);
+      console.warn('[TwilioVideo] Failed to switch camera:', error);
       this.notifyError('Failed to switch camera');
       // Camera state wasn't changed, so no need to revert
     } finally {
@@ -1579,7 +1594,7 @@ class TwilioVideoService {
       // Notify stream
       this.notifyStream(this.localStream, 'local');
     } catch (error: any) {
-      console.error('[TwilioVideo] Failed to get local stream:', error);
+      console.warn('[TwilioVideo] Failed to get local stream:', error);
 
       // On emulator, create empty stream so call flow can continue for testing
       if (runningOnEmulator) {
@@ -1712,7 +1727,7 @@ class TwilioVideoService {
         console.log('[TwilioVideo] ICE restart offer sent to user', targetUserId, 'session:', this.currentCall.callSessionId);
       }
     } catch (error) {
-      console.error('[TwilioVideo] ICE restart failed:', error);
+      console.warn('[TwilioVideo] ICE restart failed:', error);
       // If restart fails, check if we should try again or give up
       if (this.iceRestartAttempts >= this.MAX_ICE_RESTART_ATTEMPTS) {
         this.notifyError('Connection lost - unable to reconnect');
@@ -1795,7 +1810,7 @@ class TwilioVideoService {
         // Note: We don't update the existing PC's ICE servers as that's not
         // supported. Instead, if ICE restart is needed, it will use new config.
       } catch (error) {
-        console.error('[TwilioVideo] R1-006: Failed to refresh TURN credentials:', error);
+        console.warn('[TwilioVideo] R1-006: Failed to refresh TURN credentials:', error);
       }
     } else {
       console.log(`[TwilioVideo] R1-006: TURN credentials still valid (${Math.round(timeSinceCached / 60000)}min old)`);

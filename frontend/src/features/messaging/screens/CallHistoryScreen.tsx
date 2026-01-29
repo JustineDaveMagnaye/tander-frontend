@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   StatusBar,
   RefreshControl,
-  ActivityIndicator,
+  Animated,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -383,15 +383,73 @@ const ErrorState: React.FC<ErrorStateProps> = ({ onRetry }) => (
 );
 
 // =============================================================================
-// LOADING STATE COMPONENT
+// LOADING STATE COMPONENT - Enhanced with animations
 // =============================================================================
 
-const LoadingState: React.FC = () => (
-  <View style={styles.loadingState}>
-    <ActivityIndicator size="large" color={colors.orange[500]} />
-    <Text style={styles.loadingStateText}>Loading call history...</Text>
-  </View>
-);
+const CALL_LOADING_MESSAGES = [
+  'Loading your call history...',
+  'Fetching recent calls...',
+  'Almost ready...',
+];
+
+const LoadingState: React.FC = () => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [dots, setDots] = useState('');
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+
+  // Rotate through loading messages
+  useEffect(() => {
+    const messageTimer = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % CALL_LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(messageTimer);
+  }, []);
+
+  // Animated dots
+  useEffect(() => {
+    const dotsTimer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 400);
+    return () => clearInterval(dotsTimer);
+  }, []);
+
+  // Bounce animation for icon
+  useEffect(() => {
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -6,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    bounce.start();
+    return () => bounce.stop();
+  }, [bounceAnim]);
+
+  return (
+    <View style={styles.loadingState}>
+      <LinearGradient
+        colors={[colors.orange[100], colors.teal[100]]}
+        style={styles.loadingCircle}
+      >
+        <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
+          <Feather name="phone" size={32} color={colors.orange[500]} />
+        </Animated.View>
+      </LinearGradient>
+      <Text style={styles.loadingStateTitle}>
+        {CALL_LOADING_MESSAGES[messageIndex]}
+      </Text>
+      <Text style={styles.loadingStateDots}>{dots || ' '}</Text>
+    </View>
+  );
+};
 
 // =============================================================================
 // MAIN COMPONENT
@@ -843,17 +901,33 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  // Loading State
+  // Loading State - Enhanced with animations
   loadingState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
-  loadingStateText: {
-    marginTop: spacing.s,
-    fontSize: 16,
-    color: colors.gray[600],
+  loadingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingStateTitle: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: colors.gray[700],
+    textAlign: 'center',
+  },
+  loadingStateDots: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.orange[500],
+    height: 28,
+    marginTop: 4,
   },
 });
 

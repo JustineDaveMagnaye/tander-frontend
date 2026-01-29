@@ -25,6 +25,8 @@ export interface Conversation {
   unreadCount: number;
   otherUserId: number;
   otherUsername: string;
+  isVerified: boolean; // ID-verified user badge
+  isTyping: boolean; // Real-time typing indicator
 }
 
 interface UseConversationsReturn {
@@ -82,6 +84,8 @@ function convertDTOToConversation(dto: ConversationDTO, currentUserId: number): 
     unreadCount: dto.unreadCount,
     otherUserId,
     otherUsername,
+    isVerified: (dto as any).isOtherUserVerified ?? false, // Backend may not support yet
+    isTyping: false, // Will be updated by typing indicator system
   };
 }
 
@@ -123,7 +127,7 @@ export function useConversations(): UseConversationsReturn {
 
       setConversations(converted);
     } catch (err) {
-      console.error('[useConversations] Error fetching:', err);
+      console.warn('[useConversations] Error fetching:', err);
       setError(err instanceof Error ? err.message : 'Failed to load conversations');
     } finally {
       setIsLoading(false);
@@ -174,6 +178,35 @@ export function useConversations(): UseConversationsReturn {
 
     return () => unsubscribe();
   }, [user?.username, currentUserId, fetchConversations]);
+
+  /**
+   * Listen for typing indicators to show "typing..." in conversation list
+   */
+  useEffect(() => {
+    if (!user?.username) return;
+
+    const unsubscribe = stompService.onTyping((event) => {
+      setConversations((prev) => {
+        const convIndex = prev.findIndex(
+          (c) => c.odooConversationId.toString() === event.roomId
+        );
+
+        if (convIndex === -1) return prev;
+
+        // Only update if the typing user is the OTHER user in the conversation
+        const conv = prev[convIndex];
+        if (event.userId === conv.otherUserId) {
+          const updated = [...prev];
+          updated[convIndex] = { ...conv, isTyping: event.isTyping };
+          return updated;
+        }
+
+        return prev;
+      });
+    });
+
+    return () => unsubscribe();
+  }, [user?.username]);
 
   /**
    * Derive online status from centralized presence store

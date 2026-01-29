@@ -1,24 +1,20 @@
 /**
  * TANDER TandyScreen - Wellness Companion Chat Interface
  *
- * Design Pattern: Matches ChatScreen.tsx exactly
- * - Regular View container (NOT a Modal)
- * - Header with back button, avatar, title, action buttons
- * - Messages list with FlatList
- * - Input area with emoji, text input, send button
- * - Breathing exercise as a separate modal
+ * PREMIUM IPHONE-LEVEL UI/UX DESIGN
  *
- * UI/UX Enhancements:
- * - Header shadow for visual depth
- * - Smooth thinking indicator with bounce animation
- * - Message entrance animations
- * - Quick reply press feedback with scale animation
- * - Message status indicators
- * - Enhanced sponsor card with better visual hierarchy
- * - Comprehensive accessibility labels and hints
+ * Features:
+ * - Glassmorphic header with premium gradient
+ * - Premium message bubbles with glow effects
+ * - Ambient floating orbs background
+ * - Spring physics animations throughout
+ * - Premium input area with glassmorphism
+ * - Enhanced thinking indicator with premium styling
+ * - Comprehensive accessibility support
+ * - Senior-friendly design (56-64px touch targets, 18px+ fonts)
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -28,7 +24,6 @@ import {
   TextInput,
   StatusBar,
   Platform,
-  ActivityIndicator,
   Animated,
   Keyboard,
   Image,
@@ -44,10 +39,19 @@ import type { TandyStackParamList } from '@navigation/types';
 
 type TandyChatNavigationProp = NativeStackNavigationProp<TandyStackParamList, 'TandyChat'>;
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '@shared/styles/colors';
 import { TanderLogoIcon } from '@shared/components/icons/TanderLogoIcon';
 import { useResponsive } from '@shared/hooks/useResponsive';
+import {
+  PREMIUM_COLORS,
+  GlassCard,
+  AnimatedSpringButton,
+  PremiumBadge,
+  AnimatedEntrance,
+  FloatingOrb,
+} from '../components/PremiumComponents';
 import {
   getConversation,
   sendMessage as sendTandyMessage,
@@ -151,6 +155,409 @@ const getSponsorColor = (type: string): string => {
     default: return colors.teal[500];
   }
 };
+
+// ============================================================================
+// LOADING MESSAGES - Rotating messages for seniors to keep them engaged
+// ============================================================================
+
+const LOADING_MESSAGES = [
+  { title: 'Connecting to Tandy...', subtitle: 'Your wellness companion is warming up' },
+  { title: 'Almost ready...', subtitle: 'Preparing a friendly conversation' },
+  { title: 'Just a moment...', subtitle: 'Tandy is excited to chat with you' },
+];
+
+// ============================================================================
+// PREMIUM ANIMATED LOADING DOTS COMPONENT
+// ============================================================================
+
+interface LoadingDotsProps {
+  reduceMotion: boolean;
+  color?: string;
+}
+
+const LoadingDots: React.FC<LoadingDotsProps> = ({ reduceMotion, color = colors.teal[500] }) => {
+  const dot1Scale = useRef(new Animated.Value(0.6)).current;
+  const dot2Scale = useRef(new Animated.Value(0.6)).current;
+  const dot3Scale = useRef(new Animated.Value(0.6)).current;
+  const dot1Opacity = useRef(new Animated.Value(0.4)).current;
+  const dot2Opacity = useRef(new Animated.Value(0.4)).current;
+  const dot3Opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      dot1Scale.setValue(1);
+      dot2Scale.setValue(1);
+      dot3Scale.setValue(1);
+      dot1Opacity.setValue(1);
+      dot2Opacity.setValue(1);
+      dot3Opacity.setValue(1);
+      return;
+    }
+
+    const animateDot = (scale: Animated.Value, opacity: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.spring(scale, { toValue: 1.4, useNativeDriver: true, tension: 200, friction: 4 }),
+            Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.spring(scale, { toValue: 0.6, useNativeDriver: true, tension: 100, friction: 8 }),
+            Animated.timing(opacity, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+          ]),
+        ])
+      );
+
+    const animation = Animated.parallel([
+      animateDot(dot1Scale, dot1Opacity, 0),
+      animateDot(dot2Scale, dot2Opacity, 150),
+      animateDot(dot3Scale, dot3Opacity, 300),
+    ]);
+
+    animation.start();
+    return () => animation.stop();
+  }, [dot1Scale, dot2Scale, dot3Scale, dot1Opacity, dot2Opacity, dot3Opacity, reduceMotion]);
+
+  return (
+    <View style={loadingStyles.dotsRow}>
+      <Animated.View
+        style={[
+          loadingStyles.loadingDot,
+          {
+            backgroundColor: color,
+            opacity: dot1Opacity,
+            transform: [{ scale: dot1Scale }],
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          loadingStyles.loadingDot,
+          {
+            backgroundColor: color,
+            opacity: dot2Opacity,
+            transform: [{ scale: dot2Scale }],
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          loadingStyles.loadingDot,
+          {
+            backgroundColor: color,
+            opacity: dot3Opacity,
+            transform: [{ scale: dot3Scale }],
+          }
+        ]}
+      />
+    </View>
+  );
+};
+
+// ============================================================================
+// PREMIUM LOADING STATE COMPONENT
+// ============================================================================
+
+interface EnhancedLoadingStateProps {
+  reduceMotion: boolean;
+}
+
+const EnhancedLoadingState: React.FC<EnhancedLoadingStateProps> = ({ reduceMotion }) => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const iconBounce = useRef(new Animated.Value(0)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0.3)).current;
+
+  // Rotate loading messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (reduceMotion) {
+        setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+        return;
+      }
+
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [fadeAnim, reduceMotion]);
+
+  // Pulse animation for the icon container
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim, reduceMotion]);
+
+  // Bounce animation for the icon
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.spring(iconBounce, { toValue: -10, useNativeDriver: true, tension: 40, friction: 7 }),
+        Animated.spring(iconBounce, { toValue: 0, useNativeDriver: true, tension: 40, friction: 7 }),
+      ])
+    );
+
+    bounce.start();
+    return () => bounce.stop();
+  }, [iconBounce, reduceMotion]);
+
+  // Rotating ring animation
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const rotate = Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 8000,
+        useNativeDriver: true,
+      })
+    );
+
+    rotate.start();
+    return () => rotate.stop();
+  }, [rotateAnim, reduceMotion]);
+
+  // Glow animation
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const glow = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 0.6, duration: 1500, useNativeDriver: false }),
+        Animated.timing(glowAnim, { toValue: 0.3, duration: 1500, useNativeDriver: false }),
+      ])
+    );
+
+    glow.start();
+    return () => glow.stop();
+  }, [glowAnim, reduceMotion]);
+
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const currentMessage = LOADING_MESSAGES[messageIndex];
+
+  return (
+    <View style={loadingStyles.container}>
+      {/* Ambient floating orbs */}
+      {!reduceMotion && (
+        <View style={loadingStyles.orbsContainer}>
+          <FloatingOrb size={120} color={PREMIUM_COLORS.glass.teal} x={10} y={20} delay={0} opacity={0.3} />
+          <FloatingOrb size={100} color={PREMIUM_COLORS.glass.orange} x={70} y={15} delay={500} opacity={0.25} />
+          <FloatingOrb size={80} color={PREMIUM_COLORS.glass.pink} x={80} y={60} delay={1000} opacity={0.3} />
+        </View>
+      )}
+
+      {/* Premium animated avatar */}
+      <Animated.View
+        style={[
+          loadingStyles.iconContainer,
+          { transform: [{ scale: pulseAnim }] },
+        ]}
+      >
+        {/* Rotating gradient ring */}
+        <Animated.View
+          style={[
+            loadingStyles.rotatingRing,
+            { transform: [{ rotate: rotateInterpolate }] }
+          ]}
+        >
+          <LinearGradient
+            colors={[colors.teal[400], colors.orange[400], colors.teal[400]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={loadingStyles.ringGradient}
+          />
+        </Animated.View>
+
+        {/* Glassmorphic icon container */}
+        <View style={loadingStyles.iconGlassWrapper}>
+          {Platform.OS === 'ios' ? (
+            <BlurView intensity={80} tint="light" style={loadingStyles.iconGradient}>
+              <Animated.View style={{ transform: [{ translateY: iconBounce }] }}>
+                <TanderLogoIcon size={60} focused />
+              </Animated.View>
+            </BlurView>
+          ) : (
+            <LinearGradient
+              colors={[colors.teal[50], colors.white]}
+              style={loadingStyles.iconGradient}
+            >
+              <Animated.View style={{ transform: [{ translateY: iconBounce }] }}>
+                <TanderLogoIcon size={60} focused />
+              </Animated.View>
+            </LinearGradient>
+          )}
+        </View>
+      </Animated.View>
+
+      {/* Text content */}
+      <Animated.View style={[loadingStyles.textContainer, { opacity: fadeAnim }]}>
+        <Text style={loadingStyles.title}>{currentMessage.title}</Text>
+        <Text style={loadingStyles.subtitle}>{currentMessage.subtitle}</Text>
+      </Animated.View>
+
+      <LoadingDots reduceMotion={reduceMotion} color={colors.teal[500]} />
+
+      {/* Premium encouragement badge */}
+      <View style={loadingStyles.encouragementBadge}>
+        <View style={loadingStyles.encouragementIcon}>
+          <Feather name="heart" size={16} color={colors.romantic.pink} />
+        </View>
+        <Text style={loadingStyles.encouragementText}>
+          Take a deep breath while you wait
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// Premium loading state styles
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 24,
+  },
+  orbsContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  iconContainer: {
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rotatingRing: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    padding: 3,
+  },
+  ringGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 70,
+    opacity: 0.5,
+  },
+  iconGlassWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.teal[200],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 20,
+      },
+    }),
+  },
+  iconGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: PREMIUM_COLORS.glass.white,
+  },
+  textContainer: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.gray[900],
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: 0.3,
+  },
+  subtitle: {
+    fontSize: 17,
+    color: colors.gray[600],
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    marginTop: 4,
+    height: 24,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.teal[500],
+  },
+  encouragementBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,138,0.3)',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.romantic.pink,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  encouragementIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,107,138,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  encouragementText: {
+    fontSize: 16,
+    color: colors.gray[700],
+    fontWeight: '600',
+  },
+});
 
 // ============================================================================
 // MESSAGE STATUS INDICATOR COMPONENT
@@ -575,8 +982,8 @@ const SponsorCardBubble: React.FC<SponsorCardBubbleProps> = ({ sponsor }) => {
 };
 
 // ============================================================================
-// ENHANCED THINKING INDICATOR COMPONENT
-// Improved for seniors: Larger dots (10px), stronger contrast, clearer text
+// PREMIUM THINKING INDICATOR COMPONENT
+// Glassmorphic design with premium animations
 // ============================================================================
 
 interface ThinkingIndicatorProps {
@@ -588,11 +995,11 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
   const dot2 = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const dot3 = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const containerOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  const containerSlide = useRef(new Animated.Value(reduceMotion ? 0 : 20)).current;
+  const containerSlide = useRef(new Animated.Value(reduceMotion ? 0 : 30)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.2)).current;
 
   useEffect(() => {
-    // Skip animations if user prefers reduced motion
     if (reduceMotion) {
       containerOpacity.setValue(1);
       containerSlide.setValue(0);
@@ -602,39 +1009,56 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
       return;
     }
 
-    // Entrance animation
+    // Premium entrance animation with spring physics
     Animated.parallel([
       Animated.timing(containerOpacity, {
         toValue: 1,
-        duration: 300,
+        duration: 400,
         useNativeDriver: true,
       }),
       Animated.spring(containerSlide, {
         toValue: 0,
         useNativeDriver: true,
-        friction: 8,
-        tension: 50,
+        tension: 60,
+        friction: 10,
       }),
     ]).start();
 
-    // Subtle pulse animation for the entire bubble
+    // Subtle pulse animation
     const pulseAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.02,
-          duration: 1000,
+          toValue: 1.03,
+          duration: 1200,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 1200,
           useNativeDriver: true,
         }),
       ])
     );
     pulseAnimation.start();
 
-    // Dot animations with smooth bounce effect
+    // Glow animation
+    const glowAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 0.5,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0.2,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    glowAnimation.start();
+
+    // Dot animations with spring physics
     const animateDot = (dot: Animated.Value, delay: number) => {
       return Animated.loop(
         Animated.sequence([
@@ -642,14 +1066,14 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
           Animated.spring(dot, {
             toValue: 1,
             useNativeDriver: true,
-            friction: 3,
-            tension: 80,
+            tension: 150,
+            friction: 5,
           }),
           Animated.spring(dot, {
             toValue: 0,
             useNativeDriver: true,
-            friction: 3,
-            tension: 80,
+            tension: 100,
+            friction: 8,
           }),
         ])
       );
@@ -657,8 +1081,8 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
 
     const animation = Animated.parallel([
       animateDot(dot1, 0),
-      animateDot(dot2, 200),
-      animateDot(dot3, 400),
+      animateDot(dot2, 180),
+      animateDot(dot3, 360),
     ]);
 
     animation.start();
@@ -666,29 +1090,50 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
     return () => {
       animation.stop();
       pulseAnimation.stop();
+      glowAnimation.stop();
     };
-  }, [dot1, dot2, dot3, containerOpacity, containerSlide, pulseAnim, reduceMotion]);
+  }, [dot1, dot2, dot3, containerOpacity, containerSlide, pulseAnim, glowAnim, reduceMotion]);
 
   const getDotStyle = (dot: Animated.Value) => ({
     opacity: dot.interpolate({
       inputRange: [0, 1],
-      outputRange: [0.5, 1],
+      outputRange: [0.4, 1],
     }),
     transform: [
       {
         scale: dot.interpolate({
           inputRange: [0, 1],
-          outputRange: [1, 1.5],
+          outputRange: [1, 1.6],
         }),
       },
       {
         translateY: dot.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, -8],
+          outputRange: [0, -10],
         }),
       },
     ],
   });
+
+  const ThinkingBubbleContent = () => (
+    <>
+      <View style={styles.thinkingHeader}>
+        <View style={styles.thinkingAvatarRing}>
+          <TanderLogoIcon size={20} focused />
+        </View>
+        <Text style={styles.thinkingLabel}>Tandy</Text>
+        <View style={styles.thinkingOnlineDot} />
+      </View>
+      <View style={styles.thinkingContent}>
+        <Text style={styles.thinkingText}>Thinking</Text>
+        <View style={styles.dotsContainer}>
+          <Animated.View style={[styles.dot, getDotStyle(dot1)]} />
+          <Animated.View style={[styles.dot, getDotStyle(dot2)]} />
+          <Animated.View style={[styles.dot, getDotStyle(dot3)]} />
+        </View>
+      </View>
+    </>
+  );
 
   return (
     <Animated.View
@@ -703,26 +1148,22 @@ const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({ reduceMotion = fa
       accessibilityRole="progressbar"
       accessibilityState={{ busy: true }}
     >
-      <View style={styles.thinkingBubble}>
-        <View style={styles.thinkingHeader}>
-          <TanderLogoIcon size={18} focused />
-          <Text style={styles.thinkingLabel}>Tandy</Text>
+      {Platform.OS === 'ios' ? (
+        <BlurView intensity={80} tint="light" style={styles.thinkingBubble}>
+          <ThinkingBubbleContent />
+        </BlurView>
+      ) : (
+        <View style={styles.thinkingBubble}>
+          <ThinkingBubbleContent />
         </View>
-        <View style={styles.thinkingContent}>
-          <Text style={styles.thinkingText}>Thinking</Text>
-          <View style={styles.dotsContainer}>
-            <Animated.View style={[styles.dot, getDotStyle(dot1)]} />
-            <Animated.View style={[styles.dot, getDotStyle(dot2)]} />
-            <Animated.View style={[styles.dot, getDotStyle(dot3)]} />
-          </View>
-        </View>
-      </View>
+      )}
     </Animated.View>
   );
 };
 
 // ============================================================================
-// MESSAGE BUBBLE COMPONENT (with entrance animation)
+// PREMIUM MESSAGE BUBBLE COMPONENT
+// Premium styling with gradients, glow effects, and spring animations
 // ============================================================================
 
 interface MessageBubbleProps {
@@ -735,30 +1176,32 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, index, reduceMot
   const isOwn = message.sender === 'user';
   const { isTablet, isLandscape, wp } = useResponsive();
   const fadeAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  const slideAnim = useRef(new Animated.Value(reduceMotion ? 0 : (isOwn ? 30 : -30))).current;
+  const slideAnim = useRef(new Animated.Value(reduceMotion ? 0 : (isOwn ? 40 : -40))).current;
+  const scaleAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0.9)).current;
 
   // Responsive message bubble width
-  const messageBubbleMaxWidth = React.useMemo(() => {
+  const messageBubbleMaxWidth = useMemo(() => {
     if (isLandscape) {
       return isTablet ? wp(45) : wp(50);
     }
     return isTablet ? wp(60) : wp(75);
   }, [isLandscape, isTablet, wp]);
 
-  // Entrance animation (respects reduced motion preference)
+  // Premium entrance animation with spring physics
   useEffect(() => {
     if (reduceMotion) {
       fadeAnim.setValue(1);
       slideAnim.setValue(0);
+      scaleAnim.setValue(1);
       return;
     }
 
-    const delay = Math.min(index * 50, 200); // Stagger animation
+    const delay = Math.min(index * 60, 250);
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 400,
         delay,
         useNativeDriver: true,
       }),
@@ -766,11 +1209,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, index, reduceMot
         toValue: 0,
         delay,
         useNativeDriver: true,
+        tension: 70,
+        friction: 10,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        delay,
+        useNativeDriver: true,
+        tension: 80,
         friction: 8,
-        tension: 50,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim, index, reduceMotion]);
+  }, [fadeAnim, slideAnim, scaleAnim, index, reduceMotion]);
 
   return (
     <Animated.View
@@ -779,27 +1229,45 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, index, reduceMot
         isOwn && styles.messageRowOwn,
         {
           opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }],
+          transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
         },
       ]}
     >
       <View style={[styles.messageContent, { maxWidth: messageBubbleMaxWidth }]}>
         {isOwn ? (
-          <LinearGradient
-            colors={[colors.orange[500], colors.orange[600]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.bubbleOwn}
-          >
-            <Text style={styles.bubbleTextOwn}>{message.text}</Text>
-          </LinearGradient>
+          <View style={styles.bubbleOwnWrapper}>
+            <LinearGradient
+              colors={PREMIUM_COLORS.gradient.orangePremium as [string, string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bubbleOwn}
+            >
+              <Text style={styles.bubbleTextOwn}>{message.text}</Text>
+            </LinearGradient>
+          </View>
         ) : (
-          <View style={styles.bubbleOther}>
-            <View style={styles.tandyLabel}>
-              <TanderLogoIcon size={16} focused />
-              <Text style={styles.tandyLabelText}>Tandy</Text>
-            </View>
-            <Text style={styles.bubbleTextOther}>{message.text}</Text>
+          <View style={styles.bubbleOtherWrapper}>
+            {Platform.OS === 'ios' ? (
+              <BlurView intensity={60} tint="light" style={styles.bubbleOther}>
+                <View style={styles.tandyLabel}>
+                  <View style={styles.tandyAvatarMini}>
+                    <TanderLogoIcon size={14} focused />
+                  </View>
+                  <Text style={styles.tandyLabelText}>Tandy</Text>
+                </View>
+                <Text style={styles.bubbleTextOther}>{message.text}</Text>
+              </BlurView>
+            ) : (
+              <View style={styles.bubbleOther}>
+                <View style={styles.tandyLabel}>
+                  <View style={styles.tandyAvatarMini}>
+                    <TanderLogoIcon size={14} focused />
+                  </View>
+                  <Text style={styles.tandyLabelText}>Tandy</Text>
+                </View>
+                <Text style={styles.bubbleTextOther}>{message.text}</Text>
+              </View>
+            )}
           </View>
         )}
         <View style={[styles.timeRow, isOwn && styles.timeRowOwn]}>
@@ -821,9 +1289,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, index, reduceMot
 };
 
 // ============================================================================
-// QUICK REPLY BUTTON COMPONENT
-// Enhanced for seniors: Larger touch targets (56px min), bigger text (17px),
-// visual feedback with color change, icon for affordance
+// PREMIUM QUICK REPLY BUTTON COMPONENT
+// Glassmorphic design with spring animations
 // ============================================================================
 
 interface QuickReplyButtonProps {
@@ -834,64 +1301,98 @@ interface QuickReplyButtonProps {
 }
 
 const QuickReplyButton: React.FC<QuickReplyButtonProps> = ({ text, onPress, index, reduceMotion = false }) => {
-  const scaleAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0.9)).current;
+  const scaleAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0.85)).current;
   const fadeAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const slideAnim = useRef(new Animated.Value(reduceMotion ? 0 : 30)).current;
   const [isPressed, setIsPressed] = useState(false);
 
   useEffect(() => {
-    // Skip entrance animation if user prefers reduced motion
     if (reduceMotion) {
       fadeAnim.setValue(1);
       scaleAnim.setValue(1);
+      slideAnim.setValue(0);
       return;
     }
 
-    // Staggered entrance animation with bounce for visual delight
+    // Premium staggered entrance with spring physics
     Animated.sequence([
-      Animated.delay(index * 80),
+      Animated.delay(index * 100),
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 350,
+          duration: 400,
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          friction: 6,
-          tension: 80,
+          tension: 60,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 50,
+          friction: 10,
           useNativeDriver: true,
         }),
       ]),
     ]).start();
-  }, [fadeAnim, scaleAnim, index, reduceMotion]);
+  }, [fadeAnim, scaleAnim, slideAnim, index, reduceMotion]);
 
   const handlePressIn = () => {
     setIsPressed(true);
-    // Skip press animation if user prefers reduced motion
     if (reduceMotion) return;
-    // TODO: Add haptic feedback - Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     Animated.spring(scaleAnim, {
-      toValue: 0.94,
+      toValue: 0.95,
       useNativeDriver: true,
-      friction: 8,
-      tension: 100,
+      tension: 300,
+      friction: 10,
     }).start();
   };
 
   const handlePressOut = () => {
     setIsPressed(false);
-    // Skip press animation if user prefers reduced motion
     if (reduceMotion) return;
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      friction: 3,
-      tension: 100,
+      tension: 200,
+      friction: 8,
     }).start();
   };
 
+  const ButtonContent = () => (
+    <>
+      <View style={[
+        styles.quickReplyIconContainer,
+        isPressed && styles.quickReplyIconContainerPressed,
+      ]}>
+        <Feather
+          name="message-circle"
+          size={18}
+          color={isPressed ? colors.white : colors.teal[600]}
+        />
+      </View>
+      <Text style={[
+        styles.quickReplyText,
+        isPressed && styles.quickReplyTextPressed,
+      ]}>
+        {text}
+      </Text>
+      <Feather
+        name="chevron-right"
+        size={16}
+        color={isPressed ? colors.white : colors.gray[400]}
+        style={{ marginLeft: 'auto' }}
+      />
+    </>
+  );
+
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{
+      opacity: fadeAnim,
+      transform: [{ scale: scaleAnim }, { translateY: slideAnim }]
+    }}>
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -900,27 +1401,18 @@ const QuickReplyButton: React.FC<QuickReplyButtonProps> = ({ text, onPress, inde
         accessibilityHint="Double tap to send this message to Tandy"
         accessibilityRole="button"
       >
-        <View style={[
-          styles.quickReplyBtn,
-          isPressed && styles.quickReplyBtnPressed,
-        ]}>
+        {Platform.OS === 'ios' && !isPressed ? (
+          <BlurView intensity={60} tint="light" style={styles.quickReplyBtn}>
+            <ButtonContent />
+          </BlurView>
+        ) : (
           <View style={[
-            styles.quickReplyIconContainer,
-            isPressed && styles.quickReplyIconContainerPressed,
+            styles.quickReplyBtn,
+            isPressed && styles.quickReplyBtnPressed,
           ]}>
-            <Feather
-              name="message-circle"
-              size={18}
-              color={isPressed ? colors.white : colors.teal[500]}
-            />
+            <ButtonContent />
           </View>
-          <Text style={[
-            styles.quickReplyText,
-            isPressed && styles.quickReplyTextPressed,
-          ]}>
-            {text}
-          </Text>
-        </View>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -1135,17 +1627,54 @@ export const TandyScreen: React.FC = () => {
 
     return (
       <View style={styles.welcomeHeader}>
+        {/* Enhanced icon with gradient background */}
         <View style={styles.welcomeIconContainer}>
-          <TanderLogoIcon size={64} focused />
+          <LinearGradient
+            colors={[colors.teal[100], colors.teal[50]]}
+            style={styles.welcomeIconGradient}
+          >
+            <TanderLogoIcon size={64} focused />
+          </LinearGradient>
+          {/* Online status indicator */}
+          <View style={styles.welcomeOnlineIndicator}>
+            <View style={styles.welcomeOnlineDot} />
+            <Text style={styles.welcomeOnlineText}>Online</Text>
+          </View>
         </View>
-        <Text style={styles.welcomeTitle}>Chat with Tandy</Text>
+
+        <Text style={styles.welcomeTitle}>Hello! I'm Tandy</Text>
         <Text style={styles.welcomeSubtitle}>
-          Your wellness companion is here to help with relaxation, breathing exercises, and friendly conversation.
+          Your friendly wellness companion. I'm here to chat, help you relax, and brighten your day.
         </Text>
 
-        {/* Quick suggestion buttons */}
+        {/* Feature highlights for seniors */}
+        <View style={styles.featureHighlights}>
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: colors.teal[50] }]}>
+              <Feather name="message-circle" size={18} color={colors.teal[600]} />
+            </View>
+            <Text style={styles.featureText}>Friendly Chat</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: colors.orange[50] }]}>
+              <Feather name="wind" size={18} color={colors.orange[600]} />
+            </View>
+            <Text style={styles.featureText}>Breathing</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: colors.romantic.pink + '20' }]}>
+              <Feather name="heart" size={18} color={colors.romantic.pink} />
+            </View>
+            <Text style={styles.featureText}>Wellness</Text>
+          </View>
+        </View>
+
+        {/* Quick suggestion buttons - Enhanced with clearer labels */}
         <View style={styles.quickSuggestionsContainer}>
-          <Text style={styles.quickSuggestionsLabel}>Try asking:</Text>
+          <View style={styles.quickSuggestionsHeader}>
+            <Feather name="zap" size={16} color={colors.orange[500]} />
+            <Text style={styles.quickSuggestionsLabel}>Quick ways to start:</Text>
+          </View>
           <View style={styles.quickSuggestionsGrid}>
             <QuickReplyButton
               text="How are you today?"
@@ -1165,25 +1694,55 @@ export const TandyScreen: React.FC = () => {
               index={2}
               reduceMotion={reduceMotion}
             />
+            <QuickReplyButton
+              text="I'm feeling lonely"
+              onPress={() => handleSendMessage("I'm feeling lonely")}
+              index={3}
+              reduceMotion={reduceMotion}
+            />
           </View>
+        </View>
+
+        {/* Helpful tip for seniors */}
+        <View style={styles.welcomeTip}>
+          <Feather name="info" size={16} color={colors.teal[600]} />
+          <Text style={styles.welcomeTipText}>
+            Tip: You can also type your own message below
+          </Text>
         </View>
       </View>
     );
   }, [showQuickReplies, reduceMotion, handleSendMessage]);
 
   // ============================================================================
-  // RENDER (Matches ChatScreen pattern exactly)
+  // RENDER - PREMIUM IPHONE-LEVEL UI
   // ============================================================================
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor={colors.orange[500]} />
 
+      {/* Premium ambient background */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient
+          colors={PREMIUM_COLORS.gradient.warmBg as [string, string, string]}
+          style={StyleSheet.absoluteFill}
+        />
+        {!reduceMotion && (
+          <>
+            <FloatingOrb size={150} color={PREMIUM_COLORS.glass.teal} x={-5} y={5} delay={0} opacity={0.15} />
+            <FloatingOrb size={120} color={PREMIUM_COLORS.glass.orange} x={75} y={8} delay={500} opacity={0.12} />
+            <FloatingOrb size={100} color={PREMIUM_COLORS.glass.pink} x={85} y={75} delay={1000} opacity={0.15} />
+            <FloatingOrb size={80} color={PREMIUM_COLORS.glass.teal} x={5} y={80} delay={750} opacity={0.12} />
+          </>
+        )}
+      </View>
+
       <View style={styles.container}>
         <View style={[styles.mainContent, { paddingTop: insets.top }]}>
-          {/* Header with shadow */}
+          {/* Premium Glassmorphic Header */}
           <View style={styles.headerShadowContainer}>
             <LinearGradient
-              colors={[colors.orange[500], colors.teal[500]]}
+              colors={[colors.orange[500], colors.orange[400], colors.teal[500]]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[
@@ -1194,64 +1753,95 @@ export const TandyScreen: React.FC = () => {
               ]}
             >
               <View style={styles.headerLeft}>
-                {/* Back Button */}
-                <AnimatedPressable
+                {/* Premium Back Button with glass effect */}
+                <AnimatedSpringButton
                   onPress={handleBack}
                   style={styles.headerBackButton}
                   accessibilityLabel="Go back"
                   accessibilityHint="Returns to previous screen"
                 >
-                  <Feather name="arrow-left" size={24} color={colors.white} />
-                </AnimatedPressable>
+                  <View style={styles.headerButtonInner}>
+                    <Feather name="arrow-left" size={22} color={colors.white} />
+                  </View>
+                </AnimatedSpringButton>
 
-                {/* Avatar & Info */}
+                {/* Premium Avatar & Info */}
                 <View style={styles.headerUserInfo}>
                   <View style={styles.headerAvatarWrapper}>
-                    <View style={styles.headerAvatar}>
-                      <TanderLogoIcon size={24} focused />
+                    <View style={styles.headerAvatarRing}>
+                      <View style={styles.headerAvatar}>
+                        <TanderLogoIcon size={26} focused />
+                      </View>
                     </View>
-                    <View style={styles.headerOnlineDot} />
+                    <View style={styles.headerOnlineDot}>
+                      <View style={styles.headerOnlineDotInner} />
+                    </View>
                   </View>
                   <View style={styles.headerNameContainer}>
                     <Text style={styles.headerName}>Tandy</Text>
-                    <Text style={styles.headerStatus}>Your Wellness Companion</Text>
+                    <View style={styles.headerStatusRow}>
+                      <View style={styles.headerStatusDot} />
+                      <Text style={styles.headerStatus}>Online</Text>
+                    </View>
                   </View>
                 </View>
               </View>
 
-              {/* Action Buttons */}
+              {/* Premium Action Buttons */}
               <View style={styles.headerActions}>
-                <AnimatedPressable
+                <AnimatedSpringButton
                   onPress={handleOpenBreathing}
                   style={styles.headerActionButton}
                   accessibilityLabel="Start breathing exercise"
                   accessibilityHint="Opens breathing exercise screen"
                 >
-                  <Feather name="wind" size={20} color={colors.white} />
-                </AnimatedPressable>
+                  <View style={styles.headerButtonInner}>
+                    <Feather name="wind" size={20} color={colors.white} />
+                  </View>
+                </AnimatedSpringButton>
+                <AnimatedSpringButton
+                  onPress={handleOpenMeditation}
+                  style={styles.headerActionButton}
+                  accessibilityLabel="Start meditation"
+                  accessibilityHint="Opens meditation screen"
+                >
+                  <View style={styles.headerButtonInner}>
+                    <Feather name="moon" size={20} color={colors.white} />
+                  </View>
+                </AnimatedSpringButton>
               </View>
             </LinearGradient>
           </View>
 
-          {/* Error Banner */}
+          {/* Enhanced Error Banner - More encouraging for seniors */}
           {error && (
-            <View
+            <TouchableOpacity
               style={styles.errorBanner}
+              onPress={loadConversation}
               accessibilityRole="alert"
-              accessibilityLabel={error}
+              accessibilityLabel={`${error}. Tap to retry.`}
+              accessibilityHint="Double tap to try connecting again"
             >
-              <Feather name="wifi-off" size={16} color={colors.orange[600]} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
+              <View style={styles.errorIconContainer}>
+                <Feather name="wifi-off" size={18} color={colors.orange[600]} />
+              </View>
+              <View style={styles.errorTextContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorHelpText}>
+                  Don't worry - Tandy can still chat with you!
+                </Text>
+              </View>
+              <View style={styles.errorRetryBadge}>
+                <Feather name="refresh-cw" size={14} color={colors.teal[600]} />
+                <Text style={styles.errorRetryText}>Retry</Text>
+              </View>
+            </TouchableOpacity>
           )}
 
           {/* Messages Area - Scrollable */}
           <View style={styles.messagesContainer}>
             {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.orange[500]} />
-                <Text style={styles.loadingText}>Connecting to Tandy...</Text>
-              </View>
+              <EnhancedLoadingState reduceMotion={reduceMotion} />
             ) : (
               <FlatList
                 ref={flatListRef}
@@ -1275,68 +1865,151 @@ export const TandyScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Bottom Fixed Area */}
+          {/* Premium Bottom Fixed Area */}
           <Animated.View style={[styles.bottomFixedContainer, { marginBottom: keyboardHeight }]}>
-            {/* Input Area */}
+            {/* Premium Input Area with glassmorphism */}
             <View style={[
               styles.inputContainer,
               isSmallDevice && styles.inputContainerSmall,
               isPhoneLandscape && styles.inputContainerLandscape,
               {
-                paddingBottom: Math.max(insets.bottom, 12),
+                paddingBottom: Math.max(insets.bottom, 16),
                 paddingLeft: Math.max(insets.left + 16, horizontalPadding),
                 paddingRight: Math.max(insets.right + 16, horizontalPadding),
               }
             ]}>
-              <TouchableOpacity
-                style={styles.emojiButton}
-                accessibilityLabel="Add emoji"
-                accessibilityHint="Opens emoji picker"
-                accessibilityRole="button"
-              >
-                <Feather name="smile" size={20} color={colors.teal[500]} />
-              </TouchableOpacity>
+              {Platform.OS === 'ios' ? (
+                <BlurView intensity={80} tint="light" style={styles.inputBlurWrapper}>
+                  <View style={styles.inputInnerContent}>
+                    <AnimatedSpringButton
+                      onPress={() => {}}
+                      style={styles.emojiButton}
+                      accessibilityLabel="Add emoji"
+                      accessibilityHint="Opens emoji picker"
+                    >
+                      <LinearGradient
+                        colors={[colors.teal[50], colors.teal[100]]}
+                        style={styles.emojiButtonGradient}
+                      >
+                        <Feather name="smile" size={22} color={colors.teal[600]} />
+                      </LinearGradient>
+                    </AnimatedSpringButton>
 
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.textInput}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Type your message..."
-                  placeholderTextColor={colors.gray[400]}
-                  multiline
-                  maxLength={1000}
-                  onSubmitEditing={() => handleSendMessage()}
-                  accessibilityLabel="Message input"
-                  accessibilityHint="Type your message to Tandy"
-                />
-              </View>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={styles.textInput}
+                        value={inputText}
+                        onChangeText={setInputText}
+                        placeholder="Type your message..."
+                        placeholderTextColor={colors.gray[400]}
+                        multiline
+                        maxLength={1000}
+                        onSubmitEditing={() => handleSendMessage()}
+                        accessibilityLabel="Message input"
+                        accessibilityHint="Type your message to Tandy"
+                      />
+                    </View>
 
-              {inputText.trim() ? (
-                <AnimatedPressable
-                  onPress={() => handleSendMessage()}
-                  disabled={isSending}
-                  accessibilityLabel="Send message"
-                  accessibilityHint="Sends your message to Tandy"
-                >
-                  <LinearGradient
-                    colors={isSending ? [colors.gray[400], colors.gray[500]] : [colors.orange[500], colors.teal[500]]}
-                    style={styles.sendButton}
-                  >
-                    <Feather name="send" size={20} color={colors.white} />
-                  </LinearGradient>
-                </AnimatedPressable>
-              ) : (
-                <AnimatedPressable
-                  onPress={() => handleSendMessage('👍')}
-                  disabled={isSending}
-                  accessibilityLabel="Send thumbs up"
-                  accessibilityHint="Sends a thumbs up reaction"
-                >
-                  <View style={styles.likeButton}>
-                    <Feather name="thumbs-up" size={20} color={colors.teal[500]} />
+                    {inputText.trim() ? (
+                      <AnimatedSpringButton
+                        onPress={() => handleSendMessage()}
+                        disabled={isSending}
+                        accessibilityLabel="Send message"
+                        accessibilityHint="Sends your message to Tandy"
+                      >
+                        <LinearGradient
+                          colors={isSending
+                            ? [colors.gray[400], colors.gray[500]]
+                            : PREMIUM_COLORS.gradient.orangePremium as [string, string, string]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.sendButton}
+                        >
+                          <Feather name="send" size={20} color={colors.white} />
+                        </LinearGradient>
+                      </AnimatedSpringButton>
+                    ) : (
+                      <AnimatedSpringButton
+                        onPress={() => handleSendMessage('👍')}
+                        disabled={isSending}
+                        accessibilityLabel="Send thumbs up"
+                        accessibilityHint="Sends a thumbs up reaction"
+                      >
+                        <LinearGradient
+                          colors={[colors.teal[50], colors.teal[100]]}
+                          style={styles.likeButton}
+                        >
+                          <Feather name="thumbs-up" size={22} color={colors.teal[600]} />
+                        </LinearGradient>
+                      </AnimatedSpringButton>
+                    )}
                   </View>
-                </AnimatedPressable>
+                </BlurView>
+              ) : (
+                <View style={styles.inputAndroidWrapper}>
+                  <AnimatedSpringButton
+                    onPress={() => {}}
+                    style={styles.emojiButton}
+                    accessibilityLabel="Add emoji"
+                    accessibilityHint="Opens emoji picker"
+                  >
+                    <LinearGradient
+                      colors={[colors.teal[50], colors.teal[100]]}
+                      style={styles.emojiButtonGradient}
+                    >
+                      <Feather name="smile" size={22} color={colors.teal[600]} />
+                    </LinearGradient>
+                  </AnimatedSpringButton>
+
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={inputText}
+                      onChangeText={setInputText}
+                      placeholder="Type your message..."
+                      placeholderTextColor={colors.gray[400]}
+                      multiline
+                      maxLength={1000}
+                      onSubmitEditing={() => handleSendMessage()}
+                      accessibilityLabel="Message input"
+                      accessibilityHint="Type your message to Tandy"
+                    />
+                  </View>
+
+                  {inputText.trim() ? (
+                    <AnimatedSpringButton
+                      onPress={() => handleSendMessage()}
+                      disabled={isSending}
+                      accessibilityLabel="Send message"
+                      accessibilityHint="Sends your message to Tandy"
+                    >
+                      <LinearGradient
+                        colors={isSending
+                          ? [colors.gray[400], colors.gray[500]]
+                          : PREMIUM_COLORS.gradient.orangePremium as [string, string, string]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.sendButton}
+                      >
+                        <Feather name="send" size={20} color={colors.white} />
+                      </LinearGradient>
+                    </AnimatedSpringButton>
+                  ) : (
+                    <AnimatedSpringButton
+                      onPress={() => handleSendMessage('👍')}
+                      disabled={isSending}
+                      accessibilityLabel="Send thumbs up"
+                      accessibilityHint="Sends a thumbs up reaction"
+                    >
+                      <LinearGradient
+                        colors={[colors.teal[50], colors.teal[100]]}
+                        style={styles.likeButton}
+                      >
+                        <Feather name="thumbs-up" size={22} color={colors.teal[600]} />
+                      </LinearGradient>
+                    </AnimatedSpringButton>
+                  )}
+                </View>
               )}
             </View>
           </Animated.View>
@@ -1347,7 +2020,7 @@ export const TandyScreen: React.FC = () => {
 };
 
 // ============================================================================
-// STYLES (Matches ChatScreen pattern exactly)
+// PREMIUM STYLES - iPhone-level UI/UX
 // ============================================================================
 
 const styles = StyleSheet.create({
@@ -1362,18 +2035,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Header with shadow
+  // Premium Header with glassmorphic effects
   headerShadowContainer: {
     backgroundColor: colors.orange[500],
     ...Platform.select({
       ios: {
-        shadowColor: colors.gray[900],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
+        shadowColor: colors.orange[600],
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
       },
     }),
     zIndex: 10,
@@ -1383,33 +2053,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   headerSmall: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   headerLandscape: {
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
   },
   headerBackButton: {
-    width: 48, // Increased from 44px for better touch target
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
+  },
+  headerButtonInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerUserInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
   },
   headerNameContainer: {
@@ -1419,6 +2097,16 @@ const styles = StyleSheet.create({
   headerAvatarWrapper: {
     position: 'relative',
   },
+  headerAvatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
   headerAvatar: {
     width: 40,
     height: 40,
@@ -1426,93 +2114,157 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.white,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+    }),
   },
   headerOnlineDot: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.teal[500],
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.orange[500],
+  },
+  headerOnlineDotInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00D26A',
   },
   headerName: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.white,
     letterSpacing: 0.3,
   },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  headerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00D26A',
+  },
   headerStatus: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.95)',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   headerActionButton: {
-    width: 48, // Increased from 44px for better touch target
+    width: 48,
     height: 48,
     borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    overflow: 'hidden',
   },
 
-  // Error
+  // Premium Error Banner
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.3)',
+    minHeight: 72,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.orange[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  errorIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.orange[50],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.orange[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.orange[100],
+  },
+  errorTextContainer: {
+    flex: 1,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.orange[700],
   },
+  errorHelpText: {
+    fontSize: 14,
+    color: colors.gray[600],
+    marginTop: 4,
+  },
+  errorRetryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.teal[50],
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.teal[200],
+  },
+  errorRetryText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.teal[600],
+  },
 
-  // Messages
+  // Premium Messages Container
   messagesContainer: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   flatList: {
     flex: 1,
   },
   messagesList: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 8,
+    paddingBottom: 20,
+    paddingTop: 12,
   },
-  // Bottom fixed container for wellness buttons and input
+  // Premium bottom container
   bottomFixedContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   emptyMessagesList: {
     flex: 1,
     justifyContent: 'center',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.gray[500],
-  },
   messageRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
+    marginVertical: 4,
   },
   messageRowOwn: {
     justifyContent: 'flex-end',
@@ -1520,38 +2272,75 @@ const styles = StyleSheet.create({
   messageContent: {
     maxWidth: '75%',
   },
-  // Message bubbles - Enhanced for seniors with larger text and better padding
+  // Premium message bubbles with glow effects
+  bubbleOwnWrapper: {
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.orange[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+    }),
+  },
   bubbleOwn: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderRadius: 24,
+    borderBottomRightRadius: 8,
   },
   bubbleTextOwn: {
-    fontSize: 18, // Increased from 16px for better readability
+    fontSize: 18,
     lineHeight: 26,
     color: colors.white,
+    fontWeight: '500',
+  },
+  bubbleOtherWrapper: {
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+    }),
   },
   bubbleOther: {
-    backgroundColor: colors.gray[100],
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderRadius: 24,
+    borderBottomLeftRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
   },
   tandyLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 8,
+  },
+  tandyAvatarMini: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.teal[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.teal[100],
   },
   tandyLabelText: {
-    fontSize: 13, // Increased from 12px
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.teal[600],
+    color: colors.teal[700],
   },
   bubbleTextOther: {
-    fontSize: 18, // Increased from 16px for better readability
+    fontSize: 18,
     lineHeight: 26,
     color: colors.gray[900],
+    fontWeight: '400',
   },
   timeRow: {
     flexDirection: 'row',
@@ -1574,55 +2363,164 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  // Welcome Header - Shown for new conversations
+  // Premium Welcome Header with glassmorphism
   welcomeHeader: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingTop: 40,
+    paddingBottom: 24,
   },
   welcomeIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.teal[50],
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  welcomeIconGradient: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(20,184,166,0.3)',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+    }),
+  },
+  welcomeOnlineIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,210,106,0.3)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#00D26A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  welcomeOnlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00D26A',
+  },
+  welcomeOnlineText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#059669',
   },
   welcomeTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     color: colors.gray[900],
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: colors.gray[600],
     textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 300,
+    lineHeight: 28,
+    maxWidth: 340,
   },
-  quickSuggestionsContainer: {
-    marginTop: 24,
-    width: '100%',
-  },
-  quickSuggestionsLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[600],
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  quickSuggestionsGrid: {
+  // Premium Feature highlights
+  featureHighlights: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'center',
+    gap: 24,
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  featureItem: {
+    alignItems: 'center',
     gap: 10,
   },
+  featureIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
+  },
+  featureText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+  },
+  quickSuggestionsContainer: {
+    marginTop: 32,
+    width: '100%',
+  },
+  quickSuggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  quickSuggestionsLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.gray[800],
+  },
+  // Premium helpful tip
+  welcomeTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: colors.teal[200],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  welcomeTipText: {
+    fontSize: 15,
+    color: colors.teal[700],
+    fontWeight: '600',
+    flex: 1,
+  },
+  quickSuggestionsGrid: {
+    flexDirection: 'column',
+    gap: 12,
+    paddingHorizontal: 8,
+  },
 
-  // Quick Replies - Enhanced for seniors with larger targets and better visual feedback
+  // Premium Quick Replies with glassmorphism
   quickRepliesContainer: {
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -1641,23 +2539,22 @@ const styles = StyleSheet.create({
   quickReplyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.teal[200],
-    borderRadius: 16,
-    minHeight: 56, // Senior-friendly touch target (56px)
-    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    borderWidth: 1,
+    borderColor: 'rgba(20,184,166,0.3)',
+    borderRadius: 20,
+    minHeight: 60,
+    minWidth: 160,
+    gap: 12,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: colors.teal[500],
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
       },
     }),
   },
@@ -1666,20 +2563,24 @@ const styles = StyleSheet.create({
     borderColor: colors.teal[600],
   },
   quickReplyIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.teal[50],
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.teal[100],
   },
   quickReplyIconContainerPressed: {
     backgroundColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'transparent',
   },
   quickReplyText: {
     fontSize: 17,
     fontWeight: '600',
     color: colors.gray[800],
+    flex: 1,
   },
   quickReplyTextPressed: {
     color: colors.white,
@@ -1698,16 +2599,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: colors.gray[200],
+    borderColor: colors.gray[300],
     ...Platform.select({
       ios: {
         shadowColor: colors.gray[500],
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
@@ -1738,67 +2636,98 @@ const styles = StyleSheet.create({
     fontSize: 15, // Increased from 13px
   },
 
-  // Input - Enhanced for seniors with larger touch targets and better spacing
+  // Premium Input Area with glassmorphism
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 14,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[200],
+    paddingTop: 12,
+    backgroundColor: 'transparent',
   },
   inputContainerSmall: {
     paddingHorizontal: 12,
-    gap: 8,
   },
   inputContainerLandscape: {
-    paddingVertical: 10,
     paddingTop: 10,
   },
+  inputBlurWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 32,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+  },
+  inputAndroidWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    borderRadius: 32,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  inputInnerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   emojiButton: {
-    width: 48, // Increased from 44px
+    width: 48,
     height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  emojiButtonGradient: {
+    width: '100%',
+    height: '100%',
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.teal[50],
   },
   inputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.gray[100],
-    borderRadius: 28,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 24,
     paddingLeft: 18,
     paddingRight: 10,
-    minHeight: 56, // Increased from 48px for senior-friendly touch target
+    minHeight: 52,
     borderWidth: 1,
-    borderColor: colors.gray[200],
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   textInput: {
     flex: 1,
-    fontSize: 18, // Increased from 16px for better readability
+    fontSize: 18,
     color: colors.gray[900],
     paddingVertical: 12,
     maxHeight: 120,
     lineHeight: 24,
   },
   sendButton: {
-    width: 52, // Increased from 48px
+    width: 52,
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.orange[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
   likeButton: {
-    width: 52, // Increased from 48px
+    width: 52,
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.teal[50],
   },
 
   // Sponsor Card in Chat
@@ -1822,7 +2751,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.gray[200],
+    borderColor: colors.gray[300],
     backgroundColor: colors.white,
     ...Platform.select({
       ios: {
@@ -1830,9 +2759,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
@@ -2131,61 +3057,77 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minHeight: 52, // Senior-friendly touch target
   },
-  // Thinking Indicator - Enhanced for seniors with larger dots and better visibility
+  // Premium Thinking Indicator with glassmorphism
   thinkingContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   thinkingBubble: {
-    backgroundColor: colors.teal[50],
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 24,
+    backgroundColor: PREMIUM_COLORS.glass.white,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+    borderRadius: 28,
     maxWidth: '80%',
     borderWidth: 1,
-    borderColor: colors.teal[100],
+    borderColor: colors.teal[200],
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[400],
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
       },
     }),
   },
   thinkingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 10,
+    marginBottom: 12,
+  },
+  thinkingAvatarRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.teal[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.teal[100],
   },
   thinkingLabel: {
-    fontSize: 14, // Increased from 12px
+    fontSize: 15,
     fontWeight: '700',
     color: colors.teal[700],
+  },
+  thinkingOnlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00D26A',
+    marginLeft: 4,
   },
   thinkingContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   thinkingText: {
-    fontSize: 17, // Increased from 15px
+    fontSize: 18,
     color: colors.gray[700],
     fontWeight: '500',
   },
   dotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8, // Increased from 5px for better visibility
+    gap: 10,
+    height: 24,
   },
   dot: {
-    width: 10, // Increased from 7px for better visibility
+    width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.teal[500],

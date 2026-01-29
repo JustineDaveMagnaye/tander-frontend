@@ -85,7 +85,7 @@ export function useBiometric(): UseBiometricReturn {
       setIsEnabled(enabled);
       setHasStoredCredentials(credentials !== null);
     } catch (err) {
-      console.error('Failed to check biometric status:', err);
+      console.warn('Failed to check biometric status:', err);
       setError('Failed to check biometric status');
     } finally {
       setIsLoading(false);
@@ -135,7 +135,7 @@ export function useBiometric(): UseBiometricReturn {
         setHasStoredCredentials(true);
         return true;
       } catch (err) {
-        console.error('Failed to enable biometric:', err);
+        console.warn('Failed to enable biometric:', err);
         setError('An unexpected error occurred');
         return false;
       } finally {
@@ -158,7 +158,7 @@ export function useBiometric(): UseBiometricReturn {
       setHasStoredCredentials(false);
       return true;
     } catch (err) {
-      console.error('Failed to disable biometric:', err);
+      console.warn('Failed to disable biometric:', err);
       setError('Failed to disable biometric login');
       return false;
     } finally {
@@ -203,7 +203,7 @@ export function useBiometric(): UseBiometricReturn {
 
       return credentials;
     } catch (err) {
-      console.error('Failed to authenticate and get credentials:', err);
+      console.warn('Failed to authenticate and get credentials:', err);
       setError('An unexpected error occurred');
       return null;
     } finally {

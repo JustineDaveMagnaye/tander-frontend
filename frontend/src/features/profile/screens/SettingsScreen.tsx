@@ -887,7 +887,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           fadeAnim.setValue(1);
         }
       } catch (err) {
-        console.error('Failed to load settings:', err);
+        console.warn('Failed to load settings:', err);
         toast.error(
           'Unable to Load Settings',
           'Please check your internet connection and try again.'
@@ -1009,7 +1009,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       // Logout after a brief delay to let user see the toast
       setTimeout(() => onLogout?.(), 1500);
     } catch (err) {
-      console.error('Failed to delete account:', err);
+      console.warn('Failed to delete account:', err);
       triggerHaptic('warning');
       toast.error(
         'Unable to Delete Account',
@@ -1056,7 +1056,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           setShowDistanceSaved(false);
         }, SAVE_INDICATOR_DURATION);
       } catch (err) {
-        console.error('Failed to update distance:', err);
+        console.warn('Failed to update distance:', err);
         setDistancePreference(previousDistanceRef.current);
         setIsSavingDistance(false);
         triggerHaptic('warning');
@@ -1096,7 +1096,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           setShowAgeSaved(false);
         }, SAVE_INDICATOR_DURATION);
       } catch (err) {
-        console.error('Failed to update age range:', err);
+        console.warn('Failed to update age range:', err);
         setMinAge(previousMinAgeRef.current);
         setIsSavingAge(false);
         triggerHaptic('warning');
@@ -1136,7 +1136,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           setShowAgeSaved(false);
         }, SAVE_INDICATOR_DURATION);
       } catch (err) {
-        console.error('Failed to update age range:', err);
+        console.warn('Failed to update age range:', err);
         setMaxAge(previousMaxAgeRef.current);
         setIsSavingAge(false);
         triggerHaptic('warning');
@@ -1387,7 +1387,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SectionHeader
             icon="user"
             title="Account Settings"
-            subtitle={responsiveStyles.isLandscape ? "Manage account" : "Manage your account preferences"}
+            subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Manage account" : "Manage your account preferences"}
             responsiveStyles={responsiveStyles}
             gradientColors={colors.gradient.primaryButton}
           />
@@ -1397,7 +1397,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.orange[50]}
               iconColor={colors.orange[500]}
               title="Notifications"
-              subtitle={responsiveStyles.isLandscape ? "Alerts and reminders" : "Manage alerts and reminders"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Alerts and reminders" : "Manage alerts and reminders"}
               onPress={() => handleNavigateToSubSetting('notifications')}
               accessibilityHint="Double tap to manage your notification preferences"
               responsiveStyles={responsiveStyles}
@@ -1407,7 +1407,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.teal[50]}
               iconColor={colors.teal[500]}
               title="Privacy"
-              subtitle={responsiveStyles.isLandscape ? "Profile visibility" : "Control who can see your profile"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Profile visibility" : "Control who can see your profile"}
               onPress={() => handleNavigateToSubSetting('privacy')}
               accessibilityHint="Double tap to manage your privacy settings"
               responsiveStyles={responsiveStyles}
@@ -1417,7 +1417,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.pink[50]}
               iconColor={colors.pink[500]}
               title="Security"
-              subtitle={responsiveStyles.isLandscape ? "Password and login" : "Password and login options"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Password and login" : "Password and login options"}
               onPress={() => handleNavigateToSubSetting('security')}
               accessibilityHint="Double tap to manage your security settings"
               responsiveStyles={responsiveStyles}
@@ -1427,7 +1427,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor="#E8F5E9"
               iconColor="#4CAF50"
               title="ID Verification"
-              subtitle={responsiveStyles.isLandscape ? "Verify identity" : "Verify your identity for trust"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Verify identity" : "Verify your identity for trust"}
               onPress={() => handleNavigateToSubSetting('idverification')}
               accessibilityHint="Double tap to manage your ID verification"
               responsiveStyles={responsiveStyles}
@@ -1439,7 +1439,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.teal[50]}
               iconColor={colors.teal[600]}
               title="Call History"
-              subtitle={responsiveStyles.isLandscape ? "Past calls" : "View your past calls"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Past calls" : "View your past calls"}
               onPress={() => handleNavigateToSubSetting('callhistory')}
               accessibilityHint="Double tap to view your call history"
               responsiveStyles={responsiveStyles}
@@ -1449,7 +1449,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.orange[50]}
               iconColor={colors.orange[600]}
               title="Call Settings"
-              subtitle={responsiveStyles.isLandscape ? "Audio and video" : "Audio and video preferences"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Audio and video" : "Audio and video preferences"}
               onPress={() => handleNavigateToSubSetting('callsettings')}
               showBorder={false}
               accessibilityHint="Double tap to manage call settings"
@@ -1463,7 +1463,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SectionHeader
             icon="compass"
             title="Discovery Settings"
-            subtitle={responsiveStyles.isLandscape ? "Who you see" : "Control who you see and who sees you"}
+            subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Who you see" : "Control who you see and who sees you"}
             responsiveStyles={responsiveStyles}
             gradientColors={colors.gradient.likeButton}
           />
@@ -1473,7 +1473,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.romantic.blush}
               iconColor={colors.romantic.pink}
               title="Show Me"
-              subtitle={responsiveStyles.isLandscape ? "Who appears in feed" : "Choose who appears in your feed"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Who appears in feed" : "Choose who appears in your feed"}
               onPress={() => handleNavigateToSubSetting('showme')}
               accessibilityHint="Double tap to choose who you want to see"
               responsiveStyles={responsiveStyles}
@@ -1483,7 +1483,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor="#E3F2FD"
               iconColor="#2196F3"
               title="Location"
-              subtitle={responsiveStyles.isLandscape ? "Search location" : "Set your search location"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Search location" : "Set your search location"}
               onPress={() => handleNavigateToSubSetting('location')}
               showBorder={false}
               accessibilityHint="Double tap to set your location"
@@ -1497,7 +1497,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SectionHeader
             icon="navigation"
             title="Distance Preference"
-            subtitle={responsiveStyles.isLandscape ? "Search radius" : "How far to search for matches"}
+            subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Search radius" : "How far to search for matches"}
             responsiveStyles={responsiveStyles}
             gradientColors={colors.gradient.primaryButton}
           />
@@ -1589,7 +1589,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 },
               ]}
             >
-              {responsiveStyles.isLandscape
+              {(!responsiveStyles.isTablet && responsiveStyles.isLandscape)
                 ? `Showing people within ${distancePreference}km`
                 : `Show people within ${distancePreference} kilometers of your location`
               }
@@ -1602,7 +1602,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SectionHeader
             icon="calendar"
             title="Age Range"
-            subtitle={responsiveStyles.isLandscape ? "Preferred ages" : "Set the age range you prefer"}
+            subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Preferred ages" : "Set the age range you prefer"}
             responsiveStyles={responsiveStyles}
             gradientColors={colors.gradient.likeButton}
           />
@@ -1756,7 +1756,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 },
               ]}
             >
-              {responsiveStyles.isLandscape
+              {(!responsiveStyles.isTablet && responsiveStyles.isLandscape)
                 ? `Showing ages ${minAge}-${maxAge}`
                 : `Show people between ${minAge} and ${maxAge} years old`
               }
@@ -1769,7 +1769,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SectionHeader
             icon="help-circle"
             title="Support & About"
-            subtitle={responsiveStyles.isLandscape ? "Get help" : "Get help or learn more"}
+            subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Get help" : "Get help or learn more"}
             responsiveStyles={responsiveStyles}
             gradientColors={colors.gradient.ctaButton}
           />
@@ -1779,7 +1779,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               iconBackgroundColor={colors.teal[50]}
               iconColor={colors.teal[500]}
               title="Help & Support"
-              subtitle={responsiveStyles.isLandscape ? "Contact us" : "Get help or contact us"}
+              subtitle={(!responsiveStyles.isTablet && responsiveStyles.isLandscape) ? "Contact us" : "Get help or contact us"}
               onPress={() => handleNavigateToSubSetting('help')}
               accessibilityHint="Double tap to get help and support"
               responsiveStyles={responsiveStyles}

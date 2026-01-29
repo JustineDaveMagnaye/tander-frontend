@@ -34,6 +34,7 @@ interface CompleteProfileRequest {
   lastName: string;
   nickName?: string;
   birthDate: string; // Format: MM/dd/yyyy or yyyy-MM-dd
+  age?: number; // Calculated from birthDate
   city: string;
   country: string;
   civilStatus?: string;

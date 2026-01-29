@@ -35,7 +35,7 @@ function signUpReducer(state: SignUpState, action: SignUpAction): SignUpState {
     case 'SET_METHOD':
       return { ...state, method: action.payload, error: null };
     case 'SET_USERNAME':
-      return { ...state, username: action.payload.toLowerCase().replace(/[^a-z0-9_]/g, ''), error: null };
+      return { ...state, username: action.payload.replace(/[^a-zA-Z0-9_]/g, ''), error: null };
     case 'SET_PHONE':
       return { ...state, phone: formatPhoneForDisplay(action.payload), error: null };
     case 'SET_EMAIL':

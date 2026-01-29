@@ -4,6 +4,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import { incomingCallNativeModule } from '@/services/incomingCall/IncomingCallNativeModule';
 import { StoredUserData } from '@/types/api';
 
 // ============================================================================
@@ -29,7 +31,7 @@ export const getToken = async (): Promise<string | null> => {
     const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
     return token;
   } catch (error) {
-    console.error('Error getting token from storage:', error);
+    console.warn('Error getting token from storage:', error);
     return null;
   }
 };
@@ -42,8 +44,13 @@ export const getToken = async (): Promise<string | null> => {
 export const setToken = async (token: string): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+
+    // Also store in native SharedPreferences for native API calls (e.g., decline call when app killed)
+    if (Platform.OS === 'android' && incomingCallNativeModule.isAvailable()) {
+      incomingCallNativeModule.setAuthToken(token);
+    }
   } catch (error) {
-    console.error('Error setting token in storage:', error);
+    console.warn('Error setting token in storage:', error);
     throw error;
   }
 };
@@ -55,8 +62,13 @@ export const setToken = async (token: string): Promise<void> => {
 export const removeToken = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+
+    // Also clear from native SharedPreferences
+    if (Platform.OS === 'android' && incomingCallNativeModule.isAvailable()) {
+      incomingCallNativeModule.clearAuthToken();
+    }
   } catch (error) {
-    console.error('Error removing token from storage:', error);
+    console.warn('Error removing token from storage:', error);
     throw error;
   }
 };
@@ -74,7 +86,7 @@ export const getUserData = async (): Promise<StoredUserData | null> => {
     const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
     return userData ? JSON.parse(userData) : null;
   } catch (error) {
-    console.error('Error getting user data from storage:', error);
+    console.warn('Error getting user data from storage:', error);
     return null;
   }
 };
@@ -88,7 +100,7 @@ export const setUserData = async (user: StoredUserData): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
   } catch (error) {
-    console.error('Error setting user data in storage:', error);
+    console.warn('Error setting user data in storage:', error);
     throw error;
   }
 };
@@ -101,7 +113,7 @@ export const removeUserData = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
   } catch (error) {
-    console.error('Error removing user data from storage:', error);
+    console.warn('Error removing user data from storage:', error);
     throw error;
   }
 };
@@ -119,7 +131,7 @@ export const getRefreshToken = async (): Promise<string | null> => {
     const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
     return refreshToken;
   } catch (error) {
-    console.error('Error getting refresh token from storage:', error);
+    console.warn('Error getting refresh token from storage:', error);
     return null;
   }
 };
@@ -133,7 +145,7 @@ export const setRefreshToken = async (token: string): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
   } catch (error) {
-    console.error('Error setting refresh token in storage:', error);
+    console.warn('Error setting refresh token in storage:', error);
     throw error;
   }
 };
@@ -146,7 +158,7 @@ export const removeRefreshToken = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
   } catch (error) {
-    console.error('Error removing refresh token from storage:', error);
+    console.warn('Error removing refresh token from storage:', error);
     throw error;
   }
 };
@@ -167,9 +179,46 @@ export const clearAllData = async (): Promise<void> => {
       STORAGE_KEYS.USER_DATA,
       STORAGE_KEYS.REFRESH_TOKEN,
     ]);
+
+    // Also clear from native SharedPreferences
+    if (Platform.OS === 'android' && incomingCallNativeModule.isAvailable()) {
+      incomingCallNativeModule.clearAuthToken();
+    }
   } catch (error) {
-    console.error('Error clearing all data from storage:', error);
+    console.warn('Error clearing all data from storage:', error);
     throw error;
+  }
+};
+
+// ============================================================================
+// Native Token Sync
+// ============================================================================
+
+/**
+ * Sync existing token to native SharedPreferences
+ * Call this on app startup to ensure native code has access to auth token
+ * This is needed for native API calls (e.g., decline call when app killed)
+ */
+export const syncTokenToNative = async (): Promise<void> => {
+  if (Platform.OS !== 'android' || !incomingCallNativeModule.isAvailable()) {
+    return;
+  }
+
+  try {
+    // Note: authStore uses '@tander/auth_token' key (from asyncStorage.ts)
+    // We check both keys for compatibility
+    let token = await AsyncStorage.getItem('@tander/auth_token');
+    if (!token) {
+      token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    }
+    if (token) {
+      incomingCallNativeModule.setAuthToken(token);
+      console.log('[TokenStorage] Auth token synced to native SharedPreferences');
+    } else {
+      console.log('[TokenStorage] No auth token found to sync');
+    }
+  } catch (error) {
+    console.warn('[TokenStorage] Error syncing token to native:', error);
   }
 };
 
@@ -188,4 +237,5 @@ export default {
   setRefreshToken,
   removeRefreshToken,
   clearAllData,
+  syncTokenToNative,
 };

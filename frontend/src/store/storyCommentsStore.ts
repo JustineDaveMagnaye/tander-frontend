@@ -58,8 +58,8 @@ interface StoryCommentsActions {
   // Add a sent comment
   addSentComment: (comment: StoryComment) => void;
 
-  // Update comment status locally
-  updateCommentStatus: (commentId: string, status: StoryComment['status'], linkedMatchId?: number) => void;
+  // Update comment status locally (and optionally set match/conversation IDs)
+  updateCommentStatus: (commentId: string, status: StoryComment['status'], linkedMatchId?: number, conversationId?: string) => void;
 
   // Mark a comment as read (calls API)
   markAsRead: (commentId: string) => Promise<void>;
@@ -115,7 +115,7 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch comments';
       set({ error: message, isLoading: false });
-      console.error('Failed to fetch received comments:', error);
+      console.warn('Failed to fetch received comments:', error);
     }
   },
 
@@ -146,7 +146,7 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to send comment';
       set({ error: message, isSending: false });
-      console.error('Failed to send comment:', error);
+      console.warn('Failed to send comment:', error);
       return { success: false, message };
     }
   },
@@ -156,14 +156,17 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
       const response = await storyCommentsApi.likeBackComment(commentId);
 
       if (response.success && response.isMatch) {
-        // Update comment status locally
-        get().updateCommentStatus(commentId, 'LIKED_BACK', response.match?.id);
+        // Update comment status locally with match ID and conversation ID
+        const conversationId = response.match?.conversationId
+          ? String(response.match.conversationId)
+          : undefined;
+        get().updateCommentStatus(commentId, 'LIKED_BACK', response.match?.id, conversationId);
       }
 
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to like back';
-      console.error('Failed to like back:', error);
+      console.warn('Failed to like back:', error);
       return {
         success: false,
         message,
@@ -186,7 +189,7 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
 
       return response.success;
     } catch (error) {
-      console.error('Failed to decline comment:', error);
+      console.warn('Failed to decline comment:', error);
       return false;
     }
   },
@@ -216,11 +219,16 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
     }));
   },
 
-  updateCommentStatus: (commentId: string, status: StoryComment['status'], linkedMatchId?: number) => {
+  updateCommentStatus: (commentId: string, status: StoryComment['status'], linkedMatchId?: number, conversationId?: string) => {
     set((state) => {
       const updatedComments = state.receivedComments.map((c) =>
         c.id === commentId
-          ? { ...c, status, linkedMatchId: linkedMatchId ?? c.linkedMatchId }
+          ? {
+              ...c,
+              status,
+              linkedMatchId: linkedMatchId ?? c.linkedMatchId,
+              conversationId: conversationId ?? c.conversationId,
+            }
           : c
       );
       const totalPendingCount = updatedComments.filter((c) => c.status === 'PENDING').length;
@@ -247,7 +255,7 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
     try {
       await storyCommentsApi.markCommentAsRead(commentId);
     } catch (error) {
-      console.error('Failed to mark comment as read:', error);
+      console.warn('Failed to mark comment as read:', error);
       // Revert on error - refetch
       get().fetchReceivedComments();
     }
@@ -263,7 +271,7 @@ export const useStoryCommentsStore = create<StoryCommentsStore>((set, get) => ({
     try {
       await storyCommentsApi.markAllCommentsAsRead();
     } catch (error) {
-      console.error('Failed to mark all comments as read:', error);
+      console.warn('Failed to mark all comments as read:', error);
       // Revert on error - refetch
       get().fetchReceivedComments();
     }

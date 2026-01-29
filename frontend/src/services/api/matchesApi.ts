@@ -146,7 +146,7 @@ export const getMatches = async (
     );
     return response;
   } catch (error) {
-    console.error('Get matches error:', error);
+    console.warn('Get matches error:', error);
     throw error;
   }
 };
@@ -159,7 +159,7 @@ export const getMatchesList = async (): Promise<MatchDTO[]> => {
     const response = await get<MatchDTO[]>(MATCHES_ENDPOINTS.LIST);
     return response;
   } catch (error) {
-    console.error('Get matches list error:', error);
+    console.warn('Get matches list error:', error);
     throw error;
   }
 };
@@ -172,7 +172,7 @@ export const getCategorizedMatches = async (): Promise<CategorizedMatchesDTO> =>
     const response = await get<CategorizedMatchesDTO>(MATCHES_ENDPOINTS.CATEGORIZED);
     return response;
   } catch (error) {
-    console.error('Get categorized matches error:', error);
+    console.warn('Get categorized matches error:', error);
     throw error;
   }
 };
@@ -185,7 +185,7 @@ export const getInboxMatches = async (): Promise<MatchDTO[]> => {
     const response = await get<MatchDTO[]>(MATCHES_ENDPOINTS.INBOX);
     return response;
   } catch (error) {
-    console.error('Get inbox matches error:', error);
+    console.warn('Get inbox matches error:', error);
     throw error;
   }
 };
@@ -198,7 +198,7 @@ export const getMatchesWaitingForMe = async (): Promise<MatchDTO[]> => {
     const response = await get<MatchDTO[]>(MATCHES_ENDPOINTS.WAITING_FOR_ME);
     return response;
   } catch (error) {
-    console.error('Get waiting for me matches error:', error);
+    console.warn('Get waiting for me matches error:', error);
     throw error;
   }
 };
@@ -211,7 +211,7 @@ export const getMatchesWaitingForThem = async (): Promise<MatchDTO[]> => {
     const response = await get<MatchDTO[]>(MATCHES_ENDPOINTS.WAITING_FOR_THEM);
     return response;
   } catch (error) {
-    console.error('Get waiting for them matches error:', error);
+    console.warn('Get waiting for them matches error:', error);
     throw error;
   }
 };
@@ -224,7 +224,7 @@ export const getNewMatches = async (): Promise<MatchDTO[]> => {
     const response = await get<MatchDTO[]>(MATCHES_ENDPOINTS.NEW);
     return response;
   } catch (error) {
-    console.error('Get new matches error:', error);
+    console.warn('Get new matches error:', error);
     throw error;
   }
 };
@@ -237,7 +237,7 @@ export const getMatchById = async (matchId: number): Promise<MatchDTO> => {
     const response = await get<MatchDTO>(`${MATCHES_ENDPOINTS.BASE}/${matchId}`);
     return response;
   } catch (error) {
-    console.error('Get match by ID error:', error);
+    console.warn('Get match by ID error:', error);
     throw error;
   }
 };
@@ -250,7 +250,7 @@ export const recordSwipe = async (request: SwipeRequest): Promise<SwipeResponse>
     const response = await post<SwipeResponse>(MATCHES_ENDPOINTS.SWIPE, request);
     return response;
   } catch (error) {
-    console.error('Record swipe error:', error);
+    console.warn('Record swipe error:', error);
     throw error;
   }
 };
@@ -265,7 +265,7 @@ export const unmatch = async (matchId: number): Promise<{ success: boolean; mess
     );
     return response;
   } catch (error) {
-    console.error('Unmatch error:', error);
+    console.warn('Unmatch error:', error);
     throw error;
   }
 };
@@ -280,7 +280,7 @@ export const checkMatch = async (userId: number): Promise<{ isMatched: boolean; 
     );
     return response;
   } catch (error) {
-    console.error('Check match error:', error);
+    console.warn('Check match error:', error);
     throw error;
   }
 };
@@ -293,7 +293,7 @@ export const getMatchStats = async (): Promise<MatchStats> => {
     const response = await get<MatchStats>(MATCHES_ENDPOINTS.STATS);
     return response;
   } catch (error) {
-    console.error('Get match stats error:', error);
+    console.warn('Get match stats error:', error);
     throw error;
   }
 };
@@ -306,7 +306,7 @@ export const getMatchedUserIds = async (): Promise<number[]> => {
     const response = await get<number[]>(MATCHES_ENDPOINTS.USER_IDS);
     return response;
   } catch (error) {
-    console.error('Get matched user IDs error:', error);
+    console.warn('Get matched user IDs error:', error);
     throw error;
   }
 };

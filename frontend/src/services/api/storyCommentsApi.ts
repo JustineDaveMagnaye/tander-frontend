@@ -52,6 +52,8 @@ interface BackendStoryCommentDTO {
   status: 'PENDING' | 'LIKED_BACK' | 'DECLINED' | 'EXPIRED';
   linkedMatchId: number | null;
   expiresAt: string | null;
+  // Conversation ID when matched (may be provided by backend)
+  conversationId: number | null;
 }
 
 /**
@@ -114,6 +116,8 @@ const convertToStoryComment = (dto: BackendStoryCommentDTO): StoryComment => ({
   status: dto.status,
   linkedMatchId: dto.linkedMatchId ?? undefined,
   expiresAt: dto.expiresAt ?? undefined,
+  // Map conversationId if backend provides it (for LIKED_BACK status)
+  conversationId: dto.conversationId ? String(dto.conversationId) : undefined,
 });
 
 // ============================================================================
@@ -142,7 +146,7 @@ export const sendStoryComment = async (
       swipeId: response.swipeId ?? undefined,
     };
   } catch (error) {
-    console.error('Send story comment error:', error);
+    console.warn('Send story comment error:', error);
     throw error;
   }
 };
@@ -162,7 +166,7 @@ export const getReceivedComments = async (): Promise<ReceivedCommentsResponse> =
       totalPendingCount: response.totalPendingCount,
     };
   } catch (error) {
-    console.error('Get received comments error:', error);
+    console.warn('Get received comments error:', error);
     throw error;
   }
 };
@@ -195,7 +199,7 @@ export const likeBackComment = async (commentId: string): Promise<LikeBackRespon
         : undefined,
     };
   } catch (error) {
-    console.error('Like back comment error:', error);
+    console.warn('Like back comment error:', error);
     throw error;
   }
 };
@@ -213,7 +217,7 @@ export const declineComment = async (
     );
     return response;
   } catch (error) {
-    console.error('Decline comment error:', error);
+    console.warn('Decline comment error:', error);
     throw error;
   }
 };
@@ -230,7 +234,7 @@ export const markCommentAsRead = async (
     );
     return response;
   } catch (error) {
-    console.error('Mark comment as read error:', error);
+    console.warn('Mark comment as read error:', error);
     throw error;
   }
 };
@@ -245,7 +249,7 @@ export const markAllCommentsAsRead = async (): Promise<{ success: boolean; marke
     );
     return response;
   } catch (error) {
-    console.error('Mark all comments as read error:', error);
+    console.warn('Mark all comments as read error:', error);
     throw error;
   }
 };
@@ -260,7 +264,7 @@ export const getUnreadCount = async (): Promise<number> => {
     );
     return response.unreadCount;
   } catch (error) {
-    console.error('Get unread count error:', error);
+    console.warn('Get unread count error:', error);
     throw error;
   }
 };

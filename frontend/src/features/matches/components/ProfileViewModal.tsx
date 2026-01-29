@@ -1,23 +1,22 @@
 /**
- * TANDER ProfileViewModal - Premium Profile Experience
+ * TANDER ProfileViewModal - ULTRA PREMIUM Profile Experience
  *
- * A luxurious, immersive profile viewer designed to make Filipino seniors
- * excited to connect. Inspired by Hinge's personality-forward approach
- * combined with Bumble's clean design aesthetic.
+ * A luxurious, immersive profile viewer with Photo Supremacy design.
+ * Photos are 100% unobstructed - all info displays below the photo area.
  *
- * Design System Compliance:
- * - Orange (#F97316) for primary CTAs and action elements
- * - Teal (#14B8A6) for trust indicators and secondary elements
- * - 56-64px minimum touch targets for senior accessibility
- * - 18-20px body text, 16px minimum throughout
+ * Design Philosophy:
+ * - ZERO photo obstruction - no overlays, gradients, or text on photos
+ * - Clean separation between photo and info sections
+ * - Glassmorphism effects for premium feel
+ * - Senior-friendly: 56-64px touch targets, 16px+ fonts
  * - WCAG AA contrast compliance (4.5:1 minimum)
  *
- * Photo Carousel Features:
- * - Instagram/Tinder-style progress bars at top
- * - Tap left/right to navigate photos
- * - Swipe gesture support for photo switching
- * - Smooth transitions with reduce motion support
- * - Photo-focused hero design
+ * Key Changes from Previous Version:
+ * - Removed Wave button (redundant - users are already matched)
+ * - Moved name/location from photo overlay to dedicated info header
+ * - Removed gradient overlay from photo area
+ * - Tablet shows centered card instead of split horizontal view
+ * - Added glassmorphism effects to section cards
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
@@ -34,12 +33,12 @@ import {
   Animated,
   Easing,
   AccessibilityInfo,
-  Dimensions,
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@shared/styles/colors';
 import { useResponsive } from '@shared/hooks/useResponsive';
@@ -71,67 +70,47 @@ const SWIPE_THRESHOLD = 50;
 
 // Interest category icons mapping
 const INTEREST_ICONS: InterestIconMap = {
-  // Music & Entertainment
   'music': 'musical-notes',
   'singing': 'mic',
   'dancing': 'body',
   'movies': 'film',
   'theater': 'easel',
-
-  // Reading & Learning
   'reading': 'book',
   'books': 'book',
   'learning': 'school',
   'history': 'time',
-
-  // Outdoor & Nature
   'gardening': 'leaf',
   'garden': 'leaf',
   'nature': 'flower',
   'hiking': 'walk',
   'walking': 'walk',
   'fishing': 'fish',
-
-  // Travel & Adventure
   'travel': 'airplane',
   'adventure': 'compass',
   'photography': 'camera',
-
-  // Food & Cooking
   'cooking': 'restaurant',
   'baking': 'cafe',
   'food': 'fast-food',
-
-  // Family & Faith
   'family': 'people',
   'grandchildren': 'heart',
   'faith': 'heart-circle',
   'church': 'heart-circle',
   'prayer': 'heart-circle',
-
-  // Wellness & Health
   'exercise': 'fitness',
   'yoga': 'body',
   'meditation': 'leaf',
   'health': 'medkit',
-
-  // Arts & Crafts
   'art': 'color-palette',
   'crafts': 'construct',
   'painting': 'brush',
   'sewing': 'cut',
-
-  // Games & Social
   'cards': 'diamond',
   'mahjong': 'grid',
   'bingo': 'apps',
   'games': 'game-controller',
-
-  // Default
   'default': 'heart',
 };
 
-// Get icon name for an interest
 const getInterestIcon = (interest: string): string => {
   const lowerInterest = interest.toLowerCase();
   for (const [key, icon] of Object.entries(INTEREST_ICONS)) {
@@ -142,7 +121,6 @@ const getInterestIcon = (interest: string): string => {
   return INTEREST_ICONS.default;
 };
 
-// Sample shared interests (in real app, would come from backend comparison)
 const SAMPLE_SHARED_COUNT = 3;
 
 // ============================================================================
@@ -150,69 +128,61 @@ const SAMPLE_SHARED_COUNT = 3;
 // ============================================================================
 
 /**
- * PhotoGallery - Instagram-style photo carousel with progress bars
- * Enhanced with swipe gestures and cleaner photo display
+ * PremiumPhotoGallery - Clean photo area with NO overlays
+ * Only shows: progress bars (top) and online indicator (small dot)
  */
-interface PhotoGalleryProps {
+interface PremiumPhotoGalleryProps {
   photos: string[];
   currentIndex: number;
   onIndexChange: (index: number) => void;
-  name: string;
-  age: number;
-  isVerified?: boolean;
   isOnline: boolean;
-  location: string;
-  distance?: string;
   height: number;
   borderRadius: number;
   reduceMotion: boolean;
   onClose: () => void;
   insets: { top: number; left: number; right: number };
   isTablet: boolean;
+  isFullScreen: boolean;
 }
 
-const PhotoGallery: React.FC<PhotoGalleryProps> = ({
+const PremiumPhotoGallery: React.FC<PremiumPhotoGalleryProps> = ({
   photos,
   currentIndex,
   onIndexChange,
-  name,
-  age,
-  isVerified,
   isOnline,
-  location,
-  distance,
   height,
   borderRadius,
   reduceMotion,
   onClose,
   insets,
   isTablet,
+  isFullScreen,
 }) => {
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
-  const imageScaleAnim = useRef(new Animated.Value(1.05)).current;
+  const imageScaleAnim = useRef(new Animated.Value(1.03)).current;
   const imageFadeAnim = useRef(new Animated.Value(1)).current;
-  const closeScaleAnim = useRef(new Animated.Value(1)).current;
+  const onlinePulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Photo zoom animation on mount/photo change
+  // Photo animation on mount/change
   useEffect(() => {
     setImageLoading(true);
     setImageError(false);
 
     if (!reduceMotion) {
-      imageScaleAnim.setValue(1.03);
+      imageScaleAnim.setValue(1.02);
       imageFadeAnim.setValue(0.8);
 
       Animated.parallel([
         Animated.timing(imageScaleAnim, {
           toValue: 1,
-          duration: 400,
+          duration: 350,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(imageFadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 280,
           useNativeDriver: true,
         }),
       ]).start();
@@ -221,6 +191,30 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
       imageFadeAnim.setValue(1);
     }
   }, [currentIndex, reduceMotion]);
+
+  // Online pulse animation
+  useEffect(() => {
+    if (isOnline && !reduceMotion) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(onlinePulseAnim, {
+            toValue: 1.2,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(onlinePulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [isOnline, reduceMotion]);
 
   // Swipe gesture handling
   const panResponder = useMemo(
@@ -232,11 +226,9 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
         },
         onPanResponderRelease: (_, gestureState) => {
           if (gestureState.dx < -SWIPE_THRESHOLD && currentIndex < photos.length - 1) {
-            // Swipe left - next photo
             onIndexChange(currentIndex + 1);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           } else if (gestureState.dx > SWIPE_THRESHOLD && currentIndex > 0) {
-            // Swipe right - previous photo
             onIndexChange(currentIndex - 1);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           }
@@ -264,14 +256,23 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
     onClose();
   }, [onClose]);
 
-  const closeSize = isTablet ? 64 : 56;
-  const safePaddingTop = Math.max(24, insets.top + 12);
+  const closeSize = isTablet ? 56 : 48;
+  const safePaddingTop = isFullScreen ? Math.max(20, insets.top + 8) : 16;
 
   return (
-    <View style={[styles.galleryContainer, { height, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius }]}>
-      {/* Progress Bars - Only show if multiple photos */}
+    <View
+      style={[
+        styles.galleryContainer,
+        {
+          height,
+          borderTopLeftRadius: borderRadius,
+          borderTopRightRadius: borderRadius,
+        },
+      ]}
+    >
+      {/* Progress Bars - Premium style */}
       {photos.length > 1 && (
-        <View style={[styles.progressBarContainer, { top: safePaddingTop }]}>
+        <View style={[styles.progressBarContainer, { top: safePaddingTop, left: 16, right: 16 }]}>
           {photos.map((_, index) => (
             <TouchableOpacity
               key={index}
@@ -281,7 +282,7 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
               }}
               style={styles.progressBarTouchable}
               accessible
-              accessibilityLabel={`Go to photo ${index + 1} of ${photos.length}`}
+              accessibilityLabel={`Photo ${index + 1} of ${photos.length}`}
             >
               <View style={styles.progressBarBackground}>
                 <View
@@ -289,7 +290,7 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
                     styles.progressBarFill,
                     {
                       width: index <= currentIndex ? '100%' : '0%',
-                      opacity: index === currentIndex ? 1 : 0.5,
+                      backgroundColor: index === currentIndex ? colors.white : 'rgba(255,255,255,0.6)',
                     },
                   ]}
                 />
@@ -299,36 +300,31 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
         </View>
       )}
 
-      {/* Close Button */}
-      <TouchableOpacity
+      {/* Close Button - Glassmorphism style */}
+      <View
         style={[
-          styles.closeButton,
+          styles.closeButtonWrapper,
           {
             top: safePaddingTop,
-            right: Math.max(20, insets.right + 12),
-            width: closeSize,
-            height: closeSize,
-            borderRadius: closeSize / 2,
+            right: Math.max(16, insets.right + 8),
           },
         ]}
-        onPress={handleClosePress}
-        activeOpacity={0.8}
-        accessible
-        accessibilityLabel="Close profile"
-        accessibilityRole="button"
       >
-        <Feather name="x" size={isTablet ? 28 : 24} color={colors.gray[700]} />
-      </TouchableOpacity>
+        <BlurView intensity={80} tint="light" style={[styles.closeButtonBlur, { width: closeSize, height: closeSize, borderRadius: closeSize / 2 }]}>
+          <TouchableOpacity
+            style={styles.closeButtonInner}
+            onPress={handleClosePress}
+            activeOpacity={0.8}
+            accessible
+            accessibilityLabel="Close profile"
+            accessibilityRole="button"
+          >
+            <Feather name="x" size={isTablet ? 26 : 22} color={colors.gray[800]} />
+          </TouchableOpacity>
+        </BlurView>
+      </View>
 
-      {/* Online Status Badge */}
-      {isOnline && (
-        <View style={[styles.onlineBadge, { top: safePaddingTop, left: Math.max(20, insets.left + 12) }]}>
-          <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>Online</Text>
-        </View>
-      )}
-
-      {/* Main Photo with gesture handling */}
+      {/* Main Photo - CLEAN, NO OVERLAY */}
       <Animated.View
         style={[
           styles.photoContainer,
@@ -348,7 +344,7 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
             onLoadEnd={() => setImageLoading(false)}
             onError={() => setImageError(true)}
             accessible
-            accessibilityLabel={`${name}'s photo ${currentIndex + 1} of ${photos.length}`}
+            accessibilityLabel={`Photo ${currentIndex + 1} of ${photos.length}`}
           />
         ) : (
           <LinearGradient
@@ -360,7 +356,6 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
             <View style={styles.placeholderIconContainer}>
               <Feather name="user" size={80} color={colors.gray[400]} />
             </View>
-            <Text style={styles.placeholderText}>{name}</Text>
           </LinearGradient>
         )}
       </Animated.View>
@@ -372,7 +367,7 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
         </View>
       )}
 
-      {/* Tap Navigation Zones - Only show if multiple photos */}
+      {/* Tap Navigation Zones */}
       {photos.length > 1 && (
         <>
           <Pressable
@@ -382,8 +377,8 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
             accessibilityLabel="Previous photo"
           >
             {currentIndex > 0 && (
-              <View style={styles.navHint}>
-                <Feather name="chevron-left" size={24} color="rgba(255,255,255,0.8)" />
+              <View style={styles.navArrow}>
+                <Feather name="chevron-left" size={28} color="rgba(255,255,255,0.9)" />
               </View>
             )}
           </Pressable>
@@ -394,101 +389,125 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({
             accessibilityLabel="Next photo"
           >
             {currentIndex < photos.length - 1 && (
-              <View style={styles.navHint}>
-                <Feather name="chevron-right" size={24} color="rgba(255,255,255,0.8)" />
+              <View style={styles.navArrow}>
+                <Feather name="chevron-right" size={28} color="rgba(255,255,255,0.9)" />
               </View>
             )}
           </Pressable>
         </>
       )}
 
-      {/* Photo Counter Badge - Only show if multiple photos */}
+      {/* Online Indicator - Small, subtle, bottom-right of photo */}
+      {isOnline && (
+        <Animated.View
+          style={[
+            styles.onlineIndicator,
+            { transform: [{ scale: onlinePulseAnim }] },
+          ]}
+        >
+          <View style={styles.onlineIndicatorInner} />
+        </Animated.View>
+      )}
+
+      {/* Photo Counter - Bottom left, subtle */}
       {photos.length > 1 && (
-        <View style={styles.photoCountBadge}>
+        <View style={styles.photoCounter}>
           <Feather name="image" size={14} color={colors.white} />
-          <Text style={styles.photoCountText}>
+          <Text style={styles.photoCounterText}>
             {currentIndex + 1}/{photos.length}
           </Text>
         </View>
       )}
+    </View>
+  );
+};
 
-      {/* Bottom Gradient Overlay - Subtle, only for text readability */}
-      <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)']}
-        locations={[0, 0.5, 1]}
-        style={styles.bottomGradient}
-        pointerEvents="none"
-      />
+/**
+ * ProfileInfoHeader - Name, Age, Verified, Location, Online status
+ * Displays BELOW the photo, not on it
+ */
+interface ProfileInfoHeaderProps {
+  name: string;
+  age: number;
+  isVerified?: boolean;
+  isOnline: boolean;
+  location: string;
+  distance?: string;
+  matchedTime: string;
+}
 
-      {/* Name & Location Overlay */}
-      <View style={styles.nameOverlay}>
-        <View style={styles.nameRow}>
-          <Text style={styles.nameText}>{name}, {age}</Text>
-          {isVerified && (
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={24} color={colors.teal[400]} />
-              <Text style={styles.verifiedText}>Verified</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.locationRow}>
-          <Feather name="map-pin" size={16} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.locationText}>
-            {location}{distance ? ` - ${distance}` : ''}
-          </Text>
-        </View>
+const ProfileInfoHeader: React.FC<ProfileInfoHeaderProps> = ({
+  name,
+  age,
+  isVerified,
+  isOnline,
+  location,
+  distance,
+  matchedTime,
+}) => {
+  return (
+    <View style={styles.infoHeader}>
+      {/* Row 1: Name, Age, Verified Badge */}
+      <View style={styles.infoNameRow}>
+        <Text style={styles.infoName}>{name}{age > 0 ? `, ${age}` : ''}</Text>
+        {isVerified && (
+          <View style={styles.verifiedBadge}>
+            <Ionicons name="checkmark-circle" size={22} color={colors.teal[500]} />
+          </View>
+        )}
+        {isOnline && (
+          <View style={styles.onlineBadgeSmall}>
+            <View style={styles.onlineDotSmall} />
+            <Text style={styles.onlineTextSmall}>Online</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Row 2: Location & Distance */}
+      <View style={styles.infoLocationRow}>
+        <Feather name="map-pin" size={16} color={colors.gray[500]} />
+        <Text style={styles.infoLocation}>
+          {location}{distance ? ` \u2022 ${distance}` : ''}
+        </Text>
+      </View>
+
+      {/* Row 3: Match time */}
+      <View style={styles.infoMatchRow}>
+        <Feather name="heart" size={14} color={colors.orange[500]} />
+        <Text style={styles.infoMatchTime}>Matched {matchedTime}</Text>
       </View>
     </View>
   );
 };
 
 /**
- * QuickStatsBar - Horizontal row of stat pills
+ * PremiumStatsBar - Glassmorphism stat cards
  */
-interface QuickStatsBarProps {
+interface PremiumStatsBarProps {
   compatibilityScore?: number;
   distance?: string;
   matchedTime: string;
-  isTablet: boolean;
 }
 
-const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
-  compatibilityScore = 85,
-  distance,
+const PremiumStatsBar: React.FC<PremiumStatsBarProps> = ({
+  compatibilityScore = 87,
   matchedTime,
-  isTablet,
 }) => {
-  // Determine color based on compatibility score
-  const getCompatibilityColor = (score: number) => {
-    if (score >= 80) return colors.teal[500];
-    if (score >= 70) return colors.orange[500];
-    return colors.orange[400];
-  };
-
-  const compatColor = getCompatibilityColor(compatibilityScore);
+  const isHighMatch = compatibilityScore >= 85;
 
   return (
-    <View style={styles.statsBarContainer}>
+    <View style={styles.statsBar}>
       {/* Compatibility Score */}
-      <View style={[styles.statPill, { backgroundColor: `${compatColor}15` }]}>
-        <Ionicons name="heart" size={18} color={compatColor} />
-        <Text style={[styles.statValue, { color: compatColor }]}>{compatibilityScore}%</Text>
+      <View style={[styles.statCard, { backgroundColor: isHighMatch ? colors.teal[50] : colors.orange[50] }]}>
+        <Ionicons name="heart" size={22} color={isHighMatch ? colors.teal[500] : colors.orange[500]} />
+        <Text style={[styles.statValue, { color: isHighMatch ? colors.teal[600] : colors.orange[600] }]}>{compatibilityScore}%</Text>
         <Text style={styles.statLabel}>Match</Text>
       </View>
 
-      {/* Distance */}
-      {distance && (
-        <View style={[styles.statPill, styles.statPillTeal]}>
-          <Feather name="navigation" size={16} color={colors.teal[600]} />
-          <Text style={[styles.statValue, { color: colors.teal[700] }]}>{distance}</Text>
-          <Text style={styles.statLabel}>Distance</Text>
-        </View>
-      )}
-
       {/* Matched Time */}
-      <View style={[styles.statPill, styles.statPillOrange]}>
-        <Feather name="clock" size={16} color={colors.orange[600]} />
-        <Text style={[styles.statValue, { color: colors.orange[700] }]}>{matchedTime}</Text>
+      <View style={[styles.statCard, { backgroundColor: colors.orange[50] }]}>
+        <Feather name="clock" size={20} color={colors.orange[500]} />
+        <Text style={[styles.statValue, { color: colors.orange[600] }]}>{matchedTime}</Text>
         <Text style={styles.statLabel}>Matched</Text>
       </View>
     </View>
@@ -496,57 +515,53 @@ const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
 };
 
 /**
- * ProfileSection - Reusable card-style section container
+ * GlassProfileSection - Premium glassmorphism section card
  */
-interface ProfileSectionProps {
+interface GlassProfileSectionProps {
   icon: string;
   iconFamily?: 'feather' | 'ionicons';
   title: string;
   children: React.ReactNode;
-  conversationStarter?: string;
-  onConversationPress?: () => void;
   accentColor?: string;
+  onAskPress?: () => void;
 }
 
-const ProfileSection: React.FC<ProfileSectionProps> = ({
+const GlassProfileSection: React.FC<GlassProfileSectionProps> = ({
   icon,
   iconFamily = 'ionicons',
   title,
   children,
-  conversationStarter,
-  onConversationPress,
   accentColor = colors.orange[500],
+  onAskPress,
 }) => {
   const IconComponent = iconFamily === 'feather' ? Feather : Ionicons;
 
   return (
-    <View style={styles.sectionCard}>
+    <View style={styles.glassSection}>
       {/* Section Header */}
-      <View style={styles.sectionHeader}>
-        <IconComponent name={icon as any} size={22} color={accentColor} />
-        <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.glassSectionHeader}>
+        <View style={[styles.glassSectionIconBg, { backgroundColor: `${accentColor}15` }]}>
+          <IconComponent name={icon as any} size={20} color={accentColor} />
+        </View>
+        <Text style={styles.glassSectionTitle}>{title}</Text>
       </View>
 
-      {/* Section Divider */}
-      <View style={styles.sectionDivider} />
-
-      {/* Section Content */}
-      <View style={styles.sectionContent}>
+      {/* Content */}
+      <View style={styles.glassSectionContent}>
         {children}
       </View>
 
-      {/* Conversation Starter Button */}
-      {conversationStarter && onConversationPress && (
+      {/* Ask Button */}
+      {onAskPress && (
         <TouchableOpacity
-          style={styles.conversationButton}
-          onPress={onConversationPress}
+          style={styles.askButton}
+          onPress={onAskPress}
           activeOpacity={0.7}
           accessible
-          accessibilityLabel={conversationStarter}
-          accessibilityRole="button"
+          accessibilityLabel="Ask about this"
         >
           <Feather name="message-circle" size={16} color={colors.teal[600]} />
-          <Text style={styles.conversationButtonText}>{conversationStarter}</Text>
+          <Text style={styles.askButtonText}>Ask about this</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -554,14 +569,14 @@ const ProfileSection: React.FC<ProfileSectionProps> = ({
 };
 
 /**
- * InterestTags - Visual interest tags with icons and shared highlights
+ * PremiumInterestTags - Visual interest tags with shared highlights
  */
-interface InterestTagsProps {
+interface PremiumInterestTagsProps {
   interests: string[];
   sharedCount?: number;
 }
 
-const InterestTags: React.FC<InterestTagsProps> = ({
+const PremiumInterestTags: React.FC<PremiumInterestTagsProps> = ({
   interests,
   sharedCount = SAMPLE_SHARED_COUNT,
 }) => {
@@ -585,10 +600,12 @@ const InterestTags: React.FC<InterestTagsProps> = ({
                 size={16}
                 color={isShared ? colors.teal[600] : colors.orange[600]}
               />
-              <Text style={[
-                styles.interestTagText,
-                isShared && styles.interestTagTextShared,
-              ]}>
+              <Text
+                style={[
+                  styles.interestTagText,
+                  isShared && styles.interestTagTextShared,
+                ]}
+              >
                 {interest}
               </Text>
               {isShared && (
@@ -599,11 +616,11 @@ const InterestTags: React.FC<InterestTagsProps> = ({
         })}
       </View>
 
-      {/* Shared Interests Highlight */}
+      {/* Shared Interests Banner */}
       {sharedCount > 0 && (
-        <View style={styles.sharedHighlight}>
+        <View style={styles.sharedBanner}>
           <Ionicons name="sparkles" size={18} color={colors.teal[500]} />
-          <Text style={styles.sharedHighlightText}>
+          <Text style={styles.sharedBannerText}>
             You share {sharedCount} {sharedCount === 1 ? 'interest' : 'interests'}!
           </Text>
         </View>
@@ -613,116 +630,101 @@ const InterestTags: React.FC<InterestTagsProps> = ({
 };
 
 /**
- * StickyActionBar - Fixed bottom action buttons
+ * FloatingMessageButton - Premium floating CTA
  */
-interface StickyActionBarProps {
-  onWave: () => void;
-  onMessage: () => void;
+interface FloatingMessageButtonProps {
+  onPress: () => void;
   name: string;
   bottomInset: number;
-  buttonHeight: number;
   reduceMotion: boolean;
 }
 
-const StickyActionBar: React.FC<StickyActionBarProps> = ({
-  onWave,
-  onMessage,
+const FloatingMessageButton: React.FC<FloatingMessageButtonProps> = ({
+  onPress,
   name,
   bottomInset,
-  buttonHeight,
   reduceMotion,
 }) => {
-  const ctaPulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // Subtle pulse animation for CTA
   useEffect(() => {
-    if (reduceMotion) {
-      ctaPulseAnim.setValue(1);
-      return;
-    }
+    if (reduceMotion) return;
 
-    const pulseAnimation = Animated.loop(
+    const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(ctaPulseAnim, {
-          toValue: 1.02,
-          duration: 1200,
+        Animated.timing(pulseAnim, {
+          toValue: 1.03,
+          duration: 1500,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-        Animated.timing(ctaPulseAnim, {
+        Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1200,
+          duration: 1500,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
     );
-    pulseAnimation.start();
-    return () => pulseAnimation.stop();
+    pulse.start();
+    return () => pulse.stop();
   }, [reduceMotion]);
 
-  const handleWave = useCallback(async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Haptics not available
-    }
-    onWave();
-  }, [onWave]);
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+  };
 
-  const handleMessage = useCallback(async () => {
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+  };
+
+  const handlePress = async () => {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Haptics not available
-    }
-    onMessage();
-  }, [onMessage]);
+    } catch {}
+    onPress();
+  };
 
   return (
-    <View style={[styles.actionBarContainer, { paddingBottom: Math.max(bottomInset + 12, 24) }]}>
+    <View style={[styles.floatingButtonContainer, { paddingBottom: Math.max(bottomInset + 16, 28) }]}>
+      {/* Gradient fade background */}
       <LinearGradient
-        colors={['transparent', 'rgba(255,255,255,0.95)', colors.white]}
-        locations={[0, 0.3, 0.5]}
-        style={styles.actionBarGradient}
+        colors={['transparent', 'rgba(255,255,255,0.9)', colors.white]}
+        locations={[0, 0.4, 0.7]}
+        style={styles.floatingButtonGradient}
         pointerEvents="none"
       />
 
-      <View style={styles.actionButtonsRow}>
-        {/* Wave Button (Secondary) */}
+      <Animated.View style={{ transform: [{ scale: Animated.multiply(pulseAnim, scaleAnim) }] }}>
         <TouchableOpacity
-          style={[styles.waveButton, { height: buttonHeight, borderRadius: buttonHeight / 2 }]}
-          onPress={handleWave}
-          activeOpacity={0.8}
+          style={styles.floatingButton}
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
           accessible
-          accessibilityLabel={`Send a wave to ${name}`}
+          accessibilityLabel={`Send message to ${name}`}
           accessibilityRole="button"
         >
-          <Text style={styles.waveEmoji}>👋</Text>
-          <Text style={styles.waveButtonText}>Wave</Text>
+          <LinearGradient
+            colors={colors.gradient.primaryButton}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Feather name="message-circle" size={24} color={colors.white} />
+          <Text style={styles.floatingButtonText}>Message {name}</Text>
         </TouchableOpacity>
-
-        {/* Message Button (Primary CTA) */}
-        <Animated.View style={[styles.messageButtonContainer, { transform: [{ scale: ctaPulseAnim }] }]}>
-          <TouchableOpacity
-            style={[styles.messageButton, { height: buttonHeight, borderRadius: buttonHeight / 2 }]}
-            onPress={handleMessage}
-            activeOpacity={0.85}
-            accessible
-            accessibilityLabel={`Send message to ${name}`}
-            accessibilityRole="button"
-          >
-            <LinearGradient
-              colors={colors.gradient.primaryButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: buttonHeight / 2 }]}
-            />
-            <Feather name="message-circle" size={22} color={colors.white} />
-            <Text style={styles.messageButtonText}>Message</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      </Animated.View>
     </View>
   );
 };
@@ -745,169 +747,108 @@ export const ProfileViewModal: React.FC<ProfileViewModalProps> = ({
     height,
     isTablet,
     isLandscape,
-    isPhone,
-    moderateScale,
     getScreenMargin,
-    hp,
-    wp,
     getButtonHeight,
-    getTouchTargetSize,
   } = useResponsive();
 
-  // State
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
-  // Animations - initialize off-screen (will be set properly in useEffect)
+  // Animations
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const contentStaggerAnim = useRef([
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-  ]).current;
+  const contentFadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Get all photos - support both image, images, and photoUrl properties
+  // Get all photos
   const photos = useMemo(() => {
     const photoList: string[] = [];
-
-    // First try images array
     if (match?.images && Array.isArray(match.images) && match.images.length > 0) {
       photoList.push(...match.images.filter(Boolean));
     }
-
-    // If no images, try single image property
     if (photoList.length === 0 && match?.image) {
       photoList.push(match.image);
     }
-
-    // Fallback to photoUrl
     if (photoList.length === 0 && match?.photoUrl) {
       photoList.push(match.photoUrl);
     }
-
     return photoList;
   }, [match?.images, match?.image, match?.photoUrl]);
 
-  // Responsive calculations
   const screenMargin = getScreenMargin();
   const buttonHeight = Math.max(56, getButtonHeight());
 
-  // Modal sizing - works on all screen sizes
+  // Modal sizing - Centered card for tablet, full screen for phone
   const modalConfig = useMemo(() => {
     const availableWidth = width - insets.left - insets.right;
     const availableHeight = height - insets.top - insets.bottom;
 
-    // Small phone (iPhone SE, small Android) - portrait
-    const isSmallPhone = width < 375;
-    const isMediumPhone = width >= 375 && width < 428;
+    if (isTablet) {
+      // Tablet: Centered card design (like QuickViewModal)
+      const maxWidth = isLandscape ? 520 : 480;
+      const maxHeight = isLandscape ? availableHeight * 0.92 : availableHeight * 0.9;
+      const cardWidth = Math.min(maxWidth, availableWidth * 0.85);
+      // Photo takes ~55% of card height for better proportion
+      const photoHeight = maxHeight * 0.52;
 
-    if (isTablet && isLandscape) {
-      // iPad Landscape - horizontal split layout (photo left, content right)
       return {
-        width: Math.min(availableWidth * 0.92, 1100),
-        maxHeight: availableHeight * 0.92,
-        borderRadius: 32,
-        photoHeight: availableHeight * 0.92, // Full height for side-by-side
-        photoWidth: '50%', // Photo takes 50% of width - more prominent
-        layout: 'horizontal' as const,
-      };
-    } else if (isTablet) {
-      // iPad Portrait - much larger modal to show all content with prominent photo
-      return {
-        width: Math.min(availableWidth * 0.9, 700),
-        maxHeight: availableHeight * 0.95,
-        borderRadius: 32,
-        photoHeight: Math.max(320, Math.min(availableHeight * 0.45, 450)), // Increased photo height
-        layout: 'vertical' as const,
-      };
-    } else if (isLandscape) {
-      // Phone Landscape - horizontal layout with larger photo
-      return {
-        width: Math.min(availableWidth * 0.96, 800),
-        maxHeight: availableHeight * 0.95,
-        borderRadius: 20,
-        photoHeight: availableHeight * 0.95,
-        photoWidth: '45%',
-        layout: 'horizontal' as const,
-      };
-    } else if (isSmallPhone) {
-      // Small Phone Portrait (iPhone SE, etc.)
-      return {
-        width: width,
-        maxHeight: height,
-        borderRadius: 24,
-        photoHeight: Math.max(250, Math.min(height * 0.42, 320)), // Increased
-        layout: 'vertical' as const,
-      };
-    } else if (isMediumPhone) {
-      // Medium Phone Portrait (iPhone 12/13/14)
-      return {
-        width: width,
-        maxHeight: height,
+        width: cardWidth,
+        maxHeight: maxHeight,
         borderRadius: 28,
-        photoHeight: Math.max(320, Math.min(height * 0.48, 420)), // Increased
-        layout: 'vertical' as const,
+        photoHeight: Math.min(photoHeight, 450),
+        isFullScreen: false,
       };
     }
 
-    // Large Phone Portrait (iPhone Pro Max, large Android)
+    // Phone: Full screen modal
+    const isSmallPhone = width < 375;
+    const photoRatio = isSmallPhone ? 0.48 : isLandscape ? 0.4 : 0.52;
+
     return {
       width: width,
       maxHeight: height,
       borderRadius: 28,
-      photoHeight: Math.max(360, Math.min(height * 0.5, 480)), // Increased for photo prominence
-      layout: 'vertical' as const,
+      photoHeight: Math.max(280, Math.min(height * photoRatio, 480)),
+      isFullScreen: true,
     };
   }, [width, height, isTablet, isLandscape, insets]);
 
   // Entry/Exit animations
   useEffect(() => {
     if (visible) {
-      // Reset photo index
       setCurrentPhotoIndex(0);
 
       if (reduceMotion) {
         slideAnim.setValue(0);
         fadeAnim.setValue(1);
-        contentStaggerAnim.forEach(anim => anim.setValue(1));
+        contentFadeAnim.setValue(1);
       } else {
-        // Reset animations
         slideAnim.setValue(height);
         fadeAnim.setValue(0);
-        contentStaggerAnim.forEach(anim => anim.setValue(0));
+        contentFadeAnim.setValue(0);
 
-        // Entry animation
         Animated.parallel([
           Animated.spring(slideAnim, {
             toValue: 0,
             useNativeDriver: true,
-            friction: 8,
-            tension: 65,
+            friction: 9,
+            tension: 70,
           }),
           Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 300,
+            duration: 280,
             useNativeDriver: true,
           }),
         ]).start();
 
-        // Stagger content sections
-        const staggerDelay = 80;
-        contentStaggerAnim.forEach((anim, index) => {
-          setTimeout(() => {
-            Animated.spring(anim, {
-              toValue: 1,
-              useNativeDriver: true,
-              friction: 10,
-              tension: 80,
-            }).start();
-          }, 300 + index * staggerDelay);
-        });
+        // Stagger content fade in
+        setTimeout(() => {
+          Animated.timing(contentFadeAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }).start();
+        }, 200);
       }
 
-      // Accessibility announcement
       if (match) {
         AccessibilityInfo.announceForAccessibility(
           `Viewing ${match.name}'s profile. ${isOnline ? 'They are online now.' : ''} ${photos.length} photos available.`
@@ -916,17 +857,15 @@ export const ProfileViewModal: React.FC<ProfileViewModalProps> = ({
     } else {
       slideAnim.setValue(height);
       fadeAnim.setValue(0);
-      contentStaggerAnim.forEach(anim => anim.setValue(0));
+      contentFadeAnim.setValue(0);
     }
   }, [visible, match, isOnline, photos.length, height, reduceMotion]);
 
-  // Close handler with animation
+  // Close handler
   const handleClose = useCallback(async () => {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // Haptics not available
-    }
+    } catch {}
 
     if (reduceMotion) {
       onClose();
@@ -936,50 +875,33 @@ export const ProfileViewModal: React.FC<ProfileViewModalProps> = ({
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: height,
-        duration: 280,
+        duration: 250,
         useNativeDriver: true,
         easing: Easing.in(Easing.cubic),
       }),
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 220,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start(() => onClose());
   }, [height, onClose, reduceMotion]);
 
-  // Send message handler
+  // Message handler
   const handleSendMessage = useCallback(async () => {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Haptics not available
-    }
-    onSendMessage();
-  }, [onSendMessage]);
-
-  // Wave handler (for now, same as message)
-  const handleWave = useCallback(async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Haptics not available
-    }
-    // In real app, this would send a "wave" notification
+    } catch {}
     onSendMessage();
   }, [onSendMessage]);
 
   // Conversation starter handler
-  const handleConversationStarter = useCallback(() => {
+  const handleAskAbout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onSendMessage();
   }, [onSendMessage]);
 
-  // Don't render if not visible or no match
   if (!visible || !match) return null;
-
-  const isFullScreen = !isTablet && !isLandscape;
-  const isHorizontalLayout = modalConfig.layout === 'horizontal';
 
   return (
     <Modal
@@ -990,9 +912,9 @@ export const ProfileViewModal: React.FC<ProfileViewModalProps> = ({
       accessibilityViewIsModal
       statusBarTranslucent={Platform.OS === 'android'}
     >
-      <View style={[styles.overlay, { justifyContent: isFullScreen ? 'flex-end' : 'center' }]}>
+      <View style={[styles.overlay, { justifyContent: modalConfig.isFullScreen ? 'flex-end' : 'center' }]}>
         {/* Backdrop */}
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)', opacity: fadeAnim }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)', opacity: fadeAnim }]}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={handleClose}
@@ -1007,344 +929,137 @@ export const ProfileViewModal: React.FC<ProfileViewModalProps> = ({
             styles.modalContainer,
             {
               width: modalConfig.width,
-              height: isFullScreen ? modalConfig.maxHeight : modalConfig.maxHeight,
               maxHeight: modalConfig.maxHeight,
-              minHeight: isFullScreen ? modalConfig.maxHeight : modalConfig.maxHeight * 0.8,
               transform: [{ translateY: slideAnim }],
               borderTopLeftRadius: modalConfig.borderRadius,
               borderTopRightRadius: modalConfig.borderRadius,
-              borderBottomLeftRadius: isFullScreen ? 0 : modalConfig.borderRadius,
-              borderBottomRightRadius: isFullScreen ? 0 : modalConfig.borderRadius,
-              flexDirection: isHorizontalLayout ? 'row' : 'column',
+              borderBottomLeftRadius: modalConfig.isFullScreen ? 0 : modalConfig.borderRadius,
+              borderBottomRightRadius: modalConfig.isFullScreen ? 0 : modalConfig.borderRadius,
             },
           ]}
         >
-          {isHorizontalLayout ? (
-            // HORIZONTAL LAYOUT (Tablet/Phone Landscape)
-            <>
-              {/* Left Side: Photo Gallery */}
-              <View style={[styles.horizontalPhotoContainer, { width: modalConfig.photoWidth }]}>
-                <PhotoGallery
-                  photos={photos}
-                  currentIndex={currentPhotoIndex}
-                  onIndexChange={setCurrentPhotoIndex}
-                  name={match.name}
-                  age={match.age}
-                  isVerified={match.isVerified}
-                  isOnline={isOnline}
-                  location={match.location}
-                  distance={match.distance}
-                  height={modalConfig.photoHeight}
-                  borderRadius={modalConfig.borderRadius}
-                  reduceMotion={reduceMotion}
-                  onClose={handleClose}
-                  insets={insets}
-                  isTablet={isTablet}
-                />
-              </View>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: buttonHeight + 100 },
+            ]}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+          >
+            {/* Photo Gallery - CLEAN, NO OVERLAYS */}
+            <PremiumPhotoGallery
+              photos={photos}
+              currentIndex={currentPhotoIndex}
+              onIndexChange={setCurrentPhotoIndex}
+              isOnline={isOnline}
+              height={modalConfig.photoHeight}
+              borderRadius={modalConfig.borderRadius}
+              reduceMotion={reduceMotion}
+              onClose={handleClose}
+              insets={insets}
+              isTablet={isTablet}
+              isFullScreen={modalConfig.isFullScreen}
+            />
 
-              {/* Right Side: Content & Actions */}
-              <View style={styles.horizontalContentContainer}>
-                {/* Close Button for Horizontal Layout */}
-                <TouchableOpacity
-                  style={[styles.horizontalCloseButton, { top: insets.top + 12 }]}
-                  onPress={handleClose}
-                  activeOpacity={0.8}
-                  accessible
-                  accessibilityLabel="Close profile"
-                >
-                  <Feather name="x" size={24} color={colors.gray[600]} />
-                </TouchableOpacity>
-
-                <ScrollView
-                  style={styles.horizontalScrollView}
-                  contentContainerStyle={styles.horizontalScrollContent}
-                  showsVerticalScrollIndicator={true}
-                  bounces={true}
-                >
-                  {/* Name & Info Header */}
-                  <View style={styles.horizontalHeader}>
-                    <View style={styles.horizontalNameRow}>
-                      <Text style={styles.horizontalNameText}>{match.name}, {match.age}</Text>
-                      {match.isVerified && (
-                        <Ionicons name="checkmark-circle" size={24} color={colors.teal[500]} />
-                      )}
-                    </View>
-                    <View style={styles.horizontalLocationRow}>
-                      <Feather name="map-pin" size={16} color={colors.gray[500]} />
-                      <Text style={styles.horizontalLocationText}>{match.location}</Text>
-                    </View>
-                  </View>
-
-                  {/* Quick Stats */}
-                  <Animated.View style={[styles.horizontalSection, { opacity: contentStaggerAnim[0] }]}>
-                    <QuickStatsBar
-                      compatibilityScore={87}
-                      distance={match.distance}
-                      matchedTime={match.matchedTime}
-                      isTablet={isTablet}
-                    />
-                  </Animated.View>
-
-                  {/* About Section */}
-                  {match.bio && (
-                    <Animated.View style={[styles.horizontalSection, { opacity: contentStaggerAnim[1] }]}>
-                      <ProfileSection
-                        icon="sparkles"
-                        title={`About ${match.name}`}
-                        conversationStarter="Ask about this"
-                        onConversationPress={handleConversationStarter}
-                        accentColor={colors.orange[500]}
-                      >
-                        <Text style={styles.bioText}>"{match.bio}"</Text>
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                  {/* Basics Info */}
-                  <Animated.View style={[styles.horizontalSection, { opacity: contentStaggerAnim[2] }]}>
-                    <ProfileSection
-                      icon="list"
-                      iconFamily="feather"
-                      title="Basics"
-                      accentColor={colors.teal[500]}
-                    >
-                      <View style={styles.basicsGrid}>
-                        <View style={styles.basicItem}>
-                          <Ionicons name="calendar-outline" size={20} color={colors.gray[500]} />
-                          <Text style={styles.basicText}>{match.age} years old</Text>
-                        </View>
-                        <View style={styles.basicItem}>
-                          <Feather name="map-pin" size={20} color={colors.gray[500]} />
-                          <Text style={styles.basicText}>{match.location}</Text>
-                        </View>
-                        {match.occupation && (
-                          <View style={styles.basicItem}>
-                            <Feather name="briefcase" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.occupation}</Text>
-                          </View>
-                        )}
-                        {match.education && (
-                          <View style={styles.basicItem}>
-                            <Ionicons name="school-outline" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.education}</Text>
-                          </View>
-                        )}
-                        {match.height && (
-                          <View style={styles.basicItem}>
-                            <Ionicons name="resize-outline" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.height}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </ProfileSection>
-                  </Animated.View>
-
-                  {/* Interests */}
-                  {match.interests && match.interests.length > 0 && (
-                    <Animated.View style={[styles.horizontalSection, { opacity: contentStaggerAnim[3] }]}>
-                      <ProfileSection
-                        icon="heart"
-                        title="Interests"
-                        accentColor={colors.romantic.pink}
-                      >
-                        <InterestTags
-                          interests={match.interests}
-                          sharedCount={Math.min(3, match.interests.length)}
-                        />
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                  {/* Looking For */}
-                  {match.lookingFor && (
-                    <Animated.View style={[styles.horizontalSection, { opacity: contentStaggerAnim[4] }]}>
-                      <ProfileSection
-                        icon="heart-circle"
-                        title="Looking For"
-                        accentColor={colors.orange[500]}
-                      >
-                        <Text style={styles.lookingForText}>"{match.lookingFor}"</Text>
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                  {/* Bottom spacing for action buttons */}
-                  <View style={{ height: buttonHeight + 40 }} />
-                </ScrollView>
-
-                {/* Action Buttons at Bottom of Right Panel */}
-                <View style={[styles.horizontalActionBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-                  <TouchableOpacity
-                    style={[styles.horizontalWaveButton, { height: buttonHeight }]}
-                    onPress={handleWave}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.waveEmoji}>👋</Text>
-                    <Text style={styles.horizontalWaveText}>Wave</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.horizontalMessageButton, { height: buttonHeight }]}
-                    onPress={handleSendMessage}
-                    activeOpacity={0.85}
-                  >
-                    <LinearGradient
-                      colors={colors.gradient.primaryButton}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[StyleSheet.absoluteFill, { borderRadius: buttonHeight / 2 }]}
-                    />
-                    <Feather name="message-circle" size={20} color={colors.white} />
-                    <Text style={styles.horizontalMessageText}>Message</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </>
-          ) : (
-            // VERTICAL LAYOUT (Phones Portrait & Tablet Portrait)
-            <>
-              <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={[
-                  styles.scrollContent,
-                  {
-                    minHeight: modalConfig.maxHeight - buttonHeight - 20,
-                    paddingBottom: buttonHeight + 80,
-                  }
-                ]}
-                showsVerticalScrollIndicator={true}
-                bounces={true}
-                nestedScrollEnabled={true}
-              >
-                {/* Section 1: Hero Photo Gallery */}
-                <PhotoGallery
-                  photos={photos}
-                  currentIndex={currentPhotoIndex}
-                  onIndexChange={setCurrentPhotoIndex}
-                  name={match.name}
-                  age={match.age}
-                  isVerified={match.isVerified}
-                  isOnline={isOnline}
-                  location={match.location}
-                  distance={match.distance}
-                  height={modalConfig.photoHeight}
-                  borderRadius={modalConfig.borderRadius}
-                  reduceMotion={reduceMotion}
-                  onClose={handleClose}
-                  insets={insets}
-                  isTablet={isTablet}
-                />
-
-                {/* Content Area */}
-                <View style={[styles.contentArea, { paddingHorizontal: screenMargin }]}>
-                  {/* Section 2: Quick Stats Bar */}
-                  <Animated.View style={[styles.staggeredSection, { opacity: contentStaggerAnim[0], transform: [{ translateY: contentStaggerAnim[0].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                    <QuickStatsBar
-                      compatibilityScore={87}
-                      distance={match.distance}
-                      matchedTime={match.matchedTime}
-                      isTablet={isTablet}
-                    />
-                  </Animated.View>
-
-                  {/* Section 3: About Section */}
-                  {match.bio && (
-                    <Animated.View style={[styles.staggeredSection, { opacity: contentStaggerAnim[1], transform: [{ translateY: contentStaggerAnim[1].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                      <ProfileSection
-                        icon="sparkles"
-                        title={`About ${match.name}`}
-                        conversationStarter="Ask about this"
-                        onConversationPress={handleConversationStarter}
-                        accentColor={colors.orange[500]}
-                      >
-                        <Text style={styles.bioText}>"{match.bio}"</Text>
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                  {/* Section 4: Basics Info */}
-                  <Animated.View style={[styles.staggeredSection, { opacity: contentStaggerAnim[2], transform: [{ translateY: contentStaggerAnim[2].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                    <ProfileSection
-                      icon="list"
-                      iconFamily="feather"
-                      title="Basics"
-                      accentColor={colors.teal[500]}
-                    >
-                      <View style={styles.basicsGrid}>
-                        <View style={styles.basicItem}>
-                          <Ionicons name="calendar-outline" size={20} color={colors.gray[500]} />
-                          <Text style={styles.basicText}>{match.age} years old</Text>
-                        </View>
-                        <View style={styles.basicItem}>
-                          <Feather name="map-pin" size={20} color={colors.gray[500]} />
-                          <Text style={styles.basicText}>{match.location}</Text>
-                        </View>
-                        {match.occupation && (
-                          <View style={styles.basicItem}>
-                            <Feather name="briefcase" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.occupation}</Text>
-                          </View>
-                        )}
-                        {match.education && (
-                          <View style={styles.basicItem}>
-                            <Ionicons name="school-outline" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.education}</Text>
-                          </View>
-                        )}
-                        {match.height && (
-                          <View style={styles.basicItem}>
-                            <Ionicons name="resize-outline" size={20} color={colors.gray[500]} />
-                            <Text style={styles.basicText}>{match.height}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </ProfileSection>
-                  </Animated.View>
-
-                  {/* Section 5: Interests */}
-                  {match.interests && match.interests.length > 0 && (
-                    <Animated.View style={[styles.staggeredSection, { opacity: contentStaggerAnim[3], transform: [{ translateY: contentStaggerAnim[3].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                      <ProfileSection
-                        icon="heart"
-                        title="Interests"
-                        accentColor={colors.romantic.pink}
-                      >
-                        <InterestTags
-                          interests={match.interests}
-                          sharedCount={Math.min(3, match.interests.length)}
-                        />
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                  {/* Section 6: Looking For */}
-                  {match.lookingFor && (
-                    <Animated.View style={[styles.staggeredSection, { opacity: contentStaggerAnim[4], transform: [{ translateY: contentStaggerAnim[4].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                      <ProfileSection
-                        icon="heart-circle"
-                        title="Looking For"
-                        accentColor={colors.orange[500]}
-                      >
-                        <Text style={styles.lookingForText}>"{match.lookingFor}"</Text>
-                      </ProfileSection>
-                    </Animated.View>
-                  )}
-
-                </View>
-              </ScrollView>
-
-              {/* Section 7: Sticky Action Bar */}
-              <StickyActionBar
-                onWave={handleWave}
-                onMessage={handleSendMessage}
+            {/* Content Area - All info BELOW photo */}
+            <Animated.View style={[styles.contentArea, { opacity: contentFadeAnim, paddingHorizontal: screenMargin }]}>
+              {/* Info Header: Name, Age, Verified, Location */}
+              <ProfileInfoHeader
                 name={match.name}
-                bottomInset={isFullScreen ? insets.bottom : 0}
-                buttonHeight={buttonHeight}
-                reduceMotion={reduceMotion}
+                age={match.age}
+                isVerified={match.isVerified}
+                isOnline={isOnline}
+                location={match.location}
+                distance={match.distance}
+                matchedTime={match.matchedTime}
               />
-            </>
-          )}
+
+              {/* Stats Bar */}
+              <PremiumStatsBar
+                compatibilityScore={87}
+                matchedTime={match.matchedTime}
+              />
+
+              {/* About Section */}
+              {match.bio && (
+                <GlassProfileSection
+                  icon="sparkles"
+                  title={`About ${match.name}`}
+                  accentColor={colors.orange[500]}
+                  onAskPress={handleAskAbout}
+                >
+                  <Text style={styles.bioText}>"{match.bio}"</Text>
+                </GlassProfileSection>
+              )}
+
+              {/* Basics Section */}
+              <GlassProfileSection
+                icon="list"
+                iconFamily="feather"
+                title="Basics"
+                accentColor={colors.teal[500]}
+              >
+                <View style={styles.basicsGrid}>
+                  {match.age > 0 && (
+                    <View style={styles.basicItem}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.gray[500]} />
+                      <Text style={styles.basicText}>{match.age} years old</Text>
+                    </View>
+                  )}
+                  <View style={styles.basicItem}>
+                    <Feather name="map-pin" size={20} color={colors.gray[500]} />
+                    <Text style={styles.basicText}>{match.location}</Text>
+                  </View>
+                  {match.occupation && (
+                    <View style={styles.basicItem}>
+                      <Feather name="briefcase" size={20} color={colors.gray[500]} />
+                      <Text style={styles.basicText}>{match.occupation}</Text>
+                    </View>
+                  )}
+                  {match.education && (
+                    <View style={styles.basicItem}>
+                      <Ionicons name="school-outline" size={20} color={colors.gray[500]} />
+                      <Text style={styles.basicText}>{match.education}</Text>
+                    </View>
+                  )}
+                </View>
+              </GlassProfileSection>
+
+              {/* Interests Section */}
+              {match.interests && match.interests.length > 0 && (
+                <GlassProfileSection
+                  icon="heart"
+                  title="Interests"
+                  accentColor={colors.romantic.pink}
+                >
+                  <PremiumInterestTags
+                    interests={match.interests}
+                    sharedCount={Math.min(3, match.interests.length)}
+                  />
+                </GlassProfileSection>
+              )}
+
+              {/* Looking For Section */}
+              {match.lookingFor && (
+                <GlassProfileSection
+                  icon="heart-circle"
+                  title="Looking For"
+                  accentColor={colors.orange[500]}
+                >
+                  <Text style={styles.lookingForText}>"{match.lookingFor}"</Text>
+                </GlassProfileSection>
+              )}
+            </Animated.View>
+          </ScrollView>
+
+          {/* Floating Message Button - Single CTA */}
+          <FloatingMessageButton
+            onPress={handleSendMessage}
+            name={match.name}
+            bottomInset={modalConfig.isFullScreen ? insets.bottom : 0}
+            reduceMotion={reduceMotion}
+          />
         </Animated.View>
       </View>
     </Modal>
@@ -1365,6 +1080,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: colors.white,
     overflow: 'hidden',
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -1372,8 +1088,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    minHeight: '100%',
-    paddingBottom: 20,
   },
 
   // Photo Gallery
@@ -1401,78 +1115,115 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  placeholderText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.gray[600],
-    textAlign: 'center',
   },
 
   // Progress Bars
   progressBarContainer: {
     position: 'absolute',
-    left: 20,
-    right: 20,
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
     zIndex: 20,
   },
   progressBarTouchable: {
     flex: 1,
-    height: 44,
+    height: 40,
     justifyContent: 'center',
   },
   progressBarBackground: {
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderRadius: 1.5,
+    height: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 1.5,
+    borderRadius: 2,
   },
 
-  // Navigation Zones
+  // Close Button
+  closeButtonWrapper: {
+    position: 'absolute',
+    zIndex: 25,
+  },
+  closeButtonBlur: {
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+
+  // Navigation
   navZoneLeft: {
     position: 'absolute',
     left: 0,
-    top: 80,
-    bottom: 100,
-    width: '35%',
+    top: 70,
+    bottom: 20,
+    width: '30%',
     justifyContent: 'center',
     alignItems: 'flex-start',
-    paddingLeft: 16,
+    paddingLeft: 12,
     zIndex: 10,
   },
   navZoneRight: {
     position: 'absolute',
     right: 0,
-    top: 80,
-    bottom: 100,
-    width: '35%',
+    top: 70,
+    bottom: 20,
+    width: '30%',
     justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingRight: 16,
+    paddingRight: 12,
     zIndex: 10,
   },
-  navHint: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+  navArrow: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // Photo Count Badge
-  photoCountBadge: {
+  // Online Indicator (on photo)
+  onlineIndicator: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 16,
     right: 16,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 15,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  onlineIndicatorInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.teal[500],
+  },
+
+  // Photo Counter
+  photoCounter: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1482,170 +1233,25 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     zIndex: 15,
   },
-  photoCountText: {
+  photoCounterText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.white,
-  },
-
-  // Close Button
-  closeButton: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 25,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-
-  // Online Badge
-  onlineBadge: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.teal[500],
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    zIndex: 25,
-  },
-  onlineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.white,
-  },
-  onlineText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
-  },
-
-  // Bottom Gradient & Name Overlay
-  bottomGradient: {
-    ...StyleSheet.absoluteFillObject,
-    pointerEvents: 'none',
-  },
-  nameOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    zIndex: 15,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  nameText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.white,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  verifiedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  locationText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
   },
 
   // Content Area
   contentArea: {
-    paddingTop: 16,
+    paddingTop: 20,
     backgroundColor: colors.gray[50],
     minHeight: 300,
   },
-  staggeredSection: {
-    marginTop: 16,
-  },
 
-  // Quick Stats Bar
-  statsBarContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  statPill: {
-    flex: 1,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    minHeight: 70,
-  },
-  statPillTeal: {
-    backgroundColor: colors.teal[50],
-  },
-  statPillOrange: {
-    backgroundColor: colors.orange[50],
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.gray[500],
-    marginTop: 2,
-  },
-
-  // Profile Sections
-  sectionCard: {
+  // Info Header
+  infoHeader: {
     backgroundColor: colors.white,
     borderRadius: 20,
     padding: 20,
+    marginBottom: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1653,48 +1259,149 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.06,
         shadowRadius: 12,
       },
-      android: {
-        elevation: 2,
-      },
+      android: { elevation: 2 },
     }),
   },
-  sectionHeader: {
+  infoNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  sectionTitle: {
+  infoName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.gray[900],
+  },
+  verifiedBadge: {
+    marginLeft: 2,
+  },
+  onlineBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.teal[50],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  onlineDotSmall: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.teal[500],
+  },
+  onlineTextSmall: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.teal[700],
+  },
+  infoLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+  },
+  infoLocation: {
+    fontSize: 16,
+    color: colors.gray[600],
+  },
+  infoMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  infoMatchTime: {
+    fontSize: 14,
+    color: colors.orange[600],
+    fontWeight: '500',
+  },
+
+  // Stats Bar
+  statsBar: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    minHeight: 80,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginTop: 2,
+  },
+
+  // Glass Section
+  glassSection: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  glassSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  glassSectionIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  glassSectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.gray[900],
   },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: colors.gray[100],
-    marginVertical: 16,
-  },
-  sectionContent: {},
+  glassSectionContent: {},
 
-  // Conversation Starter Button
-  conversationButton: {
+  // Ask Button
+  askButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     backgroundColor: colors.teal[50],
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 14,
     marginTop: 16,
-    minHeight: 48,
+    minHeight: 52,
   },
-  conversationButtonText: {
+  askButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.teal[700],
   },
 
-  // Bio & Looking For Text
+  // Bio & Looking For
   bioText: {
     fontSize: 18,
     lineHeight: 28,
@@ -1715,7 +1422,7 @@ const styles = StyleSheet.create({
   basicItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   basicText: {
     fontSize: 17,
@@ -1752,190 +1459,54 @@ const styles = StyleSheet.create({
   interestTagTextShared: {
     color: colors.teal[700],
   },
-  sharedHighlight: {
+  sharedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: colors.teal[50],
-    borderRadius: 12,
+    borderRadius: 14,
   },
-  sharedHighlightText: {
+  sharedBannerText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.teal[700],
   },
 
-  // Action Bar
-  actionBarContainer: {
+  // Floating Button
+  floatingButtonContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingTop: 20,
     paddingHorizontal: 24,
+    paddingTop: 24,
   },
-  actionBarGradient: {
+  floatingButtonGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-
-  // Wave Button
-  waveButton: {
-    flex: 0.4,
+  floatingButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.orange[300],
-    minHeight: 56,
-  },
-  waveEmoji: {
-    fontSize: 22,
-  },
-  waveButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.orange[600],
-  },
-
-  // Message Button
-  messageButtonContainer: {
-    flex: 0.6,
-  },
-  messageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+    gap: 12,
+    height: 60,
+    borderRadius: 30,
     overflow: 'hidden',
-    minHeight: 56,
-  },
-  messageButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.white,
-  },
-
-  // ============================================================================
-  // HORIZONTAL LAYOUT STYLES (Tablet/Phone Landscape)
-  // ============================================================================
-
-  horizontalPhotoContainer: {
-    height: '100%',
-    overflow: 'hidden',
-    borderTopLeftRadius: 32,
-    borderBottomLeftRadius: 32,
-  },
-  horizontalContentContainer: {
-    flex: 1,
-    backgroundColor: colors.gray[50],
-    borderTopRightRadius: 32,
-    borderBottomRightRadius: 32,
-    position: 'relative',
-  },
-  horizontalCloseButton: {
-    position: 'absolute',
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowColor: colors.orange[600],
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
       },
-      android: {
-        elevation: 4,
-      },
+      android: { elevation: 8 },
     }),
   },
-  horizontalScrollView: {
-    flex: 1,
-  },
-  horizontalScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-  },
-  horizontalHeader: {
-    marginBottom: 16,
-    paddingRight: 60, // Space for close button
-  },
-  horizontalNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  horizontalNameText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.gray[900],
-  },
-  horizontalLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  horizontalLocationText: {
-    fontSize: 16,
-    color: colors.gray[600],
-  },
-  horizontalSection: {
-    marginBottom: 16,
-  },
-  horizontalActionBar: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[100],
-  },
-  horizontalWaveButton: {
-    flex: 0.35,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.orange[300],
-    borderRadius: 28,
-    minHeight: 56,
-  },
-  horizontalWaveText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.orange[600],
-  },
-  horizontalMessageButton: {
-    flex: 0.65,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderRadius: 28,
-    overflow: 'hidden',
-    minHeight: 56,
-  },
-  horizontalMessageText: {
-    fontSize: 16,
+  floatingButtonText: {
+    fontSize: 18,
     fontWeight: '700',
     color: colors.white,
   },

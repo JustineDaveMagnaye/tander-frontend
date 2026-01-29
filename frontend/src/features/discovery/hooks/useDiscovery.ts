@@ -170,7 +170,7 @@ export const useDiscovery = (): UseDiscoveryReturn => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load profiles';
       setError(message);
-      console.error('[useDiscovery] Load profiles error:', err);
+      console.warn('[useDiscovery] Load profiles error:', err);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -278,7 +278,7 @@ export const useDiscovery = (): UseDiscoveryReturn => {
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Swipe failed';
-      console.error('[useDiscovery] Swipe error:', err);
+      console.warn('[useDiscovery] Swipe error:', err);
 
       // Handle specific errors
       if (typeof err === 'object' && err !== null && 'statusCode' in err) {

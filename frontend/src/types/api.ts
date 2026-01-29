@@ -171,6 +171,7 @@ export interface CompleteProfileRequest {
   firstName: string;
   lastName?: string;
   dateOfBirth: string; // YYYY-MM-DD format
+  age?: number; // Calculated from dateOfBirth
   gender: Gender;
   interestedIn: InterestedIn;
   bio?: string;

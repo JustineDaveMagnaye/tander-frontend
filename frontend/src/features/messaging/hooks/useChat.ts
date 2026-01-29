@@ -44,6 +44,7 @@ export interface SendCallMessageParams {
 interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
+  isLoadingMore: boolean; // ✅ Lazy loading: expose loading state for pagination indicator
   isConnected: boolean;
   isOtherUserTyping: boolean;
   isOtherUserOnline: boolean;
@@ -63,6 +64,7 @@ export function useChat({
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false); // ✅ Lazy loading: separate state for pagination
   const [isConnected, setIsConnected] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
@@ -219,10 +221,21 @@ export function useChat({
 
     // Subscribe to read receipts callback
     const unsubReadReceipt = stompService.onReadReceipt?.((receipt) => {
-      if (receipt.roomId !== roomId) return;
+      console.log('[useChat] Read receipt received:', receipt, 'current roomId:', roomId);
+
+      // ✅ FIX: Match by roomId OR conversationId (backend may send either)
+      const matchesRoom = receipt.roomId === roomId ||
+                          receipt.roomId === conversationId ||
+                          String(receipt.conversationId) === conversationId;
+
+      if (!matchesRoom) {
+        console.log('[useChat] Read receipt roomId mismatch, ignoring');
+        return;
+      }
+
       // Only update if someone else read our messages
       if (receipt.readBy !== currentUserId) {
-        console.log('[useChat] Read receipt received, marking messages as read');
+        console.log('[useChat] Marking messages as read from read receipt');
         // Mark all our sent messages as 'read'
         setMessages((prev) =>
           prev.map((msg) =>
@@ -255,6 +268,50 @@ export function useChat({
       unsubReadReceipt?.();
       unsubDeliveryReceipt?.();
     };
+  }, [user?.id, conversationId]);
+
+  // Heartbeat polling for real-time message sync (backup for WebSocket)
+  useEffect(() => {
+    const HEARTBEAT_INTERVAL = 2000; // 2 seconds - ✅ Faster for better real-time feel
+    const PAGE_SIZE = 20; // ✅ Consistent with lazy loading page size
+
+    const heartbeat = setInterval(async () => {
+      const convId = resolvedConvIdRef.current;
+      if (!convId) return;
+
+      try {
+        const apiMessages = await getMessages(convId, { page: 0, size: PAGE_SIZE });
+        const convertedMessages = apiMessages
+          .map((dto: ChatMessageDTO) => {
+            const currentUserId = user?.id ? (typeof user.id === 'string' ? parseInt(user.id, 10) : user.id) : null;
+            const isOwn = dto.senderId === currentUserId;
+            return {
+              id: dto.id.toString(),
+              text: dto.content,
+              sender: isOwn ? 'me' : 'them',
+              time: new Date(dto.sentAt).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              }),
+              status: dto.status.toLowerCase() as Message['status'],
+              timestamp: new Date(dto.sentAt).getTime(),
+            } as Message;
+          })
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMessages = convertedMessages.filter(m => !existingIds.has(m.id) && !m.id.startsWith('temp-'));
+          if (newMessages.length === 0) return prev;
+          return [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
+        });
+      } catch {
+        // Silent fail - WebSocket is primary, this is backup
+      }
+    }, HEARTBEAT_INTERVAL);
+
+    return () => clearInterval(heartbeat);
   }, [user?.id]);
 
   /**
@@ -306,7 +363,7 @@ export function useChat({
           resolvedConvIdRef.current = convId; // Store for pagination
           console.log('[useChat] Got conversation ID from API:', convId);
         } catch (lookupError) {
-          console.error('[useChat] Failed to lookup conversation:', lookupError);
+          console.warn('[useChat] Failed to lookup conversation:', lookupError);
           setIsLoading(false);
           return;
         }
@@ -320,7 +377,9 @@ export function useChat({
         resolvedConvIdRef.current = convId; // Store for pagination
       }
 
-      const apiMessages = await getMessages(convId, { page: 0, size: 50 });
+      // ✅ Lazy loading: Start with only 20 messages for fast initial render
+      const PAGE_SIZE = 20;
+      const apiMessages = await getMessages(convId, { page: 0, size: PAGE_SIZE });
 
       // Convert and sort by timestamp (API returns newest first for pagination)
       const convertedMessages = apiMessages
@@ -329,9 +388,9 @@ export function useChat({
 
       setMessages(convertedMessages);
       pageRef.current = 0;
-      setHasMoreMessages(apiMessages.length >= 50);
+      setHasMoreMessages(apiMessages.length >= PAGE_SIZE);
     } catch (error) {
-      console.error('[useChat] Error loading messages:', error);
+      console.warn('[useChat] Error loading messages:', error);
       // Don't clear messages on error - keep any existing
     } finally {
       setIsLoading(false);
@@ -339,10 +398,11 @@ export function useChat({
   };
 
   /**
-   * Load more messages (pagination)
+   * Load more messages (pagination) - ✅ Lazy loading with proper loading state
    */
-  const loadMoreMessages = async (): Promise<void> => {
-    if (!hasMoreMessages || isLoading || !conversationId) return;
+  const loadMoreMessages = useCallback(async (): Promise<void> => {
+    // Prevent concurrent loads and unnecessary API calls
+    if (!hasMoreMessages || isLoading || isLoadingMore || !conversationId) return;
 
     // Use resolved conversation ID if available (handles dm_X_Y format)
     const convId = resolvedConvIdRef.current;
@@ -351,9 +411,12 @@ export function useChat({
       return;
     }
 
+    const PAGE_SIZE = 20; // ✅ Same page size as initial load
+    setIsLoadingMore(true);
+
     try {
       const nextPage = pageRef.current + 1;
-      const apiMessages = await getMessages(convId, { page: nextPage, size: 50 });
+      const apiMessages = await getMessages(convId, { page: nextPage, size: PAGE_SIZE });
 
       if (apiMessages.length === 0) {
         setHasMoreMessages(false);
@@ -371,12 +434,14 @@ export function useChat({
         });
 
         pageRef.current = nextPage;
-        setHasMoreMessages(apiMessages.length >= 50);
+        setHasMoreMessages(apiMessages.length >= PAGE_SIZE);
       }
     } catch (error) {
-      console.error('[useChat] Error loading more messages:', error);
+      console.warn('[useChat] Error loading more messages:', error);
+    } finally {
+      setIsLoadingMore(false);
     }
-  };
+  }, [hasMoreMessages, isLoading, isLoadingMore, conversationId, convertDTOToMessage]);
 
   /**
    * Send a message - uses STOMP if connected, REST API as fallback
@@ -456,7 +521,7 @@ export function useChat({
           // This stops the 24-hour expiration timer
           queryClient.invalidateQueries({ queryKey: ['matches'] });
         } catch (error) {
-          console.error('[useChat] Failed to send message via REST API:', error);
+          console.warn('[useChat] Failed to send message via REST API:', error);
           // Mark message as failed so user can see and retry
           setMessages((prev) =>
             prev.map((m) =>
@@ -536,7 +601,7 @@ export function useChat({
           receiverId: otherUserId,
           content: persistentMessage,
         }).catch((error) => {
-          console.error('[useChat] Failed to persist call message:', error);
+          console.warn('[useChat] Failed to persist call message:', error);
         });
       }
     },
@@ -556,25 +621,36 @@ export function useChat({
 
   /**
    * Mark messages as read - uses STOMP if connected, REST API as fallback
+   * ✅ FIX: Include roomId for proper read receipt broadcasting
+   * ✅ FIX: Use resolved numeric conversation ID for backend (avoids dm_X_Y format error)
    */
   const markAsRead = useCallback(async () => {
     if (!conversationId) return;
 
-    // Skip REST API for room ID formats but still do STOMP if connected
+    // Use resolved conversation ID if available (handles dm_X_Y format)
+    // Backend expects a numeric Long, not a string like "dm_6_9"
+    const resolvedId = resolvedConvIdRef.current;
     const isRoomIdFormat = conversationId.startsWith('dm_') || conversationId.startsWith('call_');
 
-    const convId = isRoomIdFormat ? NaN : parseInt(conversationId, 10);
-    if (isNaN(convId) && !isRoomIdFormat) return;
+    // Get numeric ID: prefer resolved ID, then try parsing conversationId
+    const convId = resolvedId ?? (isRoomIdFormat ? NaN : parseInt(conversationId, 10));
+    if (isNaN(convId)) {
+      // No valid numeric ID yet - skip marking as read
+      // This will resolve once loadInitialMessages completes
+      console.log('[useChat] Skipping markAsRead: no resolved conversation ID yet');
+      return;
+    }
 
-    // Try STOMP first if connected
+    // Try STOMP first if connected - send numeric ID, not dm_ format
     if (stompService.isConnectedToServer()) {
-      stompService.markMessagesAsRead(conversationId);
-    } else if (!isNaN(convId)) {
-      // Fallback to REST API (only if we have a valid numeric ID)
+      // ✅ FIX: Send numeric conversationId (backend expects Long), plus roomId for broadcast
+      stompService.markMessagesAsRead(String(convId), roomIdRef.current);
+    } else {
+      // Fallback to REST API
       try {
         await markConversationAsRead(convId);
       } catch (error) {
-        console.error('[useChat] Failed to mark as read via REST API:', error);
+        console.warn('[useChat] Failed to mark as read via REST API:', error);
       }
     }
   }, [conversationId]);
@@ -582,6 +658,7 @@ export function useChat({
   return {
     messages,
     isLoading,
+    isLoadingMore, // ✅ Lazy loading: expose for pagination indicator
     isConnected,
     isOtherUserTyping,
     isOtherUserOnline,

@@ -35,7 +35,7 @@ export async function getDismissalCount(): Promise<number> {
     const value = await AsyncStorage.getItem(LOCATION_STORAGE_KEYS.DISMISSAL_COUNT);
     return value ? parseInt(value, 10) : 0;
   } catch (error) {
-    console.error('Error getting dismissal count:', error);
+    console.warn('Error getting dismissal count:', error);
     return 0;
   }
 }
@@ -55,7 +55,7 @@ export async function incrementDismissalCount(): Promise<number> {
     await AsyncStorage.removeItem(LOCATION_STORAGE_KEYS.PERMISSION_GRANTED_AT);
     return newCount;
   } catch (error) {
-    console.error('Error incrementing dismissal count:', error);
+    console.warn('Error incrementing dismissal count:', error);
     return 0;
   }
 }
@@ -68,7 +68,7 @@ export async function getLastPromptTime(): Promise<number | null> {
     const value = await AsyncStorage.getItem(LOCATION_STORAGE_KEYS.LAST_PROMPT_TIME);
     return value ? parseInt(value, 10) : null;
   } catch (error) {
-    console.error('Error getting last prompt time:', error);
+    console.warn('Error getting last prompt time:', error);
     return null;
   }
 }
@@ -80,7 +80,7 @@ export async function setLastPromptTime(time: number): Promise<void> {
   try {
     await AsyncStorage.setItem(LOCATION_STORAGE_KEYS.LAST_PROMPT_TIME, time.toString());
   } catch (error) {
-    console.error('Error setting last prompt time:', error);
+    console.warn('Error setting last prompt time:', error);
   }
 }
 
@@ -92,7 +92,7 @@ export async function getDontAskAgain(): Promise<boolean> {
     const value = await AsyncStorage.getItem(LOCATION_STORAGE_KEYS.DONT_ASK_AGAIN);
     return value === 'true';
   } catch (error) {
-    console.error('Error getting dont ask again:', error);
+    console.warn('Error getting dont ask again:', error);
     return false;
   }
 }
@@ -104,7 +104,7 @@ export async function setDontAskAgain(value: boolean): Promise<void> {
   try {
     await AsyncStorage.setItem(LOCATION_STORAGE_KEYS.DONT_ASK_AGAIN, value.toString());
   } catch (error) {
-    console.error('Error setting dont ask again:', error);
+    console.warn('Error setting dont ask again:', error);
   }
 }
 
@@ -118,7 +118,7 @@ export async function setPermissionGrantedAt(time: number): Promise<void> {
     await AsyncStorage.setItem(LOCATION_STORAGE_KEYS.DISMISSAL_COUNT, '0');
     await AsyncStorage.setItem(LOCATION_STORAGE_KEYS.DONT_ASK_AGAIN, 'false');
   } catch (error) {
-    console.error('Error setting permission granted at:', error);
+    console.warn('Error setting permission granted at:', error);
   }
 }
 
@@ -141,7 +141,7 @@ export async function getLocationPermissionState(): Promise<LocationPermissionSt
       permissionGrantedAt: permissionGrantedAt ? parseInt(permissionGrantedAt, 10) : null,
     };
   } catch (error) {
-    console.error('Error getting location permission state:', error);
+    console.warn('Error getting location permission state:', error);
     return {
       dismissalCount: 0,
       lastPromptTime: null,
@@ -225,6 +225,6 @@ export async function resetLocationPermissionStorage(): Promise<void> {
       AsyncStorage.removeItem(LOCATION_STORAGE_KEYS.PERMISSION_GRANTED_AT),
     ]);
   } catch (error) {
-    console.error('Error resetting location permission storage:', error);
+    console.warn('Error resetting location permission storage:', error);
   }
 }

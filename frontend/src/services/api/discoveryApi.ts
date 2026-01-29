@@ -157,7 +157,7 @@ export const getProfileBatch = async (count: number = 10): Promise<Profile[]> =>
     );
     return response.map(mapProfileDTOToProfile);
   } catch (error) {
-    console.error('Get profile batch error:', error);
+    console.warn('Get profile batch error:', error);
     throw error;
   }
 };
@@ -195,7 +195,7 @@ export const getDiscoveryProfiles = async (
       content: response.content.map(mapProfileDTOToProfile),
     };
   } catch (error) {
-    console.error('Get discovery profiles error:', error);
+    console.warn('Get discovery profiles error:', error);
     throw error;
   }
 };
@@ -211,7 +211,7 @@ export const getProfileById = async (userId: number): Promise<Profile | null> =>
     );
     return mapProfileDTOToProfile(response);
   } catch (error) {
-    console.error('Get profile by ID error:', error);
+    console.warn('Get profile by ID error:', error);
     // Return null for 404s
     if (typeof error === 'object' && error !== null && 'statusCode' in error) {
       if ((error as { statusCode: number }).statusCode === 404) {
@@ -242,7 +242,7 @@ export const getProfilesWhoLikedMe = async (
       content: response.content.map(mapProfileDTOToProfile),
     };
   } catch (error) {
-    console.error('Get profiles who liked me error:', error);
+    console.warn('Get profiles who liked me error:', error);
     throw error;
   }
 };
@@ -257,7 +257,7 @@ export const getLikesReceivedCount = async (): Promise<{ count: number; message:
     );
     return response;
   } catch (error) {
-    console.error('Get likes received count error:', error);
+    console.warn('Get likes received count error:', error);
     throw error;
   }
 };
@@ -270,7 +270,7 @@ export const getDiscoveryStats = async (): Promise<DiscoveryStats> => {
     const response = await get<DiscoveryStats>(DISCOVERY_ENDPOINTS.STATS);
     return response;
   } catch (error) {
-    console.error('Get discovery stats error:', error);
+    console.warn('Get discovery stats error:', error);
     throw error;
   }
 };

@@ -158,7 +158,7 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
 
       return permissionStatus;
     } catch (error) {
-      console.error('Error checking location permission:', error);
+      console.warn('Error checking location permission:', error);
       set({
         permissionStatus: 'undetermined',
         isCheckingPermission: false,
@@ -200,7 +200,7 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
         return false;
       }
     } catch (error) {
-      console.error('Error requesting location permission:', error);
+      console.warn('Error requesting location permission:', error);
       set({
         isCheckingPermission: false,
         trackingError: 'Failed to request permission',
@@ -264,7 +264,7 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
       console.log('Location tracking started');
       return true;
     } catch (error) {
-      console.error('Error starting location tracking:', error);
+      console.warn('Error starting location tracking:', error);
       set({
         isTracking: false,
         trackingError: 'Failed to start location tracking',
@@ -323,7 +323,7 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
 
       return coords;
     } catch (error) {
-      console.error('Error getting current location:', error);
+      console.warn('Error getting current location:', error);
       set({ trackingError: 'Failed to get current location' });
       return null;
     }

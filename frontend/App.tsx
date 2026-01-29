@@ -12,6 +12,10 @@ import { StyleSheet } from 'react-native';
 import { useOrientationLock } from './src/shared/hooks/useOrientationLock';
 import { pushNotificationService } from './src/services/notifications/PushNotificationService';
 import { ToastProvider } from './src/shared/components';
+import { setupAuthInterceptor } from './src/services/api/authInterceptor';
+
+// Setup global auth interceptor to handle 401 errors
+setupAuthInterceptor();
 
 // Create a client for TanStack Query
 const queryClient = new QueryClient({

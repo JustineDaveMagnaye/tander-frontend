@@ -229,7 +229,7 @@ const register = async (data: RegisterRequest): Promise<RegisterResponse> => {
 
     return response;
   } catch (error) {
-    console.error('Registration error:', error);
+    console.warn('Registration error:', error);
     throw error;
   }
 };
@@ -253,7 +253,7 @@ const sendOtp = async (username: string): Promise<SendOtpResponse> => {
 
     return response;
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.warn('Send OTP error:', error);
     throw error;
   }
 };
@@ -274,7 +274,7 @@ const verifyOtp = async (username: string, otp: string): Promise<VerifyOtpRespon
 
     return response;
   } catch (error) {
-    console.error('Verify OTP error:', error);
+    console.warn('Verify OTP error:', error);
     throw error;
   }
 };
@@ -308,7 +308,7 @@ const completeProfile = async (
 
     return response;
   } catch (error) {
-    console.error('Complete profile error:', error);
+    console.warn('Complete profile error:', error);
     throw error;
   }
 };
@@ -362,7 +362,7 @@ const verifyId = async (data: VerifyIdRequest): Promise<VerifyIdResponse> => {
     const result = await response.json();
     return result;
   } catch (error) {
-    console.error('ID verification error:', error);
+    console.warn('ID verification error:', error);
     throw error;
   }
 };
@@ -483,7 +483,7 @@ const login = async (data: LoginRequest): Promise<LoginResponse> => {
       registrationPhase,
     };
   } catch (error) {
-    console.error('Login error:', error);
+    console.warn('Login error:', error);
     throw error;
   }
 };
@@ -506,7 +506,7 @@ const logout = async (): Promise<void> => {
     // Clear all stored data
     await clearAllData();
   } catch (error) {
-    console.error('Logout error:', error);
+    console.warn('Logout error:', error);
     // Still clear local data even if server call fails
     await clearAllData();
   }
@@ -536,7 +536,7 @@ const refreshToken = async (refreshToken: string): Promise<{ token: string }> =>
 
     return response;
   } catch (error) {
-    console.error('Refresh token error:', error);
+    console.warn('Refresh token error:', error);
     throw error;
   }
 };
@@ -555,7 +555,7 @@ const validateToken = async (token: string): Promise<{ valid: boolean; user?: Us
 
     return response;
   } catch (error) {
-    console.error('Validate token error:', error);
+    console.warn('Validate token error:', error);
     return { valid: false };
   }
 };
@@ -596,7 +596,7 @@ const registerWithEmail = async (data: RegisterRequest): Promise<EmailVerificati
 
     return result;
   } catch (error) {
-    console.error('Registration with email error:', error);
+    console.warn('Registration with email error:', error);
     throw error;
   }
 };
@@ -629,7 +629,7 @@ const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
 
     return result;
   } catch (error) {
-    console.error('Email verification error:', error);
+    console.warn('Email verification error:', error);
     throw error;
   }
 };
@@ -663,7 +663,7 @@ const resendVerification = async (email: string): Promise<ResendVerificationResp
 
     return result;
   } catch (error) {
-    console.error('Resend verification error:', error);
+    console.warn('Resend verification error:', error);
     throw error;
   }
 };
@@ -742,7 +742,7 @@ const loginWithEmailCheck = async (data: LoginRequest): Promise<LoginResponse> =
 
     return { token, user };
   } catch (error) {
-    console.error('Login with email check error:', error);
+    console.warn('Login with email check error:', error);
     throw error;
   }
 };
@@ -781,7 +781,7 @@ const getIdVerificationStatus = async (): Promise<IdVerificationStatusResponse> 
 
     return result;
   } catch (error) {
-    console.error('Get ID verification status error:', error);
+    console.warn('Get ID verification status error:', error);
     throw error;
   }
 };
@@ -828,7 +828,7 @@ const submitIdVerification = async (
 
     return result;
   } catch (error) {
-    console.error('Submit ID verification error:', error);
+    console.warn('Submit ID verification error:', error);
     throw error;
   }
 };
@@ -875,7 +875,7 @@ const resubmitIdVerification = async (
 
     return result;
   } catch (error) {
-    console.error('Resubmit ID verification error:', error);
+    console.warn('Resubmit ID verification error:', error);
     throw error;
   }
 };

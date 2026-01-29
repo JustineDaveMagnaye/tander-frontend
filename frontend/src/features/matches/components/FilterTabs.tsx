@@ -1,16 +1,18 @@
 /**
- * TANDER FilterTabs - PREMIUM REDESIGN
- * Modern, elegant filter pill system with smooth animations
+ * TANDER FilterTabs - ULTRA PREMIUM REDESIGN v2
+ * Modern, elegant filter pill system with premium animations
  *
- * Design Inspiration: Bumble/Hinge premium filter chips
+ * Design Inspiration: Bumble/Hinge/Tinder premium filter chips
  *
  * Features:
- * - Smooth pill-style animated tabs
- * - Gradient active states with elegant transitions
- * - Badge counts with celebration animations
+ * - Smooth pill-style animated tabs with depth
+ * - Beautiful gradient active states
+ * - Pulsing online indicator animation
+ * - Badge counts with subtle glow effects
  * - Haptic feedback for premium feel
  * - Senior-friendly touch targets (56-64px)
  * - WCAG AA contrast compliance
+ * - Consistent styling across all device sizes
  */
 
 import React, { useRef, useCallback, useEffect } from 'react';
@@ -31,30 +33,38 @@ import { colors } from '@shared/styles/colors';
 import type { FilterType } from '../types';
 import type { MatchesFontSizes, MatchesSpacing } from '../hooks/useMatchesResponsive';
 
-// Filter configuration with icons and colors - Orange/Teal Theme
+// Filter configuration with icons and colors - Premium Orange/Teal Theme
 const FILTER_CONFIG: Record<FilterType, {
   icon: keyof typeof Feather.glyphMap;
   label: string;
   activeColors: readonly [string, string];
-  badgeColor: string;
+  inactiveIconColor: string;
+  badgeActiveColor: string;
+  badgeInactiveColors: readonly [string, string];
 }> = {
   all: {
     icon: 'heart',
     label: 'All',
-    activeColors: colors.gradient.ctaButton as unknown as [string, string], // Orange to Teal
-    badgeColor: colors.white,
+    activeColors: [colors.orange[500], colors.teal[500]] as [string, string], // Orange to Teal - consistent everywhere
+    inactiveIconColor: colors.orange[400],
+    badgeActiveColor: colors.orange[500],
+    badgeInactiveColors: [colors.orange[500], colors.orange[600]] as [string, string],
   },
   new: {
-    icon: 'star',
+    icon: 'zap',
     label: 'New',
-    activeColors: colors.gradient.primaryButton as unknown as [string, string], // Orange gradient
-    badgeColor: colors.white,
+    activeColors: [colors.orange[500], colors.orange[600]] as [string, string], // Orange gradient
+    inactiveIconColor: colors.orange[400],
+    badgeActiveColor: colors.orange[500],
+    badgeInactiveColors: [colors.orange[500], colors.orange[600]] as [string, string],
   },
   online: {
-    icon: 'circle',
+    icon: 'wifi',
     label: 'Online',
     activeColors: [colors.teal[500], colors.teal[600]] as [string, string], // Teal gradient
-    badgeColor: colors.white,
+    inactiveIconColor: colors.teal[500],
+    badgeActiveColor: colors.teal[500],
+    badgeInactiveColors: [colors.teal[500], colors.teal[600]] as [string, string],
   },
 };
 
@@ -70,6 +80,88 @@ interface FilterPillProps {
   isTablet: boolean;
   reduceMotion: boolean;
 }
+
+// Pulsing Online Indicator Component
+const PulsingDot: React.FC<{ isActive: boolean; reduceMotion: boolean; size: number }> = ({
+  isActive,
+  reduceMotion,
+  size,
+}) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pulseAnim, {
+            toValue: 1.4,
+            duration: 1000,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 0,
+            duration: 1000,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 0.6,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+    pulse.start();
+
+    return () => pulse.stop();
+  }, [reduceMotion, pulseAnim, opacityAnim]);
+
+  const dotColor = isActive ? colors.white : colors.teal[500];
+  const pulseColor = isActive ? 'rgba(255,255,255,0.4)' : colors.teal[300];
+
+  return (
+    <View style={[styles.pulsingDotContainer, { width: size, height: size }]}>
+      {/* Pulse ring */}
+      <Animated.View
+        style={[
+          styles.pulseRing,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: pulseColor,
+            transform: [{ scale: pulseAnim }],
+            opacity: opacityAnim,
+          },
+        ]}
+      />
+      {/* Solid dot */}
+      <View
+        style={[
+          styles.solidDot,
+          {
+            width: size * 0.6,
+            height: size * 0.6,
+            borderRadius: size * 0.3,
+            backgroundColor: dotColor,
+          },
+        ]}
+      />
+    </View>
+  );
+};
 
 const FilterPill = React.memo<FilterPillProps>(
   ({
@@ -87,51 +179,61 @@ const FilterPill = React.memo<FilterPillProps>(
     const config = FILTER_CONFIG[filter];
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const bgOpacityAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-    const iconRotateAnim = useRef(new Animated.Value(0)).current;
+    const iconBounceAnim = useRef(new Animated.Value(1)).current;
+    const shadowAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
     // Animate active state changes
     useEffect(() => {
       if (reduceMotion) {
         bgOpacityAnim.setValue(isActive ? 1 : 0);
+        shadowAnim.setValue(isActive ? 1 : 0);
         return;
       }
 
       Animated.parallel([
         Animated.timing(bgOpacityAnim, {
           toValue: isActive ? 1 : 0,
-          duration: 250,
+          duration: 280,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
         }),
-        // Small icon rotation on activation
+        Animated.timing(shadowAnim, {
+          toValue: isActive ? 1 : 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        // Bounce effect on activation
         isActive
           ? Animated.sequence([
-              Animated.timing(iconRotateAnim, {
-                toValue: 1,
-                duration: 150,
+              Animated.spring(iconBounceAnim, {
+                toValue: 1.2,
                 useNativeDriver: true,
+                friction: 3,
+                tension: 400,
               }),
-              Animated.timing(iconRotateAnim, {
-                toValue: 0,
-                duration: 150,
+              Animated.spring(iconBounceAnim, {
+                toValue: 1,
                 useNativeDriver: true,
+                friction: 5,
+                tension: 300,
               }),
             ])
-          : Animated.timing(iconRotateAnim, {
-              toValue: 0,
-              duration: 100,
+          : Animated.timing(iconBounceAnim, {
+              toValue: 1,
+              duration: 150,
               useNativeDriver: true,
             }),
       ]).start();
-    }, [isActive, bgOpacityAnim, iconRotateAnim, reduceMotion]);
+    }, [isActive, bgOpacityAnim, iconBounceAnim, shadowAnim, reduceMotion]);
 
     const handlePressIn = useCallback(() => {
       if (reduceMotion) return;
       Animated.spring(scaleAnim, {
-        toValue: 0.95,
+        toValue: 0.96,
         useNativeDriver: true,
         friction: 8,
-        tension: 300,
+        tension: 400,
       }).start();
     }, [scaleAnim, reduceMotion]);
 
@@ -140,7 +242,7 @@ const FilterPill = React.memo<FilterPillProps>(
       Animated.spring(scaleAnim, {
         toValue: 1,
         useNativeDriver: true,
-        friction: 8,
+        friction: 6,
         tension: 300,
       }).start();
     }, [scaleAnim, reduceMotion]);
@@ -154,26 +256,40 @@ const FilterPill = React.memo<FilterPillProps>(
       onPress();
     }, [onPress]);
 
-    // Ensure senior-friendly minimum touch target (56px)
-    const pillHeight = Math.max(height, 56);
+    // Ensure senior-friendly minimum touch target (56px for tablet, 48px for mobile)
+    const pillHeight = Math.max(height, isTablet ? 56 : 48);
     const borderRadius = pillHeight / 2;
 
-    // Calculate padding based on content
-    const horizontalPadding = isCompact ? 16 : isTablet ? 24 : 20;
+    // Calculate padding based on content - more compact on mobile
+    const horizontalPadding = isCompact ? 12 : isTablet ? 24 : 14;
 
     // Font sizes with minimum for seniors
-    const displayFontSize = Math.max(fontSize, 16);
-    const displayBadgeFontSize = Math.max(badgeFontSize, 14);
+    const displayFontSize = Math.max(fontSize, isTablet ? 16 : 14);
+    const displayBadgeFontSize = Math.max(badgeFontSize, 12);
 
-    // Badge sizing
+    // Badge sizing - more compact and elegant
     const showBadge = count > 0;
-    const badgeSize = Math.max(26, displayBadgeFontSize + 12);
+    const badgeSize = Math.max(isTablet ? 24 : 22, displayBadgeFontSize + 8);
 
-    // Icon rotation interpolation
-    const iconRotate = iconRotateAnim.interpolate({
+    // Icon size - appropriate for device
+    const iconSize = isCompact ? 14 : isTablet ? 18 : 15;
+
+    // Animated shadow for active state
+    const animatedShadowOpacity = shadowAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: ['0deg', '15deg'],
+      outputRange: [0, 0.15],
     });
+
+    const animatedElevation = shadowAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 6],
+    });
+
+    // Check if this is the online filter for special treatment
+    const isOnlineFilter = filter === 'online';
+
+    // Icon container size - compact on mobile
+    const iconContainerSize = iconSize + (isTablet ? 14 : 10);
 
     return (
       <Animated.View
@@ -182,116 +298,182 @@ const FilterPill = React.memo<FilterPillProps>(
           {
             transform: [{ scale: scaleAnim }],
             flex: isCompact ? 0 : 1,
-            minWidth: isCompact ? 90 : 100,
+            minWidth: isCompact ? 85 : isTablet ? 110 : 90,
           },
         ]}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={handlePress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
+        <Animated.View
           style={[
-            styles.pill,
+            styles.pillShadow,
             {
-              height: pillHeight,
-              paddingHorizontal: horizontalPadding,
               borderRadius,
+              shadowOpacity: animatedShadowOpacity,
+              elevation: Platform.OS === 'android' ? animatedElevation : 0,
             },
           ]}
-          accessible
-          accessibilityLabel={`${config.label} filter${count > 0 ? `, ${count} matches` : ''}`}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: isActive }}
-          accessibilityHint={`Double tap to ${isActive ? 'keep' : 'show'} ${config.label.toLowerCase()} matches`}
         >
-          {/* Inactive Background */}
-          <View
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={handlePress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
             style={[
-              StyleSheet.absoluteFill,
-              styles.inactiveBg,
-              { borderRadius },
+              styles.pill,
+              {
+                height: pillHeight,
+                paddingHorizontal: horizontalPadding,
+                borderRadius,
+              },
             ]}
-          />
-
-          {/* Active Gradient Background */}
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              { opacity: bgOpacityAnim, borderRadius },
-            ]}
+            accessible
+            accessibilityLabel={`${config.label} filter${count > 0 ? `, ${count} matches` : ''}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityHint={`Double tap to ${isActive ? 'keep' : 'show'} ${config.label.toLowerCase()} matches`}
           >
-            <LinearGradient
-              colors={config.activeColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[StyleSheet.absoluteFill, { borderRadius }]}
-            />
-          </Animated.View>
-
-          {/* Pill Content */}
-          <View style={styles.pillContent}>
-            {/* Icon */}
-            <Animated.View
+            {/* Inactive Background with subtle gradient */}
+            <View
               style={[
-                styles.iconContainer,
-                {
-                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : colors.gray[100],
-                  transform: [{ rotate: iconRotate }],
-                },
+                StyleSheet.absoluteFill,
+                { borderRadius, overflow: 'hidden' },
               ]}
             >
-              <Feather
-                name={config.icon}
-                size={isCompact ? 14 : 16}
-                color={isActive ? colors.white : colors.gray[600]}
+              <LinearGradient
+                colors={[colors.white, colors.gray[50]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.inactiveBorder,
+                  { borderRadius },
+                ]}
+              />
+            </View>
+
+            {/* Active Gradient Background */}
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                { opacity: bgOpacityAnim, borderRadius, overflow: 'hidden' },
+              ]}
+            >
+              <LinearGradient
+                colors={config.activeColors as unknown as string[]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* Subtle inner glow */}
+              <LinearGradient
+                colors={['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.05)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
               />
             </Animated.View>
 
-            {/* Label */}
-            <Text
-              style={[
-                styles.pillLabel,
-                {
-                  fontSize: displayFontSize,
-                  color: isActive ? colors.white : colors.gray[700],
-                  fontWeight: isActive ? '700' : '600',
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {config.label}
-            </Text>
-
-            {/* Badge */}
-            {showBadge && (
-              <View
+            {/* Pill Content */}
+            <View style={styles.pillContent}>
+              {/* Icon with animation */}
+              <Animated.View
                 style={[
-                  styles.badge,
+                  styles.iconContainer,
                   {
-                    minWidth: badgeSize,
-                    height: badgeSize,
-                    borderRadius: badgeSize / 2,
-                    backgroundColor: isActive ? 'rgba(255,255,255,0.95)' : config.activeColors[0],
-                    paddingHorizontal: count > 99 ? 8 : 6,
+                    backgroundColor: isActive
+                      ? 'rgba(255,255,255,0.25)'
+                      : `${config.inactiveIconColor}15`,
+                    width: iconContainerSize,
+                    height: iconContainerSize,
+                    borderRadius: iconContainerSize / 2,
+                    transform: [{ scale: iconBounceAnim }],
                   },
                 ]}
               >
-                <Text
+                {isOnlineFilter ? (
+                  <PulsingDot
+                    isActive={isActive}
+                    reduceMotion={reduceMotion}
+                    size={iconSize - 2}
+                  />
+                ) : (
+                  <Feather
+                    name={config.icon}
+                    size={iconSize}
+                    color={isActive ? colors.white : config.inactiveIconColor}
+                  />
+                )}
+              </Animated.View>
+
+              {/* Label */}
+              <Text
+                style={[
+                  styles.pillLabel,
+                  {
+                    fontSize: displayFontSize,
+                    color: isActive ? colors.white : colors.gray[800],
+                    fontWeight: isActive ? '700' : '600',
+                    textShadowColor: isActive ? 'rgba(0,0,0,0.1)' : 'transparent',
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: isActive ? 2 : 0,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {config.label}
+              </Text>
+
+              {/* Badge with gradient when inactive */}
+              {showBadge && (
+                <View
                   style={[
-                    styles.badgeText,
+                    styles.badge,
                     {
-                      fontSize: displayBadgeFontSize,
-                      color: isActive ? config.activeColors[0] : colors.white,
+                      minWidth: badgeSize,
+                      height: badgeSize,
+                      borderRadius: badgeSize / 2,
+                      paddingHorizontal: count > 99 ? 7 : 5,
+                      overflow: 'hidden',
                     },
                   ]}
                 >
-                  {count > 999 ? '999+' : count}
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
+                  {isActive ? (
+                    <View
+                      style={[
+                        StyleSheet.absoluteFill,
+                        {
+                          backgroundColor: 'rgba(255,255,255,0.95)',
+                          borderRadius: badgeSize / 2,
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <LinearGradient
+                      colors={config.badgeInactiveColors as unknown as string[]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[StyleSheet.absoluteFill, { borderRadius: badgeSize / 2 }]}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      {
+                        fontSize: displayBadgeFontSize,
+                        color: isActive ? config.badgeActiveColor : colors.white,
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {count > 999 ? '999+' : count}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       </Animated.View>
     );
   }
@@ -406,7 +588,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
 const styles = StyleSheet.create({
   // Container styles
   scrollContainer: {
-    marginBottom: 4,
+    marginBottom: 8,
   },
   scrollView: {
     flexGrow: 0,
@@ -414,13 +596,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   flexContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-    paddingVertical: 4,
+    marginBottom: 8,
+    paddingVertical: 6,
   },
 
   // Pill styles
@@ -428,14 +610,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pillShadow: {
+    width: '100%',
+    shadowColor: colors.orange[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+  },
   pill: {
     width: '100%',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  inactiveBg: {
-    backgroundColor: colors.white,
+  inactiveBorder: {
     borderWidth: 1.5,
     borderColor: colors.gray[200],
   },
@@ -443,17 +630,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   iconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pillLabel: {
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
+  },
+
+  // Pulsing dot styles
+  pulsingDotContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseRing: {
+    position: 'absolute',
+  },
+  solidDot: {
+    // Solid center dot
   },
 
   // Badge styles
@@ -461,14 +657,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 3,
   },
   badgeText: {
     fontWeight: '700',
-    lineHeight: 16,
+    lineHeight: 15,
+    textAlign: 'center',
   },
 });
 

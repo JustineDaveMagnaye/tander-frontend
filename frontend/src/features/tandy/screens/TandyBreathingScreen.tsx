@@ -1,27 +1,29 @@
 /**
- * TANDER TandyBreathingScreen - Premium Breathing Experience
- * A stunning, calming breathing exercise for Filipino seniors (50+)
+ * TANDER TandyBreathingScreen - Serene Breathing Experience
+ * A calming, relaxing breathing exercise for Filipino seniors (60+)
  *
- * DESIGN PHILOSOPHY (Calm/Headspace-Level):
- * - Premium, mesmerizing breathing circle with gradient transitions
- * - Aurora-like particle effects that respond to breath phases
- * - Crystal-clear phase indicators with directional arrows
- * - Elegant progress tracking with milestone celebrations
- * - Smooth pause/resume overlay with frosted glass effect
- * - Celebratory completion screen with stats and encouragement
+ * DESIGN PHILOSOPHY (Based on Calm/Headspace Research):
+ * - Soft, muted colors that promote relaxation
+ * - Avoid sharp lines - use rounded corners, circles, organic shapes
+ * - Pulsing circle animation to guide breath rhythm
+ * - Floating ambient particles for nature-like serenity
+ * - Smooth, gentle animations that calm rather than excite
+ *
+ * COLOR PSYCHOLOGY:
+ * - Deep blues/purples: Serenity, calm, restful sleep
+ * - Soft teals: Trust, tranquility, emotional balance
+ * - Warm accents: Comfort, safety (used sparingly)
  *
  * ACCESSIBILITY (Senior-Friendly):
- * - Touch targets: 64px minimum
- * - Font sizes: 20px+ body text
- * - High contrast: WCAG AAA (7:1) recommended
+ * - Touch targets: 56-64px minimum
+ * - Font sizes: 18px+ body text, never below 14px
+ * - High contrast: WCAG AA (4.5:1) minimum
  * - Full screen reader support
- * - Reduced motion support
- * - Haptic feedback on phase transitions
  *
- * RESPONSIVE:
- * - Phones: Portrait-locked, single column
- * - Tablets: Landscape-capable, adaptive layout
- * - Dynamic circle sizing based on screen dimensions
+ * Sources:
+ * - https://www.purrweb.com/blog/designing-a-meditation-app-tips-step-by-step-guide/
+ * - https://raw.studio/blog/how-headspace-designs-for-mindfulness/
+ * - https://cieden.com/meditation-app
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -36,66 +38,79 @@ import {
   Platform,
   Pressable,
   AccessibilityInfo,
-  Vibration,
-  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
+import { useResponsive } from '@shared/hooks/useResponsive';
 import { colors } from '@shared/styles/colors';
-import { spacing, borderRadius, shadows } from '@shared/styles/spacing';
+import {
+  PREMIUM_COLORS,
+  AnimatedSpringButton,
+  FloatingOrb,
+} from '../components/PremiumComponents';
 
 // ============================================================================
-// PREMIUM COLOR PALETTE - Serene, Calming, Light Mode
+// SERENE COLOR PALETTE - Light Mode, Calming & Airy
 // ============================================================================
 
-const COLORS = {
-  // Background gradient - soft, airy, calming
-  backgroundStart: '#FEFEFE',
-  backgroundMid: '#F8FAFC',
-  backgroundEnd: '#F0FDFA',
+const SERENE_COLORS = {
+  // Light, airy gradient background - soft cream to warm white
+  backgroundDeep: '#fefefe',      // Pure white
+  backgroundMid: '#f8fafc',       // Off-white (slate-50)
+  backgroundLight: '#f1f5f9',     // Light gray (slate-100)
+  backgroundAccent: '#e0f2fe',    // Soft sky blue tint
 
-  // Card colors - frosted glass effect
-  cardSolid: '#FFFFFF',
-  cardFrosted: 'rgba(255, 255, 255, 0.95)',
-  cardBorder: 'rgba(20, 184, 166, 0.15)',
+  // Soft accent colors
+  accentSoftTeal: '#14b8a6',      // Brand teal
+  accentSoftPurple: '#a78bfa',    // Gentle lavender
+  accentSoftBlue: '#0ea5e9',      // Sky blue
+  accentWarmGlow: '#f97316',      // Brand orange
 
-  // Brand colors
-  teal: colors.teal[500],         // #14B8A6
-  tealLight: colors.teal[300],    // #5EEAD4
-  tealDark: colors.teal[600],     // #0D9488
-  orange: colors.orange[500],     // #F97316
-  orangeLight: colors.orange[400], // #FB923C
-  orangeDark: colors.orange[600], // #EA580C
+  // Breathing circle - soft, calming
+  breatheCore: '#ffffff',         // Pure white center
+  breatheInner: '#ccfbf1',        // Very light teal
+  breatheOuter: '#5eead4',        // Soft teal
+  breatheGlow: '#14b8a6',         // Brand teal glow
 
-  // Text colors - high contrast for seniors
-  textPrimary: '#1E293B',         // slate-800
-  textSecondary: '#334155',       // slate-700
-  textMuted: '#64748B',           // slate-500
-  textOnColor: '#FFFFFF',
+  // Card backgrounds - light, frosted glass effect
+  cardDark: 'rgba(255, 255, 255, 0.9)',     // White with slight transparency
+  cardMid: 'rgba(255, 255, 255, 0.95)',     // Almost solid white
+  cardLight: 'rgba(248, 250, 252, 0.9)',    // Off-white
 
-  // Phase colors with gradients
-  inhale: {
-    primary: '#14B8A6',           // Teal - fresh, energizing
-    secondary: '#0D9488',
-    glow: 'rgba(20, 184, 166, 0.3)',
-  },
-  hold: {
-    primary: '#F97316',           // Orange - warmth, stillness
-    secondary: '#EA580C',
-    glow: 'rgba(249, 115, 22, 0.3)',
-  },
-  exhale: {
-    primary: '#0D9488',           // Deep teal - release, peace
-    secondary: '#0F766E',
-    glow: 'rgba(13, 148, 136, 0.3)',
-  },
+  // Text colors - dark for light mode (high contrast)
+  textPrimary: '#1e293b',         // Dark slate (slate-800)
+  textSecondary: '#334155',       // Medium slate (slate-700)
+  textMuted: '#64748b',           // Muted slate (slate-500)
+  textAccent: '#0d9488',          // Dark teal
 
-  // UI elements
-  success: '#10B981',             // emerald-500
-  overlay: 'rgba(0, 0, 0, 0.4)',
+  // Phase-specific colors - Orange & Teal brand theme
+  inhaleColor: '#14b8a6',         // Brand teal - fresh, energizing
+  holdColor: '#f97316',           // Brand orange - warmth, stillness
+  exhaleColor: '#0d9488',         // Deep teal - release, peace
+
+  // Button colors
+  buttonPrimary: '#14b8a6',       // Teal (brand)
+  buttonSecondary: '#94a3b8',     // Light slate
+};
+
+// Floating bubble colors - More transparent for light mode
+const BUBBLE_COLORS = {
+  // Teal variations (very soft, ethereal)
+  tealLight: 'rgba(94, 234, 212, 0.06)',      // Very soft mint teal
+  tealMid: 'rgba(20, 184, 166, 0.05)',        // Brand teal - subtle
+  tealDark: 'rgba(13, 148, 136, 0.04)',       // Deep teal - barely visible
+
+  // Orange variations (warm, very gentle)
+  orangeLight: 'rgba(251, 146, 60, 0.05)',    // Very soft orange
+  orangeMid: 'rgba(249, 115, 22, 0.04)',      // Brand orange - subtle
+  orangeWarm: 'rgba(234, 88, 12, 0.03)',      // Deep orange - whisper
+
+  // Mixed accent
+  peach: 'rgba(253, 186, 116, 0.04)',         // Soft peach - barely there
+  aqua: 'rgba(45, 212, 191, 0.05)',           // Aqua teal - subtle
 };
 
 // ============================================================================
@@ -109,183 +124,162 @@ interface BreathingType {
   name: string;
   description: string;
   benefit: string;
-  difficulty: 'Easy' | 'Medium' | 'Advanced';
-  duration: string;
   icon: keyof typeof Feather.glyphMap;
-  iconColor: string;
   phases: {
     inhale: number;
     hold: number;
     exhale: number;
     hold2?: number;
   };
-  tips: string[];
-  completionMessage: string;
+  color: string;
 }
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
+// Senior-friendly breathing exercises based on medical research
+// Sources: 24hrcares.com, secondwindmovement.com, eldergym.com
 const BREATHING_TYPES: BreathingType[] = [
   {
     id: 'belly',
     name: 'Belly Breathing',
-    description: 'Deep breaths into your belly for relaxation',
-    benefit: 'Deep Relaxation',
-    difficulty: 'Easy',
-    duration: '2 min',
+    description: 'Breathe deep into your belly',
+    benefit: 'Relaxation',
     icon: 'wind',
-    iconColor: COLORS.teal,
     phases: { inhale: 4, hold: 0, exhale: 4 },
-    tips: [
-      'Place hand on belly to feel it rise',
-      'Breathe through your nose',
-      'Keep shoulders relaxed',
-    ],
-    completionMessage: 'Your body is now relaxed and calm.',
+    color: '#14b8a6', // Brand teal
   },
   {
     id: 'pursed',
     name: 'Pursed Lip',
-    description: 'Slow exhale like blowing a candle',
+    description: 'Breathe out slowly like blowing a candle',
     benefit: 'Lung Health',
-    difficulty: 'Medium',
-    duration: '2.5 min',
     icon: 'moon',
-    iconColor: COLORS.orange,
     phases: { inhale: 2, hold: 0, exhale: 4 },
-    tips: [
-      'Inhale through your nose',
-      'Purse lips like blowing a candle',
-      'Exhale slowly and gently',
-    ],
-    completionMessage: 'Great for your lungs and breathing!',
+    color: '#f97316', // Brand orange
   },
   {
     id: 'calm',
     name: 'Calming Breath',
-    description: 'Extra long exhale for stress relief',
+    description: 'Slow and gentle for relaxation',
     benefit: 'Stress Relief',
-    difficulty: 'Easy',
-    duration: '3 min',
     icon: 'sunrise',
-    iconColor: COLORS.tealLight,
     phases: { inhale: 3, hold: 0, exhale: 5 },
-    tips: [
-      'Find a comfortable position',
-      'Close your eyes if you prefer',
-      'Let go of tension with each exhale',
-    ],
-    completionMessage: 'You have released stress and found peace.',
+    color: '#5eead4', // Soft teal
   },
 ];
 
 const TARGET_CYCLES = 5;
 
-const MILESTONE_MESSAGES = [
-  { cycle: 1, message: 'Great start! Keep going.' },
-  { cycle: 2, message: 'You are doing wonderfully!' },
-  { cycle: 3, message: 'Halfway there! Stay calm.' },
-  { cycle: 4, message: 'Almost done! One more breath.' },
-  { cycle: 5, message: 'Congratulations!' },
-];
-
 // ============================================================================
-// FLOATING PARTICLE COMPONENT - Aurora-like ambient effects
+// RELAXING BUBBLE COMPONENT - Ultra-smooth, dreamy floating bubbles
 // ============================================================================
 
-interface FloatingParticleProps {
+interface RelaxingBubbleProps {
   delay: number;
   size: number;
   startX: number;
   startY: number;
   color: string;
+  floatDistance: number;
   duration: number;
-  phase: BreathingPhase;
-  isActive: boolean;
 }
 
-const FloatingParticle: React.FC<FloatingParticleProps> = ({
+const RelaxingBubble: React.FC<RelaxingBubbleProps> = ({
   delay,
   size,
   startX,
   startY,
   color,
+  floatDistance,
   duration,
-  phase,
-  isActive,
 }) => {
   const translateY = useRef(new Animated.Value(0)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.5)).current;
+  const scale = useRef(new Animated.Value(0.3)).current;
+  const innerGlow = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
-    // Fade in
+    // Very slow, gentle fade in (3 seconds)
     Animated.timing(opacity, {
       toValue: 1,
-      duration: 2000,
+      duration: 3000,
       delay,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
 
-    // Scale up
+    // Slow scale up with overshoot for organic feel (4 seconds)
     Animated.timing(scale, {
       toValue: 1,
-      duration: 3000,
+      duration: 4000,
       delay,
-      easing: Easing.out(Easing.back(1.2)),
+      easing: Easing.out(Easing.back(1.1)),
       useNativeDriver: true,
     }).start();
 
-    // Floating animation
-    const floatDistance = isActive ? 40 : 20;
-    const floatDuration = isActive
-      ? (phase === 'inhale' ? duration * 0.8 : duration * 1.2)
-      : duration;
-
+    // Ultra-smooth vertical floating (very slow - 8-12 seconds per cycle)
     const floatY = Animated.loop(
       Animated.sequence([
         Animated.timing(translateY, {
           toValue: -floatDistance,
-          duration: floatDuration,
+          duration: duration,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(translateY, {
           toValue: floatDistance * 0.3,
-          duration: floatDuration * 0.7,
+          duration: duration * 0.8,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(translateY, {
           toValue: 0,
-          duration: floatDuration * 0.5,
+          duration: duration * 0.6,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
+    // Gentle horizontal drift (even slower - 10-15 seconds per cycle)
     const floatX = Animated.loop(
       Animated.sequence([
         Animated.timing(translateX, {
-          toValue: floatDistance * 0.5,
-          duration: floatDuration * 1.3,
+          toValue: floatDistance * 0.4,
+          duration: duration * 1.2,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(translateX, {
-          toValue: -floatDistance * 0.4,
-          duration: floatDuration * 1.5,
+          toValue: -floatDistance * 0.3,
+          duration: duration * 1.4,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(translateX, {
           toValue: 0,
-          duration: floatDuration * 0.8,
+          duration: duration * 0.8,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Subtle inner glow pulsing (very slow breathing effect)
+    const glowPulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(innerGlow, {
+          toValue: 0.8,
+          duration: duration * 0.6,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(innerGlow, {
+          toValue: 0.5,
+          duration: duration * 0.6,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -295,19 +289,21 @@ const FloatingParticle: React.FC<FloatingParticleProps> = ({
     const floatTimer = setTimeout(() => {
       floatY.start();
       floatX.start();
+      glowPulse.start();
     }, delay);
 
     return () => {
       clearTimeout(floatTimer);
       floatY.stop();
       floatX.stop();
+      glowPulse.stop();
     };
-  }, [delay, duration, phase, isActive, opacity, scale, translateX, translateY]);
+  }, [delay, duration, floatDistance, opacity, scale, translateX, translateY, innerGlow]);
 
   return (
     <Animated.View
       style={[
-        particleStyles.particle,
+        bubbleStyles.bubble,
         {
           left: `${startX}%`,
           top: `${startY}%`,
@@ -320,120 +316,116 @@ const FloatingParticle: React.FC<FloatingParticleProps> = ({
         },
       ]}
       pointerEvents="none"
-    />
+    >
+      {/* Inner glow effect */}
+      <Animated.View
+        style={[
+          bubbleStyles.innerGlow,
+          {
+            width: size * 0.6,
+            height: size * 0.6,
+            borderRadius: (size * 0.6) / 2,
+            opacity: innerGlow,
+          },
+        ]}
+      />
+    </Animated.View>
   );
 };
 
-const particleStyles = StyleSheet.create({
-  particle: {
+const bubbleStyles = StyleSheet.create({
+  bubble: {
     position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerGlow: {
+    backgroundColor: 'rgba(20, 184, 166, 0.08)',
   },
 });
 
 // ============================================================================
-// AMBIENT PARTICLES CONTAINER
+// RELAXING BUBBLES CONTAINER - Orange & Teal themed ambient bubbles
 // ============================================================================
 
-interface AmbientParticlesProps {
+interface RelaxingBubblesProps {
   reduceMotion: boolean;
-  phase: BreathingPhase;
-  isActive: boolean;
 }
 
-const AmbientParticles: React.FC<AmbientParticlesProps> = ({
-  reduceMotion,
-  phase,
-  isActive,
-}) => {
+const RelaxingBubbles: React.FC<RelaxingBubblesProps> = ({ reduceMotion }) => {
   if (reduceMotion) return null;
 
-  // Particle colors that respond to breath phase
-  const getPhaseColor = (baseColor: string, opacity: number) => {
-    if (!isActive) return baseColor;
+  // More bubbles with much slower animations (8-15 second cycles)
+  // Alternating between orange and teal for brand consistency
+  const bubbles = useMemo(() => [
+    // Large teal bubbles (background layer - very slow)
+    { delay: 0, duration: 12000, size: 140, startX: 5, startY: 10, color: BUBBLE_COLORS.tealLight, floatDistance: 25 },
+    { delay: 2000, duration: 14000, size: 160, startX: 75, startY: 5, color: BUBBLE_COLORS.tealMid, floatDistance: 20 },
+    { delay: 4000, duration: 13000, size: 120, startX: 85, startY: 65, color: BUBBLE_COLORS.aqua, floatDistance: 22 },
 
-    switch (phase) {
-      case 'inhale':
-        return `rgba(20, 184, 166, ${opacity})`;  // Teal
-      case 'hold':
-      case 'hold2':
-        return `rgba(249, 115, 22, ${opacity})`;  // Orange
-      case 'exhale':
-        return `rgba(13, 148, 136, ${opacity})`;  // Deep teal
-    }
-  };
+    // Large orange bubbles (background layer - very slow)
+    { delay: 1000, duration: 15000, size: 130, startX: 0, startY: 55, color: BUBBLE_COLORS.orangeLight, floatDistance: 18 },
+    { delay: 3000, duration: 11000, size: 150, startX: 70, startY: 75, color: BUBBLE_COLORS.orangeMid, floatDistance: 24 },
 
-  const particles = useMemo(() => [
-    // Large background particles
-    { delay: 0, duration: 12000, size: 160, startX: 5, startY: 8, color: getPhaseColor('rgba(94, 234, 212, 0.08)', 0.08) },
-    { delay: 1500, duration: 14000, size: 180, startX: 75, startY: 5, color: getPhaseColor('rgba(20, 184, 166, 0.06)', 0.06) },
-    { delay: 3000, duration: 13000, size: 140, startX: 85, startY: 60, color: getPhaseColor('rgba(45, 212, 191, 0.07)', 0.07) },
+    // Medium teal bubbles (mid layer)
+    { delay: 500, duration: 10000, size: 90, startX: 20, startY: 25, color: BUBBLE_COLORS.tealDark, floatDistance: 30 },
+    { delay: 2500, duration: 11000, size: 80, startX: 60, startY: 40, color: BUBBLE_COLORS.tealLight, floatDistance: 28 },
+    { delay: 1500, duration: 9000, size: 100, startX: 40, startY: 85, color: BUBBLE_COLORS.aqua, floatDistance: 25 },
 
-    // Medium particles
-    { delay: 500, duration: 10000, size: 100, startX: 15, startY: 25, color: getPhaseColor('rgba(251, 146, 60, 0.05)', 0.05) },
-    { delay: 2000, duration: 11000, size: 90, startX: 60, startY: 35, color: getPhaseColor('rgba(20, 184, 166, 0.06)', 0.06) },
-    { delay: 1000, duration: 9500, size: 110, startX: 40, startY: 80, color: getPhaseColor('rgba(249, 115, 22, 0.05)', 0.05) },
-    { delay: 2500, duration: 10500, size: 95, startX: 0, startY: 50, color: getPhaseColor('rgba(94, 234, 212, 0.07)', 0.07) },
+    // Medium orange bubbles (mid layer)
+    { delay: 800, duration: 10500, size: 85, startX: 30, startY: 60, color: BUBBLE_COLORS.peach, floatDistance: 26 },
+    { delay: 3500, duration: 12000, size: 95, startX: 55, startY: 15, color: BUBBLE_COLORS.orangeWarm, floatDistance: 22 },
 
-    // Small accent particles
-    { delay: 800, duration: 8000, size: 60, startX: 25, startY: 45, color: getPhaseColor('rgba(20, 184, 166, 0.08)', 0.08) },
-    { delay: 1800, duration: 8500, size: 55, startX: 80, startY: 25, color: getPhaseColor('rgba(251, 146, 60, 0.06)', 0.06) },
-    { delay: 600, duration: 9000, size: 65, startX: 50, startY: 70, color: getPhaseColor('rgba(45, 212, 191, 0.07)', 0.07) },
-    { delay: 2200, duration: 7500, size: 50, startX: 90, startY: 45, color: getPhaseColor('rgba(249, 115, 22, 0.05)', 0.05) },
+    // Small accent bubbles (foreground - slightly faster but still slow)
+    { delay: 1200, duration: 8000, size: 50, startX: 15, startY: 45, color: BUBBLE_COLORS.tealMid, floatDistance: 35 },
+    { delay: 2200, duration: 8500, size: 45, startX: 80, startY: 30, color: BUBBLE_COLORS.orangeLight, floatDistance: 32 },
+    { delay: 600, duration: 9500, size: 55, startX: 45, startY: 70, color: BUBBLE_COLORS.tealLight, floatDistance: 30 },
+    { delay: 1800, duration: 8200, size: 40, startX: 90, startY: 50, color: BUBBLE_COLORS.peach, floatDistance: 28 },
 
-    // Tiny sparkle particles
-    { delay: 400, duration: 7000, size: 35, startX: 30, startY: 75, color: getPhaseColor('rgba(20, 184, 166, 0.09)', 0.09) },
-    { delay: 2800, duration: 6500, size: 40, startX: 65, startY: 55, color: getPhaseColor('rgba(251, 146, 60, 0.07)', 0.07) },
-  ], [phase, isActive]);
+    // Tiny sparkle bubbles (very subtle)
+    { delay: 400, duration: 7500, size: 30, startX: 25, startY: 80, color: BUBBLE_COLORS.aqua, floatDistance: 20 },
+    { delay: 2800, duration: 7000, size: 35, startX: 65, startY: 55, color: BUBBLE_COLORS.orangeMid, floatDistance: 18 },
+  ], []);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {particles.map((particle, index) => (
-        <FloatingParticle
-          key={index}
-          {...particle}
-          phase={phase}
-          isActive={isActive}
-        />
+      {bubbles.map((bubble, index) => (
+        <RelaxingBubble key={index} {...bubble} />
       ))}
     </View>
   );
 };
 
 // ============================================================================
-// PREMIUM TYPE CARD - Stunning selection cards
+// SERENE TYPE CARD - Soft, Rounded Design
 // ============================================================================
 
 interface TypeCardProps {
   type: BreathingType;
   onSelect: () => void;
   index: number;
-  isTablet: boolean;
 }
 
-const PremiumTypeCard: React.FC<TypeCardProps> = ({
-  type,
-  onSelect,
-  index,
-  isTablet,
-}) => {
+const SereneTypeCard: React.FC<TypeCardProps> = ({ type, onSelect, index }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(50)).current;
+  const translateY = useRef(new Animated.Value(40)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Slower, more gentle entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
-        delay: index * 150,
-        easing: Easing.out(Easing.cubic),
+        duration: 800, // Slower fade
+        delay: index * 200, // More stagger between cards
+        easing: Easing.out(Easing.sin),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 700,
-        delay: index * 150,
-        easing: Easing.out(Easing.back(1.1)),
+        duration: 900, // Slower slide
+        delay: index * 200,
+        easing: Easing.out(Easing.sin), // Sinusoidal for smooth feel
         useNativeDriver: true,
       }),
     ]).start();
@@ -441,10 +433,10 @@ const PremiumTypeCard: React.FC<TypeCardProps> = ({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.98, // Subtler press effect
       useNativeDriver: true,
-      tension: 100,
-      friction: 10,
+      tension: 80, // Softer spring
+      friction: 12,
     }).start();
   };
 
@@ -452,8 +444,8 @@ const PremiumTypeCard: React.FC<TypeCardProps> = ({
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 80,
-      friction: 8,
+      tension: 60, // Slower release
+      friction: 10,
     }).start();
   };
 
@@ -462,14 +454,6 @@ const PremiumTypeCard: React.FC<TypeCardProps> = ({
     if (phases.hold2) return `${phases.inhale}-${phases.hold}-${phases.exhale}-${phases.hold2}`;
     if (phases.hold > 0) return `${phases.inhale}-${phases.hold}-${phases.exhale}`;
     return `${phases.inhale}-${phases.exhale}`;
-  };
-
-  const getDifficultyColor = () => {
-    switch (type.difficulty) {
-      case 'Easy': return COLORS.success;
-      case 'Medium': return COLORS.orange;
-      case 'Advanced': return COLORS.orangeDark;
-    }
   };
 
   return (
@@ -483,76 +467,43 @@ const PremiumTypeCard: React.FC<TypeCardProps> = ({
         onPress={onSelect}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        accessibilityLabel={`${type.name}. ${type.description}. ${type.difficulty}. Duration ${type.duration}. Pattern: ${getPatternText()} seconds.`}
+        accessibilityLabel={`${type.name}. ${type.description}. ${type.benefit}. Pattern: ${getPatternText()} seconds.`}
         accessibilityRole="button"
         accessibilityHint="Double tap to select this breathing exercise"
       >
-        <View style={[cardStyles.card, isTablet && cardStyles.cardTablet]}>
-          {/* Gradient accent bar */}
-          <LinearGradient
-            colors={[type.iconColor, `${type.iconColor}88`]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={cardStyles.accentBar}
-          />
-
-          <View style={cardStyles.cardContent}>
-            {/* Icon container with glow effect */}
-            <View style={cardStyles.iconContainer}>
-              <View style={[cardStyles.iconGlow, { backgroundColor: `${type.iconColor}15` }]}>
-                <View style={[cardStyles.iconInner, { backgroundColor: `${type.iconColor}25` }]}>
-                  <Feather name={type.icon} size={32} color={type.iconColor} />
-                </View>
-              </View>
-            </View>
-
-            {/* Content */}
-            <View style={cardStyles.textContent}>
-              <Text style={cardStyles.cardTitle}>{type.name}</Text>
-              <Text style={cardStyles.cardDescription}>{type.description}</Text>
-
-              {/* Badges row */}
-              <View style={cardStyles.badgesRow}>
-                {/* Benefit badge */}
-                <View style={[cardStyles.badge, { backgroundColor: `${type.iconColor}12` }]}>
-                  <Feather name="heart" size={14} color={type.iconColor} />
-                  <Text style={[cardStyles.badgeText, { color: type.iconColor }]}>
-                    {type.benefit}
-                  </Text>
-                </View>
-
-                {/* Difficulty badge */}
-                <View style={[cardStyles.badge, { backgroundColor: `${getDifficultyColor()}12` }]}>
-                  <Feather name="activity" size={14} color={getDifficultyColor()} />
-                  <Text style={[cardStyles.badgeText, { color: getDifficultyColor() }]}>
-                    {type.difficulty}
-                  </Text>
-                </View>
-
-                {/* Duration badge */}
-                <View style={[cardStyles.badge, { backgroundColor: `${COLORS.textMuted}12` }]}>
-                  <Feather name="clock" size={14} color={COLORS.textMuted} />
-                  <Text style={[cardStyles.badgeText, { color: COLORS.textMuted }]}>
-                    {type.duration}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Pattern indicator and arrow */}
-            <View style={cardStyles.rightSection}>
-              <View style={cardStyles.patternContainer}>
-                <Text style={[cardStyles.patternLabel, { color: type.iconColor }]}>
-                  {getPatternText()}
-                </Text>
-                <Text style={cardStyles.patternUnit}>sec</Text>
-              </View>
-              <View style={[cardStyles.arrowCircle, { backgroundColor: `${type.iconColor}15` }]}>
-                <Feather name="chevron-right" size={24} color={type.iconColor} />
-              </View>
+        <LinearGradient
+          colors={[SERENE_COLORS.cardMid, SERENE_COLORS.cardDark]}
+          style={cardStyles.card}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          {/* Icon with soft glow */}
+          <View style={[cardStyles.iconWrapper, { backgroundColor: `${type.color}20` }]}>
+            <View style={[cardStyles.iconCircle, { backgroundColor: `${type.color}30` }]}>
+              <Feather name={type.icon} size={28} color={type.color} />
             </View>
           </View>
-        </View>
+
+          {/* Content */}
+          <View style={cardStyles.content}>
+            <Text style={cardStyles.cardTitle}>{type.name}</Text>
+            <Text style={cardStyles.cardDescription}>{type.description}</Text>
+
+            {/* Benefit badge */}
+            <View style={[cardStyles.benefitBadge, { backgroundColor: `${type.color}15` }]}>
+              <Feather name="heart" size={12} color={type.color} />
+              <Text style={[cardStyles.benefitText, { color: type.color }]}>
+                {type.benefit}
+              </Text>
+            </View>
+          </View>
+
+          {/* Pattern indicator */}
+          <View style={cardStyles.patternContainer}>
+            <Text style={cardStyles.patternLabel}>{getPatternText()}</Text>
+            <Feather name="chevron-right" size={20} color={SERENE_COLORS.textMuted} />
+          </View>
+        </LinearGradient>
       </Pressable>
     </Animated.View>
   );
@@ -560,273 +511,253 @@ const PremiumTypeCard: React.FC<TypeCardProps> = ({
 
 const cardStyles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardSolid,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 24,
-    marginBottom: 16,
-    overflow: 'visible',
+    padding: 20,
+    minHeight: 110,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    minHeight: 140,
+    borderColor: 'rgba(20, 184, 166, 0.3)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 6,
+        shadowColor: '#0d9488',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
     }),
   },
-  cardTablet: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 600,
-    minHeight: 140,
-  },
-  accentBar: {
-    height: 4,
-    width: '100%',
-  },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
-  iconContainer: {
-    marginRight: 16,
-  },
-  iconGlow: {
-    width: 72,
-    height: 72,
+  iconWrapper: {
+    width: 64,
+    height: 64,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconInner: {
-    width: 56,
-    height: 56,
+  iconCircle: {
+    width: 52,
+    height: 52,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textContent: {
+  content: {
     flex: 1,
-    marginRight: 12,
+    marginLeft: 16,
   },
   cardTitle: {
     fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
+    fontWeight: '600',
+    color: SERENE_COLORS.textPrimary,
+    marginBottom: 6,
   },
   cardDescription: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textSecondary,
-    marginBottom: 12,
+    color: SERENE_COLORS.textSecondary,
+    marginBottom: 10,
     lineHeight: 22,
   },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  badge: {
+  benefitBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
   },
-  badgeText: {
-    fontSize: 13,
+  benefitText: {
+    fontSize: 14,
     fontWeight: '600',
-  },
-  rightSection: {
-    alignItems: 'center',
-    gap: 8,
   },
   patternContainer: {
     alignItems: 'center',
+    marginLeft: 8,
   },
   patternLabel: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
+    color: SERENE_COLORS.textAccent,
+    marginBottom: 4,
     letterSpacing: 1,
-  },
-  patternUnit: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  arrowCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 
 // ============================================================================
-// MESMERIZING BREATHING CIRCLE - The stunning centerpiece
+// SERENE BREATHING CIRCLE - Multi-Ring Pulsing Design
 // ============================================================================
 
-interface BreathingCircleProps {
+interface SerenBreathingCircleProps {
   size: number;
   isActive: boolean;
   scaleAnim: Animated.Value;
   phase: BreathingPhase;
   count: number;
-  totalDuration: number;
   reduceMotion: boolean;
-  selectedType: BreathingType | null;
 }
 
-const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
+const SereneBreathingCircle: React.FC<SerenBreathingCircleProps> = ({
   size,
   isActive,
   scaleAnim,
   phase,
   count,
-  totalDuration,
   reduceMotion,
-  selectedType,
 }) => {
-  // Ring animations
-  const ring1Opacity = useRef(new Animated.Value(0.3)).current;
-  const ring2Opacity = useRef(new Animated.Value(0.2)).current;
-  const ring3Opacity = useRef(new Animated.Value(0.15)).current;
-  const ring4Opacity = useRef(new Animated.Value(0.1)).current;
+  // Multiple ring animations for ethereal effect
+  const ring1Opacity = useRef(new Animated.Value(0.2)).current;
+  const ring2Opacity = useRef(new Animated.Value(0.15)).current;
+  const ring3Opacity = useRef(new Animated.Value(0.1)).current;
   const ring1Scale = useRef(new Animated.Value(1)).current;
   const ring2Scale = useRef(new Animated.Value(1)).current;
   const ring3Scale = useRef(new Animated.Value(1)).current;
-  const ring4Scale = useRef(new Animated.Value(1)).current;
-  const innerGlow = useRef(new Animated.Value(0.5)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-
-  // Progress arc animation
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     if (!isActive || reduceMotion) {
-      ring1Opacity.setValue(0.2);
-      ring2Opacity.setValue(0.15);
-      ring3Opacity.setValue(0.1);
-      ring4Opacity.setValue(0.08);
+      ring1Opacity.setValue(0.15);
+      ring2Opacity.setValue(0.12);
+      ring3Opacity.setValue(0.08);
+      ring1Scale.setValue(1);
+      ring2Scale.setValue(1);
+      ring3Scale.setValue(1);
       return;
     }
 
-    // Ripple effect for rings
-    const createRingAnimation = (
-      opacityAnim: Animated.Value,
-      scaleAnim: Animated.Value,
-      delay: number,
-      duration: number
-    ) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.parallel([
-            Animated.timing(opacityAnim, {
-              toValue: 0.5,
-              duration: duration,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-              toValue: 1.08,
-              duration: duration,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.parallel([
-            Animated.timing(opacityAnim, {
-              toValue: 0.15,
-              duration: duration,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-              toValue: 1,
-              duration: duration,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-          ]),
-        ])
-      );
-    };
+    // Ultra-smooth ring pulsing with sinusoidal easing (4-6 second cycles)
+    // Creates a gentle, meditative ripple effect
+    const ring1Anim = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(ring1Opacity, {
+            toValue: 0.35,
+            duration: 4000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring1Scale, {
+            toValue: 1.04,
+            duration: 4000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(ring1Opacity, {
+            toValue: 0.15,
+            duration: 4000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring1Scale, {
+            toValue: 1,
+            duration: 4000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
 
-    const ring1Anim = createRingAnimation(ring1Opacity, ring1Scale, 0, 4000);
-    const ring2Anim = createRingAnimation(ring2Opacity, ring2Scale, 800, 4500);
-    const ring3Anim = createRingAnimation(ring3Opacity, ring3Scale, 1600, 5000);
-    const ring4Anim = createRingAnimation(ring4Opacity, ring4Scale, 2400, 5500);
+    const ring2Anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1200), // Longer stagger for smoother ripple
+        Animated.parallel([
+          Animated.timing(ring2Opacity, {
+            toValue: 0.28,
+            duration: 5000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring2Scale, {
+            toValue: 1.06,
+            duration: 5000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(ring2Opacity, {
+            toValue: 0.12,
+            duration: 5000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring2Scale, {
+            toValue: 1,
+            duration: 5000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
 
-    // Inner glow pulse
+    const ring3Anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(2400), // Even longer stagger
+        Animated.parallel([
+          Animated.timing(ring3Opacity, {
+            toValue: 0.22,
+            duration: 6000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring3Scale, {
+            toValue: 1.08,
+            duration: 6000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(ring3Opacity, {
+            toValue: 0.08,
+            duration: 6000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring3Scale, {
+            toValue: 1,
+            duration: 6000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+
+    // Very slow, gentle glow pulse (3.5 second cycle)
     const glowAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(innerGlow, {
-          toValue: 0.8,
-          duration: 3000,
+        Animated.timing(glowPulse, {
+          toValue: 0.7,
+          duration: 3500,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
-        Animated.timing(innerGlow, {
+        Animated.timing(glowPulse, {
           toValue: 0.4,
-          duration: 3000,
+          duration: 3500,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Slow rotation for subtle movement
-    const rotate = Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 30000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-
     ring1Anim.start();
     ring2Anim.start();
     ring3Anim.start();
-    ring4Anim.start();
     glowAnim.start();
-    rotate.start();
 
     return () => {
       ring1Anim.stop();
       ring2Anim.stop();
       ring3Anim.stop();
-      ring4Anim.stop();
       glowAnim.stop();
-      rotate.stop();
     };
-  }, [isActive, reduceMotion, ring1Opacity, ring2Opacity, ring3Opacity, ring4Opacity, ring1Scale, ring2Scale, ring3Scale, ring4Scale, innerGlow, rotateAnim]);
-
-  // Progress animation for phase
-  useEffect(() => {
-    if (!isActive) {
-      progressAnim.setValue(0);
-      return;
-    }
-
-    progressAnim.setValue(0);
-    Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: totalDuration * 1000,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
-  }, [phase, isActive, totalDuration, progressAnim]);
+  }, [isActive, reduceMotion, ring1Opacity, ring2Opacity, ring3Opacity, ring1Scale, ring2Scale, ring3Scale, glowPulse]);
 
   const getPhaseText = () => {
     switch (phase) {
@@ -837,72 +768,34 @@ const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
     }
   };
 
-  const getPhaseColors = () => {
+  const getPhaseColor = () => {
     switch (phase) {
-      case 'inhale':
-        return {
-          primary: COLORS.inhale.primary,
-          secondary: COLORS.inhale.secondary,
-          glow: COLORS.inhale.glow,
-        };
+      case 'inhale': return SERENE_COLORS.inhaleColor;
       case 'hold':
-      case 'hold2':
-        return {
-          primary: COLORS.hold.primary,
-          secondary: COLORS.hold.secondary,
-          glow: COLORS.hold.glow,
-        };
-      case 'exhale':
-        return {
-          primary: COLORS.exhale.primary,
-          secondary: COLORS.exhale.secondary,
-          glow: COLORS.exhale.glow,
-        };
+      case 'hold2': return SERENE_COLORS.holdColor;
+      case 'exhale': return SERENE_COLORS.exhaleColor;
     }
   };
 
-  const phaseColors = getPhaseColors();
-  const readyColor = selectedType?.iconColor || COLORS.teal;
-
-  const ring1Size = size + 50;
-  const ring2Size = size + 100;
-  const ring3Size = size + 150;
-  const ring4Size = size + 200;
-
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const ring1Size = size + 40;
+  const ring2Size = size + 80;
+  const ring3Size = size + 120;
 
   return (
-    <View style={circleStyles.wrapper}>
+    <View style={breatheStyles.wrapper}>
       {/* Outermost ring */}
       {isActive && (
         <Animated.View
+          renderToHardwareTextureAndroid={true}
+          needsOffscreenAlphaCompositing={true}
+          collapsable={false}
           style={[
-            circleStyles.ring,
-            {
-              width: ring4Size,
-              height: ring4Size,
-              borderRadius: ring4Size / 2,
-              borderColor: phaseColors.primary,
-              opacity: ring4Opacity,
-              transform: [{ scale: ring4Scale }, { rotate: rotateInterpolate }],
-            },
-          ]}
-        />
-      )}
-
-      {/* Third ring */}
-      {isActive && (
-        <Animated.View
-          style={[
-            circleStyles.ring,
+            breatheStyles.ring,
             {
               width: ring3Size,
               height: ring3Size,
               borderRadius: ring3Size / 2,
-              borderColor: phaseColors.primary,
+              borderColor: getPhaseColor(),
               opacity: ring3Opacity,
               transform: [{ scale: ring3Scale }],
             },
@@ -910,16 +803,19 @@ const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
         />
       )}
 
-      {/* Second ring */}
+      {/* Middle ring */}
       {isActive && (
         <Animated.View
+          renderToHardwareTextureAndroid={true}
+          needsOffscreenAlphaCompositing={true}
+          collapsable={false}
           style={[
-            circleStyles.ring,
+            breatheStyles.ring,
             {
               width: ring2Size,
               height: ring2Size,
               borderRadius: ring2Size / 2,
-              borderColor: phaseColors.primary,
+              borderColor: getPhaseColor(),
               opacity: ring2Opacity,
               transform: [{ scale: ring2Scale }],
             },
@@ -930,13 +826,16 @@ const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
       {/* Inner ring */}
       {isActive && (
         <Animated.View
+          renderToHardwareTextureAndroid={true}
+          needsOffscreenAlphaCompositing={true}
+          collapsable={false}
           style={[
-            circleStyles.ring,
+            breatheStyles.ring,
             {
               width: ring1Size,
               height: ring1Size,
               borderRadius: ring1Size / 2,
-              borderColor: phaseColors.primary,
+              borderColor: getPhaseColor(),
               opacity: ring1Opacity,
               transform: [{ scale: ring1Scale }],
             },
@@ -944,10 +843,13 @@ const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
         />
       )}
 
-      {/* Main breathing circle */}
+      {/* Main breathing circle - optimized for smooth edges on Android */}
       <Animated.View
+        renderToHardwareTextureAndroid={true}
+        needsOffscreenAlphaCompositing={true}
+        collapsable={false}
         style={[
-          circleStyles.mainCircle,
+          breatheStyles.mainCircleOuter,
           {
             width: size,
             height: size,
@@ -959,72 +861,51 @@ const MesmerizingBreathingCircle: React.FC<BreathingCircleProps> = ({
         <LinearGradient
           colors={
             isActive
-              ? [phaseColors.primary, phaseColors.secondary]
-              : [readyColor, `${readyColor}CC`]
+              ? [getPhaseColor(), `${getPhaseColor()}DD`]
+              : [SERENE_COLORS.cardMid, SERENE_COLORS.cardDark]
           }
           style={[
-            circleStyles.circleGradient,
+            breatheStyles.circleGradient,
             {
               width: size,
               height: size,
               borderRadius: size / 2,
             },
           ]}
-          start={{ x: 0.3, y: 0 }}
-          end={{ x: 0.7, y: 1 }}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
         >
-          {/* Inner glow effect */}
-          <Animated.View
-            style={[
-              circleStyles.innerGlow,
-              {
-                width: size * 0.7,
-                height: size * 0.7,
-                borderRadius: (size * 0.7) / 2,
-                opacity: innerGlow,
-              },
-            ]}
-          />
-
-          {/* Content */}
+          {/* Content displayed directly */}
           {isActive ? (
-            <View style={circleStyles.activeContent}>
-              <Text style={circleStyles.countdownText}>{count}</Text>
-            </View>
+            <Text
+              style={breatheStyles.countdownText}
+              accessibilityLabel={`${count} seconds`}
+              accessibilityRole="timer"
+            >
+              {count}
+            </Text>
           ) : (
-            <View style={circleStyles.readyContent}>
-              <Feather name={selectedType?.icon || 'wind'} size={56} color={COLORS.textOnColor} />
-              <Text style={circleStyles.readyLabel}>Ready</Text>
-            </View>
+            <>
+              <Feather name="wind" size={48} color={SERENE_COLORS.accentSoftTeal} />
+              <Text style={breatheStyles.readyLabel}>Ready</Text>
+            </>
           )}
         </LinearGradient>
       </Animated.View>
 
-      {/* Phase indicator below circle */}
+      {/* Phase label - positioned below */}
       {isActive && (
-        <View style={circleStyles.phaseIndicatorContainer}>
-          {/* Direction arrow */}
-          <View style={[circleStyles.directionArrow, { backgroundColor: `${phaseColors.primary}20` }]}>
-            <Feather
-              name={phase === 'inhale' ? 'arrow-up' : phase === 'exhale' ? 'arrow-down' : 'pause'}
-              size={24}
-              color={phaseColors.primary}
-            />
-          </View>
-
-          {/* Phase label */}
-          <View style={[circleStyles.phaseLabel, { backgroundColor: `${phaseColors.primary}15` }]}>
-            <Text style={[circleStyles.phaseLabelText, { color: phaseColors.primary }]}>
-              {getPhaseText()}
-            </Text>
-          </View>
+        <View style={[breatheStyles.phaseContainer, { backgroundColor: `${getPhaseColor()}20` }]}>
+          <Text style={[breatheStyles.phaseLabel, { color: getPhaseColor() }]}>
+            {getPhaseText()}
+          </Text>
         </View>
       )}
     </View>
   );
 };
 
-const circleStyles = StyleSheet.create({
+const breatheStyles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1032,21 +913,21 @@ const circleStyles = StyleSheet.create({
   ring: {
     position: 'absolute',
     borderWidth: 2,
-    backgroundColor: 'transparent',
   },
-  mainCircle: {
+  mainCircleOuter: {
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    // These properties help smooth circle edges on Android
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: 'rgba(20, 184, 166, 0.3)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 16,
+        shadowColor: SERENE_COLORS.breatheGlow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
       },
     }),
   },
@@ -1055,126 +936,61 @@ const circleStyles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  innerGlow: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  activeContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   countdownText: {
-    fontSize: 88,
-    fontWeight: '200',
-    color: COLORS.textOnColor,
-    letterSpacing: -4,
+    fontSize: 80,
+    fontWeight: '300',
+    color: '#ffffff',  // White for visibility on colored gradient backgrounds
+    letterSpacing: -2,
     includeFontPadding: false,
-    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  readyContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    textShadowRadius: 6,
   },
   readyLabel: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.textOnColor,
-    marginTop: 8,
-    opacity: 0.9,
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#0d9488',  // Teal-600 for visibility on light background
+    marginTop: 12,
   },
-  phaseIndicatorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 28,
-    gap: 12,
-  },
-  directionArrow: {
-    width: 48,
-    height: 48,
+  phaseContainer: {
+    marginTop: 32,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
     borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   phaseLabel: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  phaseLabelText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
 });
 
 // ============================================================================
-// PROGRESS TRACKER - Engaging visual progress
+// CYCLE PROGRESS - Soft Dots
 // ============================================================================
 
-interface ProgressTrackerProps {
+interface CycleProgressProps {
   current: number;
   total: number;
-  phase: BreathingPhase;
 }
 
-const ProgressTracker: React.FC<ProgressTrackerProps> = ({ current, total, phase }) => {
-  const milestone = MILESTONE_MESSAGES.find(m => m.cycle === current);
-
-  const getPhaseColor = () => {
-    switch (phase) {
-      case 'inhale': return COLORS.teal;
-      case 'hold':
-      case 'hold2': return COLORS.orange;
-      case 'exhale': return COLORS.tealDark;
-    }
-  };
-
+const CycleProgress: React.FC<CycleProgressProps> = ({ current, total }) => {
   return (
     <View style={progressStyles.container}>
-      {/* Progress bar */}
-      <View style={progressStyles.progressBarContainer}>
-        <View style={progressStyles.progressBarBackground}>
-          <View
-            style={[
-              progressStyles.progressBarFill,
-              {
-                width: `${(current / total) * 100}%`,
-                backgroundColor: getPhaseColor(),
-              },
-            ]}
-          />
-        </View>
-      </View>
-
-      {/* Breath indicators */}
       <View style={progressStyles.dotsRow}>
         {Array.from({ length: total }).map((_, index) => (
           <View
             key={index}
             style={[
               progressStyles.dot,
-              index < current && [progressStyles.dotFilled, { backgroundColor: getPhaseColor() }],
-              index === current && progressStyles.dotCurrent,
+              index < current && progressStyles.dotFilled,
             ]}
-          >
-            {index < current && (
-              <Feather name="check" size={12} color={COLORS.textOnColor} />
-            )}
-          </View>
+          />
         ))}
       </View>
-
-      {/* Progress text */}
       <Text style={progressStyles.label}>
         Breath {current} of {total}
       </Text>
-
-      {/* Milestone message */}
-      {milestone && current > 0 && (
-        <Text style={progressStyles.milestone}>{milestone.message}</Text>
-      )}
     </View>
   );
 };
@@ -1182,353 +998,82 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ current, total, phase
 const progressStyles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    backgroundColor: COLORS.cardFrosted,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 24,
+    backgroundColor: SERENE_COLORS.cardDark,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    minWidth: 200,
+    borderColor: 'rgba(20, 184, 166, 0.25)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
+        shadowColor: '#0d9488',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
     }),
   },
-  progressBarContainer: {
-    width: '100%',
-    marginBottom: 12,
-  },
-  progressBarBackground: {
-    height: 6,
-    backgroundColor: `${COLORS.textMuted}20`,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
   dotsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 10,
+    gap: 10,
+    marginBottom: 8,
   },
   dot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: `${COLORS.textMuted}30`,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(148, 163, 184, 0.4)',  // Slate-400 for light mode
   },
   dotFilled: {
-    backgroundColor: COLORS.teal,
-  },
-  dotCurrent: {
-    borderWidth: 2,
-    borderColor: COLORS.teal,
-    backgroundColor: 'transparent',
+    backgroundColor: SERENE_COLORS.accentSoftTeal,
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  milestone: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.teal,
-    marginTop: 4,
-    fontStyle: 'italic',
+    color: SERENE_COLORS.textSecondary,
   },
 });
 
 // ============================================================================
-// PAUSE OVERLAY - Calming frosted glass pause screen
+// SERENE COMPLETION SCREEN
 // ============================================================================
 
-interface PauseOverlayProps {
-  visible: boolean;
-  onResume: () => void;
-  onStop: () => void;
-  cycleCount: number;
-  totalCycles: number;
-}
-
-const PauseOverlay: React.FC<PauseOverlayProps> = ({
-  visible,
-  onResume,
-  onStop,
-  cycleCount,
-  totalCycles,
-}) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      fadeAnim.setValue(0);
-      scaleAnim.setValue(0.9);
-    }
-  }, [visible, fadeAnim, scaleAnim]);
-
-  if (!visible) return null;
-
-  const progressPercentage = Math.round((cycleCount / totalCycles) * 100);
-
-  return (
-    <Modal transparent visible={visible} animationType="none">
-      <Animated.View style={[pauseStyles.overlay, { opacity: fadeAnim }]}>
-        <Animated.View style={[pauseStyles.content, { transform: [{ scale: scaleAnim }] }]}>
-          {/* Pause icon */}
-          <View style={pauseStyles.pauseIcon}>
-            <Feather name="pause" size={40} color={COLORS.teal} />
-          </View>
-
-          <Text style={pauseStyles.title}>Paused</Text>
-          <Text style={pauseStyles.subtitle}>Take a moment to rest</Text>
-
-          {/* Progress info */}
-          <View style={pauseStyles.progressInfo}>
-            <Text style={pauseStyles.progressText}>
-              {progressPercentage}% Complete
-            </Text>
-            <Text style={pauseStyles.breathsText}>
-              {cycleCount} of {totalCycles} breaths
-            </Text>
-          </View>
-
-          {/* Buttons */}
-          <View style={pauseStyles.buttonsContainer}>
-            <Pressable
-              onPress={onResume}
-              style={({ pressed }) => [
-                pauseStyles.resumeButton,
-                pressed && { opacity: 0.8 },
-              ]}
-              accessibilityLabel="Resume breathing exercise"
-              accessibilityRole="button"
-            >
-              <LinearGradient
-                colors={[COLORS.teal, COLORS.tealDark]}
-                style={pauseStyles.buttonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Feather name="play" size={24} color={COLORS.textOnColor} />
-                <Text style={pauseStyles.resumeText}>Resume</Text>
-              </LinearGradient>
-            </Pressable>
-
-            <Pressable
-              onPress={onStop}
-              style={({ pressed }) => [
-                pauseStyles.stopButton,
-                pressed && { opacity: 0.8 },
-              ]}
-              accessibilityLabel="Stop and exit breathing exercise"
-              accessibilityRole="button"
-            >
-              <Feather name="x" size={24} color={COLORS.textSecondary} />
-              <Text style={pauseStyles.stopText}>End Session</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-      </Animated.View>
-    </Modal>
-  );
-};
-
-const pauseStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  content: {
-    backgroundColor: COLORS.cardSolid,
-    borderRadius: 32,
-    padding: 32,
-    alignItems: 'center',
-    maxWidth: 360,
-    width: '100%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.25,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
-  },
-  pauseIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: `${COLORS.teal}15`,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 18,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-    marginBottom: 24,
-  },
-  progressInfo: {
-    backgroundColor: `${COLORS.teal}10`,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 28,
-    width: '100%',
-  },
-  progressText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.teal,
-  },
-  breathsText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-    marginTop: 4,
-  },
-  buttonsContainer: {
-    width: '100%',
-    gap: 12,
-  },
-  resumeButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    gap: 10,
-  },
-  resumeText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.textOnColor,
-  },
-  stopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: COLORS.cardBorder,
-  },
-  stopText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-});
-
-// ============================================================================
-// COMPLETION SCREEN - Celebratory with stats
-// ============================================================================
-
-interface CompletionScreenProps {
+interface CompletionProps {
   onAgain: () => void;
   onDone: () => void;
   cycles: number;
-  exerciseType: BreathingType | null;
-  totalTimeSeconds: number;
 }
 
-const CompletionScreen: React.FC<CompletionScreenProps> = ({
-  onAgain,
-  onDone,
-  cycles,
-  exerciseType,
-  totalTimeSeconds,
-}) => {
+const SereneCompletion: React.FC<CompletionProps> = ({ onAgain, onDone, cycles }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const checkAnim = useRef(new Animated.Value(0)).current;
-  const confettiAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Gentle, relaxing completion animation
     Animated.sequence([
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
+          duration: 600, // Slower fade
+          easing: Easing.out(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 50,
-          friction: 8,
+          tension: 30, // Softer spring
+          friction: 10,
           useNativeDriver: true,
         }),
       ]),
       Animated.spring(checkAnim, {
         toValue: 1,
-        tension: 80,
-        friction: 6,
-        useNativeDriver: true,
-      }),
-      Animated.timing(confettiAnim, {
-        toValue: 1,
-        duration: 800,
+        tension: 50, // Gentler bounce
+        friction: 8,
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Haptic celebration
-    if (Platform.OS !== 'web') {
-      Vibration.vibrate([0, 50, 100, 50]);
-    }
-  }, [fadeAnim, scaleAnim, checkAnim, confettiAnim]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, [fadeAnim, scaleAnim, checkAnim]);
 
   return (
     <Animated.View
@@ -1540,55 +1085,34 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
         },
       ]}
     >
-      <View style={completionStyles.card}>
-        {/* Success icon with animation */}
+      <LinearGradient
+        colors={[SERENE_COLORS.cardMid, SERENE_COLORS.cardDark]}
+        style={completionStyles.card}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        {/* Success icon */}
         <Animated.View
           style={[
             completionStyles.checkCircle,
             { transform: [{ scale: checkAnim }] },
           ]}
         >
-          <LinearGradient
-            colors={[COLORS.success, '#059669']}
-            style={completionStyles.checkGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Feather name="check" size={48} color={COLORS.textOnColor} />
-          </LinearGradient>
+          <View style={completionStyles.checkGradient}>
+            <Feather name="check" size={40} color="#fff" />
+          </View>
         </Animated.View>
 
         <Text style={completionStyles.title}>Well Done!</Text>
         <Text style={completionStyles.subtitle}>
-          You completed your breathing session
+          You finished {cycles} breaths
         </Text>
-
-        {/* Stats row */}
-        <View style={completionStyles.statsRow}>
-          <View style={completionStyles.statItem}>
-            <Feather name="wind" size={24} color={COLORS.teal} />
-            <Text style={completionStyles.statValue}>{cycles}</Text>
-            <Text style={completionStyles.statLabel}>Breaths</Text>
-          </View>
-          <View style={completionStyles.statDivider} />
-          <View style={completionStyles.statItem}>
-            <Feather name="clock" size={24} color={COLORS.orange} />
-            <Text style={completionStyles.statValue}>{formatTime(totalTimeSeconds)}</Text>
-            <Text style={completionStyles.statLabel}>Duration</Text>
-          </View>
-          <View style={completionStyles.statDivider} />
-          <View style={completionStyles.statItem}>
-            <Feather name={exerciseType?.icon || 'heart'} size={24} color={exerciseType?.iconColor || COLORS.teal} />
-            <Text style={completionStyles.statValue}>{exerciseType?.difficulty || 'Easy'}</Text>
-            <Text style={completionStyles.statLabel}>Level</Text>
-          </View>
-        </View>
 
         {/* Motivational message */}
         <View style={completionStyles.messageBox}>
-          <Feather name="heart" size={20} color={COLORS.orange} />
+          <Feather name="heart" size={18} color={SERENE_COLORS.accentWarmGlow} />
           <Text style={completionStyles.messageText}>
-            {exerciseType?.completionMessage || 'Great for your health!'}
+            Great for your lungs and heart!
           </Text>
         </View>
 
@@ -1596,139 +1120,95 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
         <View style={completionStyles.buttonRow}>
           <Pressable
             onPress={onAgain}
+            accessibilityLabel="Practice again"
+            accessibilityRole="button"
             style={({ pressed }) => [
               completionStyles.secondaryBtn,
               pressed && { opacity: 0.8 },
             ]}
-            accessibilityLabel="Practice again"
-            accessibilityRole="button"
           >
-            <Feather name="refresh-cw" size={22} color={COLORS.tealDark} />
+            <Feather name="refresh-cw" size={20} color="#0d9488" />
             <Text style={completionStyles.secondaryBtnText}>Again</Text>
           </Pressable>
 
           <Pressable
             onPress={onDone}
+            accessibilityLabel="Finish and return"
+            accessibilityRole="button"
             style={({ pressed }) => [
               completionStyles.primaryBtn,
               pressed && { opacity: 0.8 },
             ]}
-            accessibilityLabel="Finish and return"
-            accessibilityRole="button"
           >
-            <LinearGradient
-              colors={[COLORS.orange, COLORS.orangeDark]}
-              style={completionStyles.primaryBtnGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text style={completionStyles.primaryBtnText}>Done</Text>
-              <Feather name="check" size={22} color={COLORS.textOnColor} />
-            </LinearGradient>
+            <Text style={completionStyles.primaryBtnText}>Done</Text>
+            <Feather name="check" size={20} color="#fff" />
           </Pressable>
         </View>
-      </View>
+      </LinearGradient>
     </Animated.View>
   );
 };
 
 const completionStyles = StyleSheet.create({
   container: {
-    width: '100%',
-    maxWidth: 400,
-    paddingHorizontal: 16,
+    width: '90%',
+    maxWidth: 360,
   },
   card: {
-    backgroundColor: COLORS.cardSolid,
     borderRadius: 32,
-    padding: 32,
+    padding: 36,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: 'rgba(20, 184, 166, 0.3)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 10,
+        shadowColor: '#0d9488',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 20,
       },
     }),
   },
   checkCircle: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   checkGradient: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#14B8A6',
   },
   title: {
     fontSize: 32,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    fontWeight: '600',
+    color: SERENE_COLORS.textPrimary,
     marginBottom: 8,
     letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: SERENE_COLORS.textMuted,
     textAlign: 'center',
+    lineHeight: 26,
     marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${COLORS.teal}08`,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginBottom: 24,
-    width: '100%',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  statDivider: {
-    width: 1,
-    height: 48,
-    backgroundColor: COLORS.cardBorder,
-    marginHorizontal: 8,
   },
   messageBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${COLORS.orange}10`,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     borderRadius: 16,
     marginBottom: 28,
     gap: 12,
-    width: '100%',
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: COLORS.orangeDark,
+    color: '#ea580c',  // Orange-600 for better contrast on light mode
     flex: 1,
     lineHeight: 22,
   },
@@ -1743,33 +1223,31 @@ const completionStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: `${COLORS.teal}12`,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
     borderWidth: 1,
-    borderColor: `${COLORS.teal}25`,
+    borderColor: 'rgba(94, 234, 212, 0.2)',
   },
   secondaryBtnText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: COLORS.tealDark,
+    color: '#0d9488',  // Teal-600 for better contrast on light mode
   },
   primaryBtn: {
     flex: 1,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  primaryBtnGradient: {
+    height: 56,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    height: 60,
+    backgroundColor: '#F97316',
   },
   primaryBtnText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: COLORS.textOnColor,
+    color: '#fff',
   },
 });
 
@@ -1780,7 +1258,7 @@ const completionStyles = StyleSheet.create({
 export const TandyBreathingScreen: React.FC = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { width, height, isLandscape, isTablet, hp, wp, getButtonHeight, getTouchTargetSize } = useResponsive();
+  const { width, height, isLandscape } = useResponsive();
 
   // Accessibility
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -1800,16 +1278,11 @@ export const TandyBreathingScreen: React.FC = () => {
     return () => sub?.remove();
   }, []);
 
-  // Responsive circle size
+  // Circle size
   const circleSize = useMemo(() => {
-    if (isLandscape) {
-      return Math.min(height * 0.42, width * 0.28, 220);
-    }
-    if (isTablet) {
-      return Math.min(width * 0.45, height * 0.35, 280);
-    }
-    return Math.min(width * 0.55, height * 0.30, 240);
-  }, [width, height, isLandscape, isTablet]);
+    if (isLandscape) return Math.min(height * 0.45, 200);
+    return Math.min(width * 0.55, height * 0.28, 220);
+  }, [width, height, isLandscape]);
 
   // State
   const [selectedType, setSelectedType] = useState<BreathingType | null>(null);
@@ -1819,14 +1292,11 @@ export const TandyBreathingScreen: React.FC = () => {
   const [count, setCount] = useState(4);
   const [cycleCount, setCycleCount] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
-  const [totalTimeSeconds, setTotalTimeSeconds] = useState(0);
 
   // Refs
   const countRef = useRef(4);
   const phaseRef = useRef<BreathingPhase>('inhale');
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const timeRef = useRef(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Phase duration
   const getPhaseDuration = useCallback(
@@ -1861,25 +1331,15 @@ export const TandyBreathingScreen: React.FC = () => {
     [selectedType]
   );
 
-  // Haptic feedback on phase change
-  const triggerHaptic = useCallback(() => {
-    if (Platform.OS !== 'web' && !reduceMotion) {
-      Vibration.vibrate(30);
-    }
-  }, [reduceMotion]);
-
   // Timer
   useEffect(() => {
     if (!isActive || !selectedType || isPaused) return;
 
     const timer = setInterval(() => {
       countRef.current -= 1;
-      timeRef.current += 1;
-      setTotalTimeSeconds(timeRef.current);
 
       if (countRef.current <= 0) {
         const nextPhase = getNextPhase(phaseRef.current);
-        triggerHaptic();
 
         if (nextPhase === 'inhale') {
           const newCycleCount = cycleCount + 1;
@@ -1907,29 +1367,35 @@ export const TandyBreathingScreen: React.FC = () => {
       setCount(countRef.current);
     }, 1000);
 
-    timerRef.current = timer;
     return () => clearInterval(timer);
-  }, [isActive, isPaused, selectedType, getNextPhase, getPhaseDuration, cycleCount, triggerHaptic]);
+  }, [isActive, isPaused, selectedType, getNextPhase, getPhaseDuration, cycleCount]);
 
-  // Breathing animation
+  // Breathing animation - follows the timer exactly
+  // BIG circle = breathe in, SMALL circle = breathe out
   useEffect(() => {
     if (!isActive || isPaused || reduceMotion) return;
 
+    // Get the duration for this phase in milliseconds
     const phaseDuration = getPhaseDuration(phase) * 1000;
 
+    // Exaggerated scale values for very clear visual feedback
+    // Inhale: circle grows BIG (1.35)
+    // Exhale: circle shrinks SMALL (0.65)
+    // Hold: stays at current size (no animation)
     let toValue: number;
     if (phase === 'inhale') {
-      toValue = 1.35;
+      toValue = 1.35; // Big expansion
     } else if (phase === 'exhale') {
-      toValue = 0.7;
+      toValue = 0.65; // Significant shrink
     } else {
+      // Hold phases - don't animate, keep current size
       return;
     }
 
     Animated.timing(scaleAnim, {
       toValue,
-      duration: phaseDuration,
-      easing: Easing.inOut(Easing.sin),
+      duration: phaseDuration, // Match the breathing timer exactly
+      easing: Easing.inOut(Easing.sin), // Sinusoidal for natural breathing feel
       useNativeDriver: true,
     }).start();
   }, [phase, isActive, isPaused, scaleAnim, reduceMotion, getPhaseDuration]);
@@ -1945,16 +1411,14 @@ export const TandyBreathingScreen: React.FC = () => {
     if (!selectedType) return;
     phaseRef.current = 'inhale';
     countRef.current = selectedType.phases.inhale;
-    timeRef.current = 0;
     setPhase('inhale');
     setCount(selectedType.phases.inhale);
     setCycleCount(0);
-    setTotalTimeSeconds(0);
     setShowCompletion(false);
     setIsPaused(false);
-    scaleAnim.setValue(0.7);
+    // Start at small size so the first "breathe in" shows expansion
+    scaleAnim.setValue(0.65);
     setIsActive(true);
-    triggerHaptic();
   };
 
   const handlePause = () => {
@@ -1963,14 +1427,11 @@ export const TandyBreathingScreen: React.FC = () => {
 
   const handleResume = () => {
     setIsPaused(false);
-    triggerHaptic();
   };
 
   const handleStop = () => {
     setIsActive(false);
     setIsPaused(false);
-    setSelectedType(null);
-    setCycleCount(0);
   };
 
   const handleReset = () => {
@@ -1991,22 +1452,24 @@ export const TandyBreathingScreen: React.FC = () => {
 
   const getInstructionText = () => {
     if (showCompletion) return '';
-    if (isPaused) return 'Paused - tap Resume to continue';
-    if (!isActive) return 'Sit comfortably and relax';
 
+    // Specific instructions based on exercise type
     if (selectedType?.id === 'pursed') {
+      // Pursed lip breathing - specific technique
       switch (phase) {
         case 'inhale': return 'Breathe in through your nose';
         case 'exhale': return 'Breathe out slowly, lips pursed';
         default: return '';
       }
     } else if (selectedType?.id === 'belly') {
+      // Belly/diaphragmatic breathing
       switch (phase) {
         case 'inhale': return 'Breathe in, feel your belly rise';
         case 'exhale': return 'Breathe out, feel your belly fall';
         default: return '';
       }
     } else {
+      // Default calming breath
       switch (phase) {
         case 'inhale': return 'Breathe in slowly';
         case 'exhale': return 'Breathe out gently';
@@ -2015,10 +1478,6 @@ export const TandyBreathingScreen: React.FC = () => {
     }
   };
 
-  // Calculate button height
-  const buttonHeight = getButtonHeight();
-  const touchTarget = getTouchTargetSize('large');
-
   // ============================================================================
   // RENDER: TYPE SELECTION
   // ============================================================================
@@ -2026,89 +1485,59 @@ export const TandyBreathingScreen: React.FC = () => {
   if (!selectedType) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.backgroundStart} />
+        <StatusBar barStyle="dark-content" backgroundColor={SERENE_COLORS.backgroundDeep} />
         <LinearGradient
-          colors={[COLORS.backgroundStart, COLORS.backgroundMid, COLORS.backgroundEnd]}
+          colors={[
+            SERENE_COLORS.backgroundDeep,
+            SERENE_COLORS.backgroundMid,
+            SERENE_COLORS.backgroundLight,
+          ]}
           locations={[0, 0.5, 1]}
           style={styles.gradient}
         >
-          <AmbientParticles reduceMotion={reduceMotion} phase="inhale" isActive={false} />
+          <RelaxingBubbles reduceMotion={reduceMotion} />
 
           <View style={[styles.safeArea, {
-            paddingTop: insets.top + hp(2),
-            paddingBottom: insets.bottom + hp(2),
-            paddingLeft: insets.left + wp(6),
-            paddingRight: insets.right + wp(6),
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+            paddingLeft: insets.left + 24,
+            paddingRight: insets.right + 24,
           }]}>
-            {/* Header row */}
-            <View style={styles.headerRow}>
-              <Pressable
-                onPress={handleGoBack}
-                accessibilityLabel="Go back"
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.backButton,
-                  { width: touchTarget, height: touchTarget },
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <View style={styles.backButtonInner}>
-                  <Feather name="arrow-left" size={26} color={COLORS.textPrimary} />
-                </View>
-              </Pressable>
-            </View>
+            {/* Back button */}
+            <Pressable
+              onPress={handleGoBack}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+              style={styles.backButton}
+            >
+              <View style={styles.backButtonInner}>
+                <Feather name="arrow-left" size={24} color={SERENE_COLORS.textPrimary} />
+              </View>
+            </Pressable>
 
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerIconWrapper}>
-                <LinearGradient
-                  colors={[COLORS.teal, COLORS.tealDark]}
-                  style={styles.headerIconGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Feather name="wind" size={36} color={COLORS.textOnColor} />
-                </LinearGradient>
+                <Feather name="wind" size={36} color={SERENE_COLORS.accentSoftTeal} />
               </View>
               <Text style={styles.title}>Breathe</Text>
-              <Text style={styles.subtitle}>Choose a breathing exercise</Text>
+              <Text style={styles.subtitle}>Choose a breathing style</Text>
             </View>
 
             {/* Cards */}
             <ScrollView
               style={styles.scrollView}
-              contentContainerStyle={[
-                styles.scrollContent,
-                isTablet && styles.scrollContentTablet,
-              ]}
+              contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
             >
               {BREATHING_TYPES.map((type, index) => (
-                <PremiumTypeCard
+                <SereneTypeCard
                   key={type.id}
                   type={type}
                   index={index}
-                  isTablet={isTablet}
                   onSelect={() => handleSelectType(type)}
                 />
               ))}
-
-              {/* Tips section */}
-              <View style={[styles.tipsSection, isTablet && styles.tipsSectionTablet]}>
-                <View style={styles.tipsHeader}>
-                  <Feather name="info" size={18} color={COLORS.textMuted} />
-                  <Text style={styles.tipsTitle}>Tips for seniors</Text>
-                </View>
-                <Text style={styles.tipText}>
-                  - Sit in a comfortable chair with feet flat on floor
-                </Text>
-                <Text style={styles.tipText}>
-                  - Stop immediately if you feel dizzy or lightheaded
-                </Text>
-                <Text style={styles.tipText}>
-                  - Practice regularly for best health benefits
-                </Text>
-              </View>
             </ScrollView>
           </View>
         </LinearGradient>
@@ -2122,75 +1551,77 @@ export const TandyBreathingScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.backgroundStart} />
+      <StatusBar barStyle="dark-content" backgroundColor={SERENE_COLORS.backgroundDeep} />
       <LinearGradient
-        colors={[COLORS.backgroundStart, COLORS.backgroundMid, COLORS.backgroundEnd]}
+        colors={[
+          SERENE_COLORS.backgroundDeep,
+          SERENE_COLORS.backgroundMid,
+          SERENE_COLORS.backgroundLight,
+        ]}
         locations={[0, 0.5, 1]}
         style={styles.gradient}
       >
-        <AmbientParticles reduceMotion={reduceMotion} phase={phase} isActive={isActive} />
+        <RelaxingBubbles reduceMotion={reduceMotion} />
 
         <View style={[styles.safeArea, {
-          paddingTop: insets.top + hp(2),
-          paddingBottom: insets.bottom + hp(2),
-          paddingLeft: insets.left + wp(4),
-          paddingRight: insets.right + wp(4),
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
+          paddingLeft: insets.left + 24,
+          paddingRight: insets.right + 24,
         }]}>
-          {/* Header row */}
-          <View style={styles.headerRow}>
-            <Pressable
-              onPress={showCompletion ? handleDone : handleReset}
-              accessibilityLabel={showCompletion ? 'Finish' : 'Go back'}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.backButton,
-                { width: touchTarget, height: touchTarget },
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <View style={styles.backButtonInner}>
-                <Feather name="arrow-left" size={26} color={COLORS.textPrimary} />
-              </View>
-            </Pressable>
+          {/* Back button */}
+          <Pressable
+            onPress={showCompletion ? handleDone : handleReset}
+            accessibilityLabel={showCompletion ? 'Finish' : 'Go back'}
+            accessibilityRole="button"
+            style={styles.backButton}
+          >
+            <View style={styles.backButtonInner}>
+              <Feather name="arrow-left" size={24} color={SERENE_COLORS.textPrimary} />
+            </View>
+          </Pressable>
 
-            {/* Progress indicator */}
-            {!showCompletion && (
-              <View style={styles.progressWrapper}>
-                <ProgressTracker current={cycleCount} total={TARGET_CYCLES} phase={phase} />
-              </View>
-            )}
-          </View>
+          {/* Progress indicator */}
+          {!showCompletion && (
+            <View style={styles.topRight}>
+              <CycleProgress current={cycleCount} total={TARGET_CYCLES} />
+            </View>
+          )}
 
           {/* Main content */}
           {showCompletion ? (
             <View style={styles.centerContent}>
-              <CompletionScreen
+              <SereneCompletion
                 onAgain={handleAgain}
                 onDone={handleDone}
                 cycles={cycleCount}
-                exerciseType={selectedType}
-                totalTimeSeconds={totalTimeSeconds}
               />
             </View>
           ) : (
             <View style={styles.centerContent}>
-              <MesmerizingBreathingCircle
+              <SereneBreathingCircle
                 size={circleSize}
                 isActive={isActive}
                 scaleAnim={scaleAnim}
                 phase={phase}
                 count={count}
-                totalDuration={getPhaseDuration(phase)}
                 reduceMotion={reduceMotion}
-                selectedType={selectedType}
               />
 
               {/* Instructions */}
               <View style={styles.instructions}>
                 <Text style={styles.exerciseName}>{selectedType.name}</Text>
-                <Text style={styles.instruction}>{getInstructionText()}</Text>
+                <Text style={styles.instruction}>
+                  {isPaused
+                    ? 'Paused - tap Resume to continue'
+                    : isActive
+                      ? getInstructionText()
+                      : 'Sit comfortably and relax'}
+                </Text>
                 {!isActive && (
-                  <Text style={styles.safetyNote}>Stop if you feel dizzy</Text>
+                  <Text style={styles.safetyNote}>
+                    Stop if you feel dizzy
+                  </Text>
                 )}
               </View>
             </View>
@@ -2200,53 +1631,51 @@ export const TandyBreathingScreen: React.FC = () => {
           {!showCompletion && (
             <View style={styles.controls}>
               {!isActive ? (
+                // Begin button - orange (not started yet)
                 <Pressable
                   onPress={handleStart}
-                  accessibilityLabel="Begin breathing exercise"
+                  accessibilityLabel="Begin breathing"
                   accessibilityRole="button"
                   style={({ pressed }) => [
-                    styles.primaryButton,
-                    { height: buttonHeight },
-                    pressed && { opacity: 0.85 },
+                    styles.orangeButton,
+                    pressed && { opacity: 0.8 },
                   ]}
                 >
-                  <LinearGradient
-                    colors={[COLORS.orange, COLORS.orangeDark]}
-                    style={styles.buttonGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  >
-                    <Feather name="play" size={26} color={COLORS.textOnColor} />
-                    <Text style={styles.primaryButtonText}>Begin</Text>
-                  </LinearGradient>
+                  <Feather name="play" size={24} color="#fff" />
+                  <Text style={styles.orangeButtonText}>Begin</Text>
+                </Pressable>
+              ) : isPaused ? (
+                // Resume button - teal (paused)
+                <Pressable
+                  onPress={handleResume}
+                  accessibilityLabel="Resume breathing"
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.tealButton,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Feather name="play" size={24} color="#fff" />
+                  <Text style={styles.tealButtonText}>Resume</Text>
                 </Pressable>
               ) : (
+                // Pause button - white with teal text (running)
                 <Pressable
                   onPress={handlePause}
                   accessibilityLabel="Pause"
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.pauseButton,
-                    { height: buttonHeight },
-                    pressed && { opacity: 0.85 },
+                    pressed && { opacity: 0.8 },
                   ]}
                 >
-                  <Feather name="pause" size={26} color={COLORS.tealDark} />
+                  <Feather name="pause" size={24} color="#0d9488" />
                   <Text style={styles.pauseButtonText}>Pause</Text>
                 </Pressable>
               )}
             </View>
           )}
         </View>
-
-        {/* Pause overlay */}
-        <PauseOverlay
-          visible={isPaused}
-          onResume={handleResume}
-          onStop={handleStop}
-          cycleCount={cycleCount}
-          totalCycles={TARGET_CYCLES}
-        />
       </LinearGradient>
     </View>
   );
@@ -2259,7 +1688,7 @@ export const TandyBreathingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundStart,
+    backgroundColor: SERENE_COLORS.backgroundDeep,
   },
   gradient: {
     flex: 1,
@@ -2268,14 +1697,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Header row
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
+  // Back button
   backButton: {
+    width: 56,
+    height: 56,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -2283,65 +1708,54 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.cardSolid,
+    backgroundColor: SERENE_COLORS.cardDark,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: 'rgba(20, 184, 166, 0.25)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
+        shadowColor: '#0d9488',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
       },
     }),
   },
-  progressWrapper: {
-    flex: 1,
-    alignItems: 'flex-end',
+
+  // Top right position
+  topRight: {
+    position: 'absolute',
+    top: 16,
+    right: 24,
+    zIndex: 10,
   },
 
   // Header
   header: {
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 28,
+    marginTop: 16,
+    marginBottom: 32,
   },
   headerIconWrapper: {
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.teal,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  headerIconGradient: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: 24,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
   title: {
-    fontSize: 38,
+    fontSize: 36,
     fontWeight: '300',
-    color: COLORS.textPrimary,
+    color: SERENE_COLORS.textPrimary,
     marginBottom: 6,
     letterSpacing: 2,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '400',
-    color: COLORS.textMuted,
+    color: SERENE_COLORS.textMuted,
   },
 
   // Scroll
@@ -2349,43 +1763,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 32,
-  },
-  scrollContentTablet: {
-    paddingHorizontal: 60,
-  },
-
-  // Tips section
-  tipsSection: {
-    backgroundColor: COLORS.cardFrosted,
-    borderRadius: 20,
-    padding: 20,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  tipsSectionTablet: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 600,
-  },
-  tipsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  tipsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  tipText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: COLORS.textMuted,
-    marginBottom: 6,
-    lineHeight: 22,
+    gap: 16,
+    paddingBottom: 24,
   },
 
   // Center content
@@ -2397,29 +1776,28 @@ const styles = StyleSheet.create({
 
   // Instructions
   instructions: {
-    marginTop: 36,
+    marginTop: 40,
     alignItems: 'center',
-    maxWidth: 340,
-    paddingHorizontal: 16,
+    maxWidth: 320,
   },
   exerciseName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
+    fontSize: 32,
+    fontWeight: '600',
+    color: SERENE_COLORS.textPrimary,
+    marginBottom: 16,
     textAlign: 'center',
   },
   instruction: {
     fontSize: 20,
     fontWeight: '500',
-    color: COLORS.textSecondary,
+    color: SERENE_COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 30,
   },
   safetyNote: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
-    color: COLORS.textMuted,
+    color: '#94a3b8',
     textAlign: 'center',
     marginTop: 12,
     fontStyle: 'italic',
@@ -2427,63 +1805,84 @@ const styles = StyleSheet.create({
 
   // Controls
   controls: {
-    paddingTop: 20,
-    paddingBottom: 8,
+    marginTop: 24,
   },
-  primaryButton: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.orange,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  buttonGradient: {
-    flex: 1,
+  // Orange button (Begin)
+  orangeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingHorizontal: 48,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 28,
+    minHeight: 60,
+    backgroundColor: '#F97316',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#EA580C',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+      },
+    }),
   },
-  primaryButtonText: {
-    fontSize: 22,
+  orangeButtonText: {
+    fontSize: 20,
     fontWeight: '600',
-    color: COLORS.textOnColor,
+    color: '#ffffff',
   },
+  // Teal button (Resume)
+  tealButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 28,
+    minHeight: 60,
+    backgroundColor: '#14B8A6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0d9488',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+      },
+    }),
+  },
+  tealButtonText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  // White button (Pause)
   pauseButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingHorizontal: 48,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
     borderRadius: 28,
-    backgroundColor: COLORS.cardSolid,
+    minHeight: 60,
+    backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: `${COLORS.teal}30`,
+    borderColor: 'rgba(20, 184, 166, 0.4)',
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.teal,
+        shadowColor: '#0d9488',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
       },
-      android: {
-        elevation: 6,
-      },
     }),
   },
   pauseButtonText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
-    color: COLORS.tealDark,
+    color: '#0d9488',
   },
 });
 

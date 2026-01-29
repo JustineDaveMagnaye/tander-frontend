@@ -18,7 +18,7 @@ const asyncStorageWrapper: StorageInterface = {
     try {
       return await AsyncStorage.getItem(key);
     } catch (error) {
-      console.error('AsyncStorage getItem error:', error);
+      console.warn('AsyncStorage getItem error:', error);
       return null;
     }
   },
@@ -27,7 +27,7 @@ const asyncStorageWrapper: StorageInterface = {
     try {
       await AsyncStorage.setItem(key, value);
     } catch (error) {
-      console.error('AsyncStorage setItem error:', error);
+      console.warn('AsyncStorage setItem error:', error);
       throw error;
     }
   },
@@ -36,7 +36,7 @@ const asyncStorageWrapper: StorageInterface = {
     try {
       await AsyncStorage.removeItem(key);
     } catch (error) {
-      console.error('AsyncStorage removeItem error:', error);
+      console.warn('AsyncStorage removeItem error:', error);
       throw error;
     }
   },
@@ -45,7 +45,7 @@ const asyncStorageWrapper: StorageInterface = {
     try {
       await AsyncStorage.clear();
     } catch (error) {
-      console.error('AsyncStorage clear error:', error);
+      console.warn('AsyncStorage clear error:', error);
       throw error;
     }
   },

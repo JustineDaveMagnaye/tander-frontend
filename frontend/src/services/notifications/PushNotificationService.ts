@@ -6,6 +6,11 @@
  *
  * CRITICAL: For Android, we use native FCM tokens (not Expo Push Tokens)
  * because the backend uses Firebase Admin SDK which only accepts FCM tokens.
+ *
+ * ANDROID INCOMING CALLS:
+ * - Uses native foreground service for reliable ringing
+ * - Full-screen intent for lock screen display
+ * - Push deduplication to prevent ghost calls
  */
 
 import * as Notifications from 'expo-notifications';
@@ -13,6 +18,15 @@ import * as Device from 'expo-device';
 import { Platform, AppState, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '@services/api/client';
+
+// Import incoming call services for Android
+import {
+  incomingCallNativeModule,
+  pushDeduplicatorService,
+  channelMonitorService,
+  oemGuidanceService,
+  initializeIncomingCallServices,
+} from '@/services/incomingCall';
 
 // Storage key for device token
 const DEVICE_TOKEN_KEY = '@tander_device_token';
@@ -35,6 +49,7 @@ export type NotificationType =
   | 'super_like'
   | 'missed_call'
   | 'incoming_call'
+  | 'call_cancelled'  // P0-06: Caller cancelled the call
   | 'tandy_reminder';
 
 export interface NotificationData {
@@ -76,9 +91,11 @@ class PushNotificationService {
   private expoPushToken: string | null = null;
   private notificationListener: Notifications.Subscription | null = null;
   private responseListener: Notifications.Subscription | null = null;
+  private tokenRefreshListener: Notifications.Subscription | null = null; // P1-03: Token refresh listener
   private onNotificationReceived: ((data: NotificationData) => void) | null = null;
   private onNotificationTapped: ((data: NotificationData) => void) | null = null;
   private onIncomingCall: IncomingCallCallback | null = null;
+  private onCallCancelled: ((roomId: string) => void) | null = null; // P0-06: Call cancelled callback
 
   /**
    * Initialize push notifications
@@ -110,6 +127,17 @@ class PushNotificationService {
     // Configure Android notification channel
     if (Platform.OS === 'android') {
       await this.setupAndroidChannels();
+
+      // Initialize native incoming call services (foreground service, OEM guidance, etc.)
+      try {
+        await initializeIncomingCallServices();
+        debugLog('Android incoming call services initialized');
+
+        // Set up native call action listener
+        this.setupNativeCallActionListener();
+      } catch (error) {
+        debugLog('Failed to initialize incoming call services:', error);
+      }
     }
 
     // Get and register token
@@ -120,7 +148,7 @@ class PushNotificationService {
         this.expoPushToken = token;
       }
     } catch (error) {
-      console.error('Failed to get/register push token:', error);
+      console.warn('Failed to get/register push token:', error);
     }
 
     // Set up notification listeners
@@ -128,6 +156,36 @@ class PushNotificationService {
 
     return true;
   }
+
+  /**
+   * Set up listener for native call actions (accept/decline from notification or activity)
+   */
+  private setupNativeCallActionListener(): void {
+    if (Platform.OS !== 'android') return;
+
+    const unsubscribe = incomingCallNativeModule.addCallActionListener((event) => {
+      debugLog('Native call action received:', event);
+
+      if (event.action === 'accepted' && this.onIncomingCall) {
+        // User accepted from native UI - need to forward to RN
+        // The call data should have been stored when we showed the native UI
+        debugLog('Call accepted from native UI, roomId:', event.roomId);
+      } else if (event.action === 'declined') {
+        // User declined from native UI
+        debugLog('Call declined from native UI');
+        pushDeduplicatorService.markCallDeclined(event.roomId);
+      } else if (event.action === 'timeout') {
+        // Call timed out (60s)
+        debugLog('Call timed out');
+        pushDeduplicatorService.markCallTimeout(event.roomId);
+      }
+    });
+
+    // Store unsubscribe function for cleanup
+    this.nativeCallActionUnsubscribe = unsubscribe;
+  }
+
+  private nativeCallActionUnsubscribe: (() => void) | null = null;
 
   /**
    * Set up Android notification channels
@@ -220,7 +278,7 @@ class PushNotificationService {
           return deviceToken;
         } catch (fcmError: any) {
           debugLog('CRITICAL: Failed to get FCM token:', fcmError.message);
-          console.error('[PushNotificationService] FCM token error:', fcmError);
+          console.warn('[PushNotificationService] FCM token error:', fcmError);
 
           // Show user alert about notification issue
           Alert.alert(
@@ -251,7 +309,7 @@ class PushNotificationService {
       return null;
     } catch (error: any) {
       debugLog('Failed to get push token:', error.message);
-      console.error('[PushNotificationService] Failed to get push token:', error);
+      console.warn('[PushNotificationService] Failed to get push token:', error);
       return null;
     }
   }
@@ -314,7 +372,7 @@ class PushNotificationService {
       console.log('[PushNotification] Device token registered with backend successfully');
     } catch (error: any) {
       debugLog('Token registration failed:', error.message);
-      console.error('Failed to register token with backend:', error);
+      console.warn('Failed to register token with backend:', error);
 
       // Show error to user
       if (error.statusCode === 401) {
@@ -343,6 +401,16 @@ class PushNotificationService {
         return; // Don't forward to general handler
       }
 
+      // P0-06: Handle call_cancelled notifications
+      if (data?.type === 'call_cancelled' && this.onCallCancelled) {
+        debugLog('Call cancelled notification received:', data);
+        const roomId = data.roomId || data.roomName;
+        if (roomId) {
+          this.onCallCancelled(roomId);
+        }
+        return;
+      }
+
       if (this.onNotificationReceived) {
         this.onNotificationReceived(data);
       }
@@ -365,6 +433,29 @@ class PushNotificationService {
         this.onNotificationTapped(data);
       }
     });
+
+    // P1-03: Listen for token refresh events
+    // This is called when the OS refreshes the push token (can happen at any time)
+    if (Platform.OS === 'android') {
+      // For Android, listen for FCM token refresh
+      this.tokenRefreshListener = Notifications.addPushTokenListener(async (tokenData) => {
+        debugLog('P1-03: Token refresh received:', tokenData.data.substring(0, 50) + '...');
+
+        // Validate it's not an Expo token (Android should use FCM)
+        if (tokenData.data.startsWith('ExponentPushToken')) {
+          debugLog('P1-03: Ignoring Expo token on Android');
+          return;
+        }
+
+        // Update stored token and re-register with backend
+        await AsyncStorage.setItem(DEVICE_TOKEN_KEY, tokenData.data);
+        await AsyncStorage.setItem(DEVICE_TOKEN_TYPE_KEY, 'fcm');
+        this.expoPushToken = tokenData.data;
+
+        await this.registerTokenWithBackend(tokenData.data);
+        debugLog('P1-03: Token refresh registered with backend');
+      });
+    }
 
     debugLog('Notification listeners set up successfully');
   }
@@ -412,33 +503,105 @@ class PushNotificationService {
 
   /**
    * Handle incoming call notification and trigger the callback
+   * On Android, this will:
+   * 1. Check for duplicate/cancelled calls (ghost call prevention)
+   * 2. Start the native foreground service with ringtone
+   * 3. Show full-screen intent on lock screen
+   * 4. Forward to RN callback for IncomingCallModal
    */
   private handleIncomingCallNotification(data: NotificationData): void {
-    if (!this.onIncomingCall) {
-      console.warn('[PushNotificationService] No incoming call handler registered');
-      return;
-    }
-
     const callerId = data.callerId ? parseInt(data.callerId, 10) : 0;
     const callerName = data.callerName || 'Unknown';
     const callerPhoto = data.callerPhoto || undefined;
     const callType = (data.callType?.toLowerCase() === 'video' ? 'video' : 'voice') as 'voice' | 'video';
     const roomId = data.roomId || '';
+    const callId = data.callLogId || roomId; // Use callLogId if available for deduplication
 
-    debugLog('Incoming call data - callerId:', callerId, 'callerName:', callerName, 'callerPhoto:', callerPhoto);
+    debugLog('Incoming call data - callerId:', callerId, 'callerName:', callerName, 'callType:', callType);
+    debugLog('Incoming call - roomId:', roomId, 'callId:', callId);
 
     if (!callerId || !roomId) {
-      console.error('[PushNotificationService] Invalid incoming call data:', data);
+      console.warn('[PushNotificationService] Invalid incoming call data:', data);
       return;
     }
 
-    this.onIncomingCall({
-      callerId,
-      callerName,
-      callerPhoto,
-      callType,
-      roomId,
-    });
+    // GHOST CALL PREVENTION: Check if this call should be processed
+    if (Platform.OS === 'android') {
+      try {
+        // Check if this is a duplicate or already cancelled call
+        if (!pushDeduplicatorService.shouldProcessCall(callId, roomId)) {
+          debugLog('Ignoring call - duplicate or cancelled:', callId);
+          return;
+        }
+
+        // Mark call as received
+        pushDeduplicatorService.markCallReceived(callId, roomId);
+
+        // Start native foreground service with ringtone and full-screen intent
+        // This is wrapped in try-catch as native module may not be available
+        if (incomingCallNativeModule.isAvailable()) {
+          incomingCallNativeModule.showIncomingCall(
+            callerId,
+            callerName,
+            callerPhoto,
+            callType,
+            roomId
+          );
+        } else {
+          debugLog('Native incoming call module not available, using RN fallback only');
+        }
+
+        // Mark call as shown
+        pushDeduplicatorService.markCallShown(callId);
+      } catch (error) {
+        debugLog('Error in native incoming call handling:', error);
+        // Continue to RN fallback even if native fails
+      }
+    }
+
+    // Forward to RN callback for IncomingCallModal
+    if (this.onIncomingCall) {
+      this.onIncomingCall({
+        callerId,
+        callerName,
+        callerPhoto,
+        callType,
+        roomId,
+      });
+    } else {
+      console.warn('[PushNotificationService] No incoming call handler registered');
+    }
+  }
+
+  /**
+   * Dismiss incoming call UI (called when call ends or is answered/declined)
+   */
+  dismissIncomingCall(roomId: string): void {
+    if (Platform.OS === 'android') {
+      try {
+        if (incomingCallNativeModule.isAvailable()) {
+          incomingCallNativeModule.hideIncomingCall(roomId);
+        }
+      } catch (error) {
+        debugLog('Error dismissing native incoming call:', error);
+      }
+    }
+  }
+
+  /**
+   * Check if OEM guidance should be shown to the user
+   */
+  async shouldShowOEMGuidance(): Promise<boolean> {
+    if (Platform.OS !== 'android') return false;
+    return oemGuidanceService.shouldShowGuidance();
+  }
+
+  /**
+   * Check if channel issues exist that need user attention
+   */
+  async getChannelIssues(): Promise<any[]> {
+    if (Platform.OS !== 'android') return [];
+    return channelMonitorService.getIncomingCallsChannelIssues();
   }
 
   /**
@@ -474,12 +637,19 @@ class PushNotificationService {
         // Use POST with token in body since DELETE doesn't support body in this client
         await apiClient.post('/api/notifications/unregister-token', { token, action: 'unregister' });
       } catch (error) {
-        console.error('Failed to unregister token:', error);
+        console.warn('Failed to unregister token:', error);
       }
     }
 
     await AsyncStorage.removeItem(DEVICE_TOKEN_KEY);
     this.expoPushToken = null;
+  }
+
+  /**
+   * P0-06: Set callback for when a call is cancelled by the caller
+   */
+  setOnCallCancelled(callback: ((roomId: string) => void) | null): void {
+    this.onCallCancelled = callback;
   }
 
   /**
@@ -494,9 +664,20 @@ class PushNotificationService {
       this.responseListener.remove();
       this.responseListener = null;
     }
+    // P1-03: Clean up token refresh listener
+    if (this.tokenRefreshListener) {
+      this.tokenRefreshListener.remove();
+      this.tokenRefreshListener = null;
+    }
+    // Clean up native call action listener
+    if (this.nativeCallActionUnsubscribe) {
+      this.nativeCallActionUnsubscribe();
+      this.nativeCallActionUnsubscribe = null;
+    }
     this.onNotificationReceived = null;
     this.onNotificationTapped = null;
     this.onIncomingCall = null;
+    this.onCallCancelled = null;
   }
 
   /**

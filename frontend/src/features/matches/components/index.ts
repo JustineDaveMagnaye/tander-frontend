@@ -20,6 +20,7 @@ export { NewMatchesBanner } from './NewMatchesBanner';
 export { MatchesHeader } from './MatchesHeader';
 export { FilterTabs } from './FilterTabs';
 export { MatchCardItem } from './MatchCardItem';
+export { UltraPremiumMatchCard } from './UltraPremiumMatchCard';
 export {
   MatchesLoadingState,
   MatchesErrorState,

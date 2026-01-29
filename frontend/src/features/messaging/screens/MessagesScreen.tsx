@@ -35,7 +35,6 @@ import {
   Animated,
   Keyboard,
   Platform,
-  ActivityIndicator,
   Image,
   AppState,
   AppStateStatus,
@@ -52,6 +51,14 @@ import type { MessagesStackParamList, CallType } from '@navigation/types';
 import { useConversations, useNewMatches, useChat } from '../hooks';
 import { stompService } from '@services/websocket';
 import type { Conversation, NewMatch } from '../hooks';
+
+// ✅ PREMIUM: Import new UI components
+import { DateSeparator } from '../components/DateSeparator';
+import { TypingIndicator } from '../components/TypingIndicator';
+import { ConnectionStatusBar, ConnectionState } from '../components/ConnectionStatusBar';
+import { ChatSkeleton } from '../components/ChatSkeleton';
+import { ConversationListSkeleton } from '../components/ConversationSkeleton';
+import { TAB_BAR_HEIGHT } from '@shared/components/navigation/PremiumTabBar';
 
 // ============================================================================
 // NAVIGATION TYPE
@@ -75,6 +82,29 @@ interface ChatMessage {
 // ============================================================================
 const CONVERSATION_ITEM_HEIGHT = 89; // paddingVertical: 16 * 2 + avatar 56 + border 1
 const MESSAGE_ITEM_HEIGHT = 80; // Approximate height for chat messages
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+/**
+ * Decode HTML entities in text (e.g., &#39; -> ', &amp; -> &)
+ * Handles common HTML entities that may come from backend
+ */
+const decodeHTMLEntities = (text: string): string => {
+  if (!text) return text;
+  return text
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+};
 
 // ============================================================================
 // NEW MATCH AVATAR COMPONENT
@@ -182,21 +212,41 @@ const ConversationRow: React.FC<ConversationRowProps> = React.memo(({ conversati
       {/* Content */}
       <View style={styles.conversationContent}>
         <View style={styles.conversationTopRow}>
-          <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="tail">
-            {conversation.name}
-          </Text>
+          <View style={styles.conversationNameRow}>
+            <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="tail">
+              {conversation.name}
+            </Text>
+            {/* Verification Badge - teal checkmark for ID-verified users */}
+            {conversation.isVerified && (
+              <View style={styles.verifiedBadge}>
+                <Feather name="check-circle" size={14} color={colors.teal[500]} />
+              </View>
+            )}
+          </View>
           <Text style={styles.conversationTime}>{conversation.time}</Text>
         </View>
-        <Text
-          style={[
-            styles.conversationMessage,
-            conversation.unread && styles.conversationMessageUnread,
-          ]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {conversation.message}
-        </Text>
+        {/* Show typing indicator OR last message */}
+        {conversation.isTyping ? (
+          <View style={styles.typingIndicator}>
+            <Text style={styles.typingText}>typing</Text>
+            <View style={styles.typingDots}>
+              <View style={[styles.typingDot, styles.typingDot1]} />
+              <View style={[styles.typingDot, styles.typingDot2]} />
+              <View style={[styles.typingDot, styles.typingDot3]} />
+            </View>
+          </View>
+        ) : (
+          <Text
+            style={[
+              styles.conversationMessage,
+              conversation.unread && styles.conversationMessageUnread,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {decodeHTMLEntities(conversation.message)}
+          </Text>
+        )}
       </View>
 
       {/* Unread Indicator - orange dot */}
@@ -210,38 +260,190 @@ const ConversationRow: React.FC<ConversationRowProps> = React.memo(({ conversati
 ConversationRow.displayName = 'ConversationRow';
 
 // ============================================================================
-// LOADING STATE COMPONENT
+// LOADING STATE COMPONENT - Enhanced with rotating messages for seniors
 // ============================================================================
-const LoadingState: React.FC = () => (
-  <View style={styles.loadingState}>
-    <ActivityIndicator size="large" color={colors.orange[500]} />
-    <Text style={styles.loadingStateText}>Loading conversations...</Text>
-  </View>
-);
+const LOADING_MESSAGES = [
+  'Loading your conversations...',
+  'Finding your matches...',
+  'Checking for new messages...',
+  'Almost ready...',
+  'Connecting you with friends...',
+];
+
+const LoadingState: React.FC = () => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [dots, setDots] = useState('');
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Rotate through loading messages
+  useEffect(() => {
+    const messageTimer = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(messageTimer);
+  }, []);
+
+  // Animated dots
+  useEffect(() => {
+    const dotsTimer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 400);
+    return () => clearInterval(dotsTimer);
+  }, []);
+
+  // Bounce animation for icon
+  useEffect(() => {
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -8,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    bounce.start();
+    return () => bounce.stop();
+  }, [bounceAnim]);
+
+  // Pulse animation for gradient circle
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+
+  return (
+    <View style={styles.loadingState}>
+      {/* Animated gradient circle with bouncing icon */}
+      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+        <LinearGradient
+          colors={[colors.orange[200], colors.teal[200]]}
+          style={styles.loadingCircle}
+        >
+          <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
+            <Feather name="message-circle" size={48} color={colors.orange[600]} />
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* Rotating message with animated dots */}
+      <Text style={styles.loadingStateTitle}>
+        {LOADING_MESSAGES[messageIndex]}
+      </Text>
+      <Text style={styles.loadingStateDots}>{dots || ' '}</Text>
+
+      {/* Subtle reassurance for seniors */}
+      <Text style={styles.loadingStateHint}>
+        This won't take long
+      </Text>
+    </View>
+  );
+};
 
 // ============================================================================
-// ERROR STATE COMPONENT
+// ERROR STATE COMPONENT - Enhanced with encouraging messages for seniors
 // ============================================================================
+const ERROR_ENCOURAGEMENTS = [
+  "Don't worry, this happens sometimes!",
+  "Let's try again together.",
+  "A quick refresh usually fixes this.",
+  "Your messages are still safe.",
+];
+
 interface ErrorStateProps {
   onRetry: () => void;
 }
 
-const ErrorState: React.FC<ErrorStateProps> = ({ onRetry }) => (
-  <View style={styles.errorState}>
-    <Feather name="alert-circle" size={48} color={colors.orange[500]} />
-    <Text style={styles.errorStateTitle}>Unable to load messages</Text>
-    <Text style={styles.errorStateSubtitle}>Please check your connection and try again</Text>
-    <TouchableOpacity
-      onPress={onRetry}
-      style={styles.retryButton}
-      accessible={true}
-      accessibilityLabel="Retry loading messages"
-      accessibilityRole="button"
-    >
-      <Text style={styles.retryButtonText}>Try Again</Text>
-    </TouchableOpacity>
-  </View>
-);
+const ErrorState: React.FC<ErrorStateProps> = ({ onRetry }) => {
+  const [encouragementIndex] = useState(() =>
+    Math.floor(Math.random() * ERROR_ENCOURAGEMENTS.length)
+  );
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = useCallback(() => {
+    // Button press feedback
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    onRetry();
+  }, [onRetry, scaleAnim]);
+
+  return (
+    <View style={styles.errorState}>
+      {/* Gradient circle with wifi-off icon */}
+      <LinearGradient
+        colors={[colors.orange[100], colors.orange[200]]}
+        style={styles.errorCircle}
+      >
+        <Feather name="wifi-off" size={48} color={colors.orange[600]} />
+      </LinearGradient>
+
+      {/* Error title */}
+      <Text style={styles.errorStateTitle}>Connection Issue</Text>
+
+      {/* Encouraging subtitle */}
+      <Text style={styles.errorStateSubtitle}>
+        {ERROR_ENCOURAGEMENTS[encouragementIndex]}
+      </Text>
+
+      {/* Tappable retry button with animation */}
+      <TouchableOpacity
+        onPress={handlePress}
+        accessible={true}
+        accessibilityLabel="Tap to retry loading messages"
+        accessibilityRole="button"
+        accessibilityHint="Double tap to refresh your conversations"
+        activeOpacity={0.8}
+      >
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+          <LinearGradient
+            colors={[colors.orange[500], colors.teal[500]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.retryButtonGradient}
+          >
+            <Feather name="refresh-cw" size={20} color={colors.white} />
+            <Text style={styles.retryButtonText}>Tap to Retry</Text>
+          </LinearGradient>
+        </Animated.View>
+      </TouchableOpacity>
+
+      {/* Help hint for seniors */}
+      <Text style={styles.errorHelpHint}>
+        Tip: Check if your WiFi is connected
+      </Text>
+    </View>
+  );
+};
 
 // ============================================================================
 // NO CONVERSATIONS STATE COMPONENT
@@ -289,22 +491,59 @@ const NoSearchResultsState: React.FC<NoSearchResultsStateProps> = ({ searchQuery
 );
 
 // ============================================================================
-// NETWORK STATUS BANNER COMPONENT
+// NETWORK STATUS BANNER COMPONENT - Enhanced with tap to retry
 // ============================================================================
 interface NetworkStatusBannerProps {
   isConnected: boolean;
+  onRetry?: () => void;
 }
 
-const NetworkStatusBanner: React.FC<NetworkStatusBannerProps> = ({ isConnected }) => {
+const NetworkStatusBanner: React.FC<NetworkStatusBannerProps> = ({ isConnected, onRetry }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Subtle pulse to draw attention
+  useEffect(() => {
+    if (!isConnected) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.95,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+    return undefined; // No cleanup needed when connected
+  }, [isConnected, pulseAnim]);
+
   if (isConnected) return null;
 
   return (
-    <View style={styles.networkBanner}>
-      <Feather name="wifi-off" size={16} color={colors.white} />
-      <Text style={styles.networkBannerText}>
-        No connection - Messages may be delayed
-      </Text>
-    </View>
+    <TouchableOpacity
+      onPress={onRetry}
+      activeOpacity={0.8}
+      accessible={true}
+      accessibilityLabel="No internet connection. Tap to retry"
+      accessibilityRole="button"
+    >
+      <Animated.View style={[styles.networkBanner, { transform: [{ scale: pulseAnim }] }]}>
+        <View style={styles.networkBannerContent}>
+          <Feather name="wifi-off" size={18} color={colors.white} />
+          <Text style={styles.networkBannerText}>
+            No connection - Tap to retry
+          </Text>
+        </View>
+        <Feather name="refresh-cw" size={16} color={colors.white} />
+      </Animated.View>
+    </TouchableOpacity>
   );
 };
 
@@ -351,6 +590,17 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
   const keyboardHeight = useRef(new Animated.Value(0)).current;
   const sendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // ✅ PREMIUM: Connection state for status bar
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connected');
+
+  // ✅ PREMIUM: Subscribe to connection state changes
+  useEffect(() => {
+    const unsubscribe = stompService.onConnectionState((state) => {
+      setConnectionState(state);
+    });
+    return unsubscribe;
+  }, []);
+
   // Accessibility: Reduced motion preference
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -386,16 +636,19 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
     ? (conversation as NewMatch).userId
     : (conversation as Conversation).otherUserId;
 
-  // Use the real chat hook - get real-time online/typing status
+  // Use the real chat hook - get real-time online/typing status with lazy loading
   const {
     messages: chatMessages,
     isLoading: chatLoading,
+    isLoadingMore, // ✅ Lazy loading: pagination loading state
     isConnected,
     isOtherUserTyping,
     isOtherUserOnline,
     sendMessage,
     sendTypingIndicator,
     markAsRead,
+    loadMoreMessages, // ✅ Lazy loading: load older messages
+    hasMoreMessages, // ✅ Lazy loading: more messages available
   } = useChat({
     conversationId: conversationId || `new-${(conversation as NewMatch).matchId}`,
     otherUserId: otherUserId || 0,
@@ -435,6 +688,36 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
     timestamp: msg.timestamp,
   }));
 
+  // ✅ PREMIUM: Type for list items (messages + date separators)
+  type EmbeddedListItem = ChatMessage | { type: 'date-separator'; date: Date; id: string };
+
+  // ✅ PREMIUM: Group messages with date separators for better readability
+  const messagesWithDateSeparators = useMemo((): EmbeddedListItem[] => {
+    if (messages.length === 0) return [];
+
+    const result: EmbeddedListItem[] = [];
+    let lastDateStr = '';
+
+    messages.forEach((msg) => {
+      const msgDate = new Date(msg.timestamp);
+      const dateStr = msgDate.toDateString();
+
+      // Insert date separator when date changes
+      if (dateStr !== lastDateStr) {
+        result.push({
+          type: 'date-separator',
+          date: msgDate,
+          id: `date-${dateStr}`,
+        });
+        lastDateStr = dateStr;
+      }
+
+      result.push(msg);
+    });
+
+    return result;
+  }, [messages]);
+
   // Responsive max width for chat bubbles - use wp() for landscape pixel-based calculation
   // In landscape mode, screen is wider so messages should be narrower percentage-wise
   const chatBubbleMaxWidth = isLandscape
@@ -465,6 +748,7 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
           useNativeDriver: false,
         }).start();
       }
+      // Scroll to newest when keyboard shows
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: !reduceMotion }), 100);
     });
 
@@ -486,10 +770,53 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
     };
   }, [keyboardHeight, reduceMotion]);
 
-  // Scroll to bottom on mount
+  // ✅ Track if initial scroll has been done (only once per chat open)
+  const hasInitialScrolled = useRef(false);
+  const isLoadingMoreRef = useRef(false); // Track if we're loading older messages
+
+  // Update ref when isLoadingMore changes
   useEffect(() => {
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
-  }, []);
+    isLoadingMoreRef.current = isLoadingMore;
+  }, [isLoadingMore]);
+
+  // ✅ Scroll to bottom ONCE on initial load only
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    if (hasMessages && !chatLoading && !hasInitialScrolled.current) {
+      // Set flag IMMEDIATELY to prevent any race conditions
+      hasInitialScrolled.current = true;
+      // ✅ FIX: Increased delay to 500ms to ensure FlatList renders with date separators
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 500);
+    }
+  }, [hasMessages, chatLoading]); // Depend on boolean hasMessages, not messages.length
+
+  // ✅ FIX: Scroll to bottom using scrollToOffset with large value
+  const scrollAttempts = useRef(0);
+  const maxScrollAttempts = 3;
+  const lastContentHeight = useRef(0);
+  const handleContentSizeChange = useCallback((width: number, height: number) => {
+    // Only scroll if content height changed and we have messages
+    if (hasMessages && !chatLoading && height > 0 && height !== lastContentHeight.current) {
+      lastContentHeight.current = height;
+
+      if (scrollAttempts.current < maxScrollAttempts) {
+        scrollAttempts.current += 1;
+        // Use scrollToOffset with the content height to ensure we reach the bottom
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: height, animated: false });
+        }, 100);
+      }
+    }
+  }, [hasMessages, chatLoading]);
+
+  // Reset scroll state when conversation changes
+  useEffect(() => {
+    hasInitialScrolled.current = false;
+    scrollAttempts.current = 0;
+    lastContentHeight.current = 0;
+  }, [conversationId]);
 
   // Typing indicator handler
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -530,6 +857,7 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
       setIsSending(false);
     }, 500);
 
+    // Scroll to newest after sending
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [inputText, sendMessage, sendTypingIndicator, isSending]);
 
@@ -540,6 +868,7 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
     sendTimeoutRef.current = setTimeout(() => {
       setIsSending(false);
     }, 500);
+    // Scroll to newest after sending
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [sendMessage, isSending]);
 
@@ -621,8 +950,8 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
       case 'failed':
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Feather name="alert-circle" size={14} color={colors.red[500]} />
-            <Text style={{ fontSize: 13, color: colors.red[500] }}>Failed</Text>
+            <Feather name="alert-circle" size={14} color={colors.semantic.error} />
+            <Text style={{ fontSize: 13, color: colors.semantic.error }}>Failed</Text>
           </View>
         );
       default:
@@ -668,6 +997,14 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
     );
   }, [chatBubbleMaxWidth, getStatusIcon]);
 
+  // ✅ PREMIUM: Render list item (handles both messages and date separators)
+  const renderListItem = useCallback(({ item }: { item: EmbeddedListItem }) => {
+    if ('type' in item && item.type === 'date-separator') {
+      return <DateSeparator date={item.date} />;
+    }
+    return renderMessage({ item: item as ChatMessage });
+  }, [renderMessage]);
+
   // FlatList getItemLayout for optimization
   const getMessageItemLayout = useCallback((
     _data: ArrayLike<ChatMessage> | null | undefined,
@@ -686,7 +1023,15 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
         isLandscape && styles.chatHeaderLandscape,
         isPhoneLandscape && styles.chatHeaderPhoneLandscape,
       ]}>
-        <View style={styles.chatHeaderLeft}>
+        {/* ✅ UX: Tapping avatar/name opens info panel for better discoverability */}
+        <TouchableOpacity
+          onPress={() => setShowInfo(true)}
+          style={styles.chatHeaderLeft}
+          accessible={true}
+          accessibilityLabel={`View ${userName}'s profile and options`}
+          accessibilityRole="button"
+          accessibilityHint="Double tap to open conversation info"
+        >
           <View style={styles.chatHeaderAvatarWrapper}>
             {userAvatarUrl ? (
               <Image
@@ -714,7 +1059,7 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
               {isOtherUserTyping ? 'Typing...' : isOtherUserOnline ? 'Active now' : 'Offline'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.chatHeaderActions}>
           <TouchableOpacity
@@ -873,32 +1218,63 @@ const EmbeddedChat: React.FC<EmbeddedChatProps> = ({ conversation, isNewMatch, o
         </View>
       )}
 
-      {/* Messages */}
+      {/* ✅ PREMIUM: Connection status bar */}
+      <ConnectionStatusBar
+        state={connectionState}
+        onRetry={() => stompService.reconnect()}
+      />
+
+      {/* Messages - ✅ PREMIUM: With date separators and lazy loading */}
       <Animated.View style={[styles.chatMessagesContainer, { paddingBottom: keyboardHeight }]}>
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={item => item.id}
-          getItemLayout={getMessageItemLayout}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={7}
-          removeClippedSubviews={Platform.OS === 'android'}
-          contentContainerStyle={styles.chatMessagesList}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-          }}
-        />
+        {chatLoading ? (
+          <ChatSkeleton />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messagesWithDateSeparators} // ✅ PREMIUM: Includes date separators
+            renderItem={renderListItem}
+            keyExtractor={item => item.id}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            removeClippedSubviews={Platform.OS === 'android'}
+            contentContainerStyle={styles.chatMessagesList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            // ✅ FIX: Scroll to bottom when content loads
+            onContentSizeChange={handleContentSizeChange}
+            // ✅ Maintain scroll position when prepending older messages (iOS)
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 0,
+              autoscrollToTopThreshold: 10,
+            }}
+            // ✅ Lazy loading: Load older messages when scrolling near top
+            onScroll={({ nativeEvent }) => {
+              if (nativeEvent.contentOffset.y < 100 && hasMoreMessages && !isLoadingMore) {
+                loadMoreMessages();
+              }
+            }}
+            scrollEventThrottle={100}
+            ListHeaderComponent={
+              isLoadingMore ? (
+                <View style={styles.chatLoadingMoreContainer}>
+                  <Text style={styles.chatLoadingMoreText}>Loading older messages...</Text>
+                </View>
+              ) : null
+            }
+            // ✅ PREMIUM: Animated typing indicator
+            ListFooterComponent={
+              <TypingIndicator isVisible={isOtherUserTyping} userName={userName} />
+            }
+          />
+        )}
 
         {/* Input Area - Compact in landscape, with proper safe area and disabled states */}
         <View style={[
           styles.chatInputContainer,
           isPhoneLandscape && styles.chatInputContainerLandscape,
-          { paddingBottom: isPhoneLandscape ? Math.max(insets.bottom, 6) : Math.max(insets.bottom, 12) }
+          { paddingBottom: isPhoneLandscape ? Math.max(insets.bottom, 6) : TAB_BAR_HEIGHT + Math.max(insets.bottom, 12) }
         ]}>
           <TouchableOpacity
             style={styles.chatEmojiButton}
@@ -1037,7 +1413,7 @@ export const MessagesScreen: React.FC = () => {
     try {
       await Promise.all([refreshConversations(), refreshMatches()]);
     } catch (err) {
-      console.error('Refresh error:', err);
+      console.warn('Refresh error:', err);
     } finally {
       setRefreshing(false);
     }
@@ -1151,7 +1527,7 @@ export const MessagesScreen: React.FC = () => {
       { paddingHorizontal: 0 },
     ]}>
       {/* Network Status Banner */}
-      <NetworkStatusBanner isConnected={isNetworkConnected} />
+      <NetworkStatusBanner isConnected={isNetworkConnected} onRetry={handleRefresh} />
 
       {/* Header */}
       <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
@@ -1182,9 +1558,9 @@ export const MessagesScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Content States */}
+      {/* Content States - ✅ PREMIUM: Skeleton loading */}
       {isLoading ? (
-        <LoadingState />
+        <ConversationListSkeleton />
       ) : error ? (
         <ErrorState onRetry={handleRetry} />
       ) : (
@@ -1601,12 +1977,57 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
+  // Conversation Name Row - contains name + verification badge
+  conversationNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 4,
+  },
+
   // Conversation Name - text-lg font-semibold text-gray-900
   conversationName: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.gray[900],
-    flex: 1,
+    flexShrink: 1,
+  },
+
+  // Verification Badge - teal checkmark
+  verifiedBadge: {
+    marginLeft: 2,
+  },
+
+  // Typing Indicator - animated dots
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  typingText: {
+    fontSize: 16,
+    color: colors.teal[500],
+    fontStyle: 'italic',
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  typingDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.teal[500],
+  },
+  typingDot1: {
+    opacity: 0.4,
+  },
+  typingDot2: {
+    opacity: 0.7,
+  },
+  typingDot3: {
+    opacity: 1,
   },
 
   // Conversation Time - text-sm text-gray-600 ml-2 (FIXED: gray[600] for WCAG AA)
@@ -1636,22 +2057,43 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // LOADING STATE
+  // LOADING STATE - Enhanced with animations
   // ============================================================================
   loadingState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 32,
   },
-  loadingStateText: {
-    marginTop: 12,
+  loadingCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  loadingStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.gray[800],
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  loadingStateDots: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: colors.orange[500],
+    height: 32,
+  },
+  loadingStateHint: {
     fontSize: 16,
-    color: colors.gray[600],
+    color: colors.gray[500],
+    marginTop: 8,
   },
 
   // ============================================================================
-  // ERROR STATE
+  // ERROR STATE - Enhanced with encouragement
   // ============================================================================
   errorState: {
     flex: 1,
@@ -1659,29 +2101,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
+  errorCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   errorStateTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: colors.gray[900],
-    marginTop: 16,
     marginBottom: 8,
   },
   errorStateSubtitle: {
-    fontSize: 16,
+    fontSize: 17,
     color: colors.gray[600],
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 24,
   },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: colors.orange[500],
-    borderRadius: 24,
+  retryButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 28,
+    minHeight: 56,
   },
   retryButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.white,
+  },
+  errorHelpHint: {
+    fontSize: 15,
+    color: colors.gray[500],
+    marginTop: 20,
+    fontStyle: 'italic',
   },
 
   // ============================================================================
@@ -1753,21 +2213,28 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // NETWORK STATUS BANNER
+  // NETWORK STATUS BANNER - Enhanced with tap to retry
   // ============================================================================
   networkBanner: {
     backgroundColor: colors.orange[500],
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    gap: 8,
+    minHeight: 48,
+  },
+  networkBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
   },
   networkBannerText: {
     fontSize: 16,
     fontWeight: '500',
     color: colors.white,
+    flex: 1,
   },
 
   // ============================================================================
@@ -1901,6 +2368,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 8,
+  },
+  // ✅ Lazy loading: Loading indicator for pagination
+  chatLoadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  chatLoadingMoreText: {
+    fontSize: 14,
+    color: colors.gray[500],
+    fontWeight: '500',
   },
   chatMessageRow: {
     flexDirection: 'row',

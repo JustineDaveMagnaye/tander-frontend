@@ -99,7 +99,23 @@ const transformApiProfile = (
   let interests: string[] = [];
   if (apiProfile.interests) {
     if (typeof apiProfile.interests === 'string') {
-      interests = apiProfile.interests.split(',').map(i => i.trim()).filter(Boolean);
+      const trimmed = apiProfile.interests.trim();
+      // Check if it's a JSON array string
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          interests = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          // Fallback: strip brackets/quotes and split by comma
+          interests = trimmed
+            .slice(1, -1)
+            .split(',')
+            .map(i => i.trim().replace(/^["']|["']$/g, ''))
+            .filter(Boolean);
+        }
+      } else {
+        interests = trimmed.split(',').map(i => i.trim()).filter(Boolean);
+      }
     } else {
       interests = apiProfile.interests;
     }
@@ -199,7 +215,7 @@ export const ProfileDetailScreen: React.FC = () => {
         const transformedProfile = transformApiProfile(apiProfile, userName, userPhoto);
         setProfile(transformedProfile);
       } catch (err) {
-        console.error('Failed to fetch profile:', err);
+        console.warn('Failed to fetch profile:', err);
         // Create fallback profile from route params
         setProfile({
           id: String(userId),
@@ -250,7 +266,7 @@ export const ProfileDetailScreen: React.FC = () => {
               Alert.alert('Blocked', `${profile.name} has been blocked.`);
               navigation.goBack();
             } catch (err) {
-              console.error('Failed to block user:', err);
+              console.warn('Failed to block user:', err);
               Alert.alert('Error', 'Failed to block user. Please try again.');
             } finally {
               setIsBlocking(false);
@@ -302,7 +318,7 @@ export const ProfileDetailScreen: React.FC = () => {
                         [{ text: 'OK' }]
                       );
                     } catch (err) {
-                      console.error('Failed to report user:', err);
+                      console.warn('Failed to report user:', err);
                       Alert.alert('Error', 'Failed to submit report. Please try again.');
                     } finally {
                       setIsReporting(false);
@@ -454,7 +470,7 @@ export const ProfileDetailScreen: React.FC = () => {
 
           {/* Name and Age */}
           <Text style={styles.profileName}>
-            {profile.name}, {profile.age}
+            {profile.name}{profile.age > 0 ? `, ${profile.age}` : ''}
           </Text>
 
           {/* Location */}
@@ -471,7 +487,9 @@ export const ProfileDetailScreen: React.FC = () => {
 
         {/* Quick Info Cards */}
         <View style={styles.quickInfoContainer}>
-          <InfoRow icon="user" label="Age" value={`${profile.age} years old`} />
+          {profile.age > 0 && (
+            <InfoRow icon="user" label="Age" value={`${profile.age} years old`} />
+          )}
           <InfoRow icon="map-pin" label="Location" value={profile.location} />
           {profile.distance && (
             <InfoRow icon="navigation" label="Distance" value={profile.distance} />

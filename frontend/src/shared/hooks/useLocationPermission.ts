@@ -118,7 +118,7 @@ export function useLocationPermission(): UseLocationPermissionReturn {
         return 'undetermined';
       }
     } catch (err) {
-      console.error('Error checking location permission:', err);
+      console.warn('Error checking location permission:', err);
       setError('Unable to check location permission');
       return 'undetermined';
     }
@@ -215,7 +215,7 @@ export function useLocationPermission(): UseLocationPermissionReturn {
         return false;
       }
     } catch (err) {
-      console.error('Error requesting location permission:', err);
+      console.warn('Error requesting location permission:', err);
       setError('Failed to request location permission');
       setIsChecking(false);
       return false;
@@ -233,7 +233,7 @@ export function useLocationPermission(): UseLocationPermissionReturn {
         await Linking.openSettings();
       }
     } catch (err) {
-      console.error('Error opening settings:', err);
+      console.warn('Error opening settings:', err);
       setError('Could not open settings');
     }
   }, []);

@@ -74,6 +74,17 @@ export interface CallConfigResponse {
   reconnectTimeoutSeconds: number;
 }
 
+// P0-05: Call status response
+export interface CallStatusResponse {
+  roomName: string;
+  status: 'INITIATED' | 'RINGING' | 'CONNECTED' | 'ENDED' | 'DECLINED' | 'MISSED' | 'FAILED';
+  callerId: number;
+  receiverId: number;
+  callType: 'VIDEO' | 'AUDIO';
+  startTime: string;
+  isActive: boolean;
+}
+
 // Backend expects uppercase: 'VIDEO' | 'AUDIO'
 export type BackendCallType = 'VIDEO' | 'AUDIO';
 
@@ -187,55 +198,91 @@ export const getCallHistory = async (limit: number = 50): Promise<CallHistoryIte
   return response;
 };
 
+/**
+ * P0-05: Get call status
+ * Used to verify a call is still valid before showing incoming call UI
+ */
+export const getCallStatus = async (roomName: string): Promise<CallStatusResponse | null> => {
+  try {
+    const response = await apiClient.get<CallStatusResponse>(`/api/twilio/video/status/${encodeURIComponent(roomName)}`);
+    return response;
+  } catch (error: any) {
+    // 404 means call not found or already ended
+    if (error.statusCode === 404) {
+      return null;
+    }
+    throw error;
+  }
+};
+
+/**
+ * P0-06: Cancel an outgoing call
+ * Called when the caller hangs up before the receiver answers
+ */
+export const cancelCall = async (roomName: string): Promise<{ status: string; roomName: string }> => {
+  const response = await apiClient.post<{ status: string; roomName: string }>('/api/twilio/video/cancel', {
+    roomName,
+  });
+  return response;
+};
+
 // ==================== OTP Verification API ====================
 
 /**
  * Send OTP to a phone number
+ * Note: skipAuth=true because this is used during registration before user has token
  */
 export const sendOtp = async (
   phoneNumber: string,
   channel: 'sms' | 'call' = 'sms'
 ): Promise<OtpSendResponse> => {
-  const response = await apiClient.post<OtpSendResponse>('/api/twilio/otp/send', {
-    phoneNumber,
-    channel,
-  });
+  const response = await apiClient.post<OtpSendResponse>(
+    '/api/twilio/otp/send',
+    { phoneNumber, channel },
+    { skipAuth: true } // OTP endpoints don't require auth - used during registration
+  );
   return response;
 };
 
 /**
  * Verify OTP code
+ * Note: skipAuth=true because this is used during registration before user has token
  */
 export const verifyOtp = async (
   phoneNumber: string,
   code: string
 ): Promise<OtpVerifyResponse> => {
-  const response = await apiClient.post<OtpVerifyResponse>('/api/twilio/otp/verify', {
-    phoneNumber,
-    code,
-  });
+  const response = await apiClient.post<OtpVerifyResponse>(
+    '/api/twilio/otp/verify',
+    { phoneNumber, code },
+    { skipAuth: true } // OTP endpoints don't require auth - used during registration
+  );
   return response;
 };
 
 /**
  * Send OTP to email
+ * Note: skipAuth=true because this is used during registration before user has token
  */
 export const sendOtpEmail = async (email: string): Promise<OtpSendResponse> => {
   console.log('[twilioApi] sendOtpEmail called with email:', email);
   try {
-    const response = await apiClient.post<OtpSendResponse>('/api/twilio/otp/send-email', {
-      email,
-    });
+    const response = await apiClient.post<OtpSendResponse>(
+      '/api/twilio/otp/send-email',
+      { email },
+      { skipAuth: true } // OTP endpoints don't require auth - used during registration
+    );
     console.log('[twilioApi] sendOtpEmail response:', response);
     return response;
   } catch (error) {
-    console.error('[twilioApi] sendOtpEmail error:', error);
+    console.warn('[twilioApi] sendOtpEmail error:', error);
     throw error;
   }
 };
 
 /**
  * Verify email OTP
+ * Note: skipAuth=true because this is used during registration before user has token
  */
 export const verifyOtpEmail = async (
   email: string,
@@ -243,14 +290,15 @@ export const verifyOtpEmail = async (
 ): Promise<OtpVerifyResponse> => {
   console.log('[twilioApi] verifyOtpEmail called with email:', email, 'code:', code);
   try {
-    const response = await apiClient.post<OtpVerifyResponse>('/api/twilio/otp/verify-email', {
-      email,
-      code,
-    });
+    const response = await apiClient.post<OtpVerifyResponse>(
+      '/api/twilio/otp/verify-email',
+      { email, code },
+      { skipAuth: true } // OTP endpoints don't require auth - used during registration
+    );
     console.log('[twilioApi] verifyOtpEmail response:', response);
     return response;
   } catch (error) {
-    console.error('[twilioApi] verifyOtpEmail error:', error);
+    console.warn('[twilioApi] verifyOtpEmail error:', error);
     throw error;
   }
 };
@@ -263,6 +311,8 @@ export const twilioApi = {
   acceptCall,
   declineCall,
   endCall,
+  cancelCall, // P0-06: Cancel outgoing call
+  getCallStatus, // P0-05: Check call validity
   getIceServers,
   getCallConfig,
   getCallHistory,

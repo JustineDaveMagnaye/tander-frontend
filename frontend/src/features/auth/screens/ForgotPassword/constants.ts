@@ -2,9 +2,63 @@
  * ForgotPassword Screen Constants
  * Centralized constants for validation, timing, and configuration
  *
- * Responsive Testing Fixes Applied:
- * - G2-R-007: Added font scaling limits for accessibility
+ * Updated with iOS Premium Design System - Orange + Teal Theme
  */
+
+// ============================================================================
+// iOS PREMIUM DESIGN SYSTEM
+// ============================================================================
+export const iOS = {
+  colors: {
+    background: '#F2F2F7',
+    secondaryBackground: '#FFFFFF',
+    tertiaryBackground: '#F2F2F7',
+    label: '#000000',
+    secondaryLabel: '#3C3C43',
+    tertiaryLabel: '#8E8E93',
+    quaternaryLabel: '#C7C7CC',
+    // Primary: Orange for actions
+    orange: '#F97316',
+    orangeDark: '#EA580C',
+    orangeLight: 'rgba(249, 115, 22, 0.1)',
+    // Secondary: Teal for completed/secondary actions
+    teal: '#30D5C8',
+    tealDark: '#20B2AA',
+    tealLight: 'rgba(48, 213, 200, 0.1)',
+    separator: 'rgba(60, 60, 67, 0.12)',
+    opaqueSeparator: '#C6C6C8',
+    systemFill: 'rgba(120, 120, 128, 0.2)',
+    secondaryFill: 'rgba(120, 120, 128, 0.16)',
+    tertiaryFill: 'rgba(120, 120, 128, 0.12)',
+    success: '#34C759',
+    green: '#34C759',
+    error: '#FF3B30',
+    red: '#FF3B30',
+    warning: '#FF9500',
+    white: '#FFFFFF',
+    black: '#000000',
+  },
+  spacing: { xs: 4, sm: 8, md: 16, lg: 20, xl: 24, xxl: 32 },
+  radius: { sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, pill: 100 },
+  typography: {
+    largeTitle: { fontSize: 34, fontWeight: '700' as const, letterSpacing: 0.37 },
+    title1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: 0.36 },
+    title2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: 0.35 },
+    title3: { fontSize: 20, fontWeight: '600' as const, letterSpacing: 0.38 },
+    headline: { fontSize: 17, fontWeight: '600' as const, letterSpacing: -0.41 },
+    body: { fontSize: 17, fontWeight: '400' as const, letterSpacing: -0.41 },
+    callout: { fontSize: 16, fontWeight: '400' as const, letterSpacing: -0.32 },
+    subhead: { fontSize: 15, fontWeight: '400' as const, letterSpacing: -0.24 },
+    footnote: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.08 },
+    caption1: { fontSize: 12, fontWeight: '400' as const, letterSpacing: 0 },
+    caption2: { fontSize: 11, fontWeight: '400' as const, letterSpacing: 0.07 },
+  },
+  shadow: {
+    small: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 2 },
+    medium: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
+    large: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
+  },
+} as const;
 
 // Font scaling limits for accessibility (G2-R-007)
 // Limits maximum font scaling to prevent layout breaking while still supporting accessibility
@@ -58,10 +112,10 @@ export type ResetStep = 'method' | 'verify' | 'password' | 'success';
 export const STEPS: ResetStep[] = ['method', 'verify', 'password', 'success'];
 
 export const STEP_LABELS: Record<ResetStep, string> = {
-  method: 'Choose reset method',
-  verify: 'Verify your identity',
-  password: 'Create new password',
-  success: 'Password reset complete',
+  method: 'Method',
+  verify: 'Verify',
+  password: 'Reset',
+  success: 'Done',
 };
 
 // Reset method types

@@ -101,7 +101,7 @@ export const ShowMeScreen: React.FC<ShowMeScreenProps> = ({ onBack }) => {
         const settings = await getDiscoverySettings();
         setSelectedOption(settings.showMe);
       } catch (err) {
-        console.error('Failed to load show me setting:', err);
+        console.warn('Failed to load show me setting:', err);
         // Keep default on error
       }
     };
@@ -114,7 +114,7 @@ export const ShowMeScreen: React.FC<ShowMeScreenProps> = ({ onBack }) => {
     try {
       await updateShowMe(option);
     } catch (err) {
-      console.error('Failed to update show me setting:', err);
+      console.warn('Failed to update show me setting:', err);
       setSelectedOption(previousOption); // Revert on error
       Alert.alert('Error', 'Failed to update preference. Please try again.');
     }

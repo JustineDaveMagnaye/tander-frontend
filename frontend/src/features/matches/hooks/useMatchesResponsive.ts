@@ -306,7 +306,17 @@ const getColumnCount = (
 
 /**
  * Calculate optimal card dimensions
+ *
+ * UltraPremiumMatchCard Design:
+ * - INFO_SECTION_HEIGHT: 115px fixed (increased to prevent clipping)
+ * - Photo takes remaining space after info section
+ * - Photo aspect ratio: 4:5 portrait (height = width * 1.25)
  */
+const INFO_SECTION_HEIGHT = 115;
+const COMPACT_INFO_HEIGHT = 100;
+const TABLET_INFO_HEIGHT = 120;
+const PHOTO_ASPECT_RATIO = 1.25; // 4:5 portrait
+
 const getCardDimensions = (
   width: number,
   screenHeight: number,
@@ -322,37 +332,50 @@ const getCardDimensions = (
   const totalGaps = (numColumns - 1) * cardGap;
   const cardWidth = Math.floor((availableWidth - totalGaps) / numColumns);
 
-  let aspectRatio = 1.45;
-  if (isLandscape && !isTablet) {
-    const availableH = screenHeight - 200;
-    const idealH = Math.min(availableH * 0.8, cardWidth * 1.15);
-    aspectRatio = Math.max(0.95, Math.min(1.2, idealH / cardWidth));
+  // Determine info section height based on device/mode
+  const isCompactMode = isLandscape && !isTablet;
+  const infoHeight = isCompactMode ? COMPACT_INFO_HEIGHT : isTablet ? TABLET_INFO_HEIGHT : INFO_SECTION_HEIGHT;
+
+  // Calculate photo height based on aspect ratio
+  let photoRatio = PHOTO_ASPECT_RATIO;
+  if (isCompactMode) {
+    // Landscape phones need shorter photos
+    photoRatio = 0.85;
   } else if (isTablet && isLandscape) {
-    aspectRatio = 1.35;
+    // Tablet landscape: optimize to fit more cards on screen
+    photoRatio = 1.0;
   } else if (isTablet) {
-    aspectRatio = 1.42;
-  } else if (width < BREAKPOINTS.xs + 40) {
-    aspectRatio = 1.5;
+    // Tablet portrait: slightly shorter for better fit
+    photoRatio = 1.15;
   }
 
+  // Calculate card width limits
   const minCardWidth = width < BREAKPOINTS.xs + 40 ? 280 : 155;
-  const maxCardWidth = isTablet ? 320 : 220;
+  const maxCardWidth = isTablet ? 340 : 220;
   const finalCardWidth = Math.min(Math.max(cardWidth, minCardWidth), maxCardWidth);
 
-  let maxCardHeight: number;
-  if (isLandscape && !isTablet) {
-    maxCardHeight = Math.min(screenHeight * 0.72, 260);
-  } else if (isLandscape && isTablet) {
-    maxCardHeight = Math.min(screenHeight * 0.68, 380);
+  // Calculate photo height and total card height
+  const photoHeight = finalCardWidth * photoRatio;
+
+  // Apply height constraints - optimized for better fit
+  let maxPhotoHeight: number;
+  if (isCompactMode) {
+    maxPhotoHeight = Math.min(screenHeight * 0.55, 180);
+  } else if (isTablet && isLandscape) {
+    // Tablet landscape: shorter to fit more cards
+    maxPhotoHeight = Math.min(screenHeight * 0.45, 280);
   } else if (isTablet) {
-    maxCardHeight = Math.min(screenHeight * 0.42, 420);
+    // Tablet portrait: moderate height
+    maxPhotoHeight = Math.min(screenHeight * 0.32, 340);
   } else {
-    maxCardHeight = Math.min(screenHeight * 0.4, 380);
+    maxPhotoHeight = Math.min(screenHeight * 0.35, 320);
   }
 
-  const calculatedHeight = finalCardWidth * aspectRatio;
-  const minCardHeight = isLandscape && !isTablet ? 200 : isTablet ? 300 : 260;
-  const finalCardHeight = Math.max(Math.min(calculatedHeight, maxCardHeight), minCardHeight);
+  const minPhotoHeight = isCompactMode ? 120 : isTablet ? 200 : 180;
+  const finalPhotoHeight = Math.max(Math.min(photoHeight, maxPhotoHeight), minPhotoHeight);
+
+  // Total card height = photo + info section
+  const finalCardHeight = finalPhotoHeight + infoHeight;
 
   return {
     cardWidth: finalCardWidth,

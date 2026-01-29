@@ -516,7 +516,7 @@ export const Step1Screen: React.FC<Step1ScreenProps> = ({ navigation }) => {
 
       // TODO: Replace with actual navigation when Step 2 is implemented
       console.log('Step 1 data ready:', {
-        username: username.trim().toLowerCase(),
+        username: username.trim(),
         phoneNumber,
         email: emailAddress,
         method,
@@ -683,7 +683,7 @@ export const Step1Screen: React.FC<Step1ScreenProps> = ({ navigation }) => {
           ref={usernameRef}
           style={[styles.input, { fontSize: sizes.inputFontSize }]}
           value={username}
-          onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+          onChangeText={(text) => setUsername(text.replace(/[^a-zA-Z0-9_]/g, ''))}
           placeholder="your_username"
           placeholderTextColor={colors.gray[400]}
           autoCapitalize="none"

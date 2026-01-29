@@ -88,7 +88,7 @@ export const IDVerificationSettingsScreen: React.FC<IDVerificationSettingsScreen
       setStatus(response.data.status);
       setStatusData(response.data);
     } catch (err: any) {
-      console.error('Failed to fetch ID verification status:', err);
+      console.warn('Failed to fetch ID verification status:', err);
       setError('Failed to load verification status');
     } finally {
       setIsLoading(false);
@@ -177,7 +177,7 @@ export const IDVerificationSettingsScreen: React.FC<IDVerificationSettingsScreen
       setIdBackPhoto(null);
       setSelfiePhoto(null);
     } catch (err: any) {
-      console.error('Failed to submit ID verification:', err);
+      console.warn('Failed to submit ID verification:', err);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Submission Failed', err?.message || 'Please try again later.');
     } finally {

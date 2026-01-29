@@ -1,6 +1,6 @@
 /**
  * TANDER CallScreen - Fully Responsive Cross-Platform Design
- * Senior-Friendly Calling Interface for 50+ Users
+ * Senior-Friendly Calling Interface for 60+ Users
  *
  * Features:
  * - FULLY RESPONSIVE: Adapts to all screen sizes from 320px to 1280px+
@@ -253,7 +253,7 @@ async function checkCallPermissions(callType: CallType): Promise<PermissionResul
       return { success: true };
     }
   } catch (error) {
-    console.error('[CallScreen] Permission check error:', error);
+    console.warn('[CallScreen] Permission check error:', error);
     return { success: false };
   }
 }

@@ -43,7 +43,7 @@ import {
   FilterTabs,
   ProfileViewModal,
   QuickViewModal,
-  MatchCardItem,
+  UltraPremiumMatchCard,
   MatchesLoadingState,
   MatchesErrorState,
   MatchesEmptyState,
@@ -218,7 +218,7 @@ export const MatchesScreen: React.FC = () => {
     try {
       await refetch();
     } catch (e) {
-      console.error('Refresh error:', e);
+      console.warn('Refresh error:', e);
     } finally {
       setIsRefreshing(false);
     }
@@ -228,24 +228,20 @@ export const MatchesScreen: React.FC = () => {
     navigation.navigate('DiscoverTab' as never);
   }, [navigation]);
 
-  // Render match card
+  // Render match card - Using UltraPremiumMatchCard for photo-first design
   const renderMatchCard = useCallback(
     ({ item: match, index }: { item: Match; index: number }) => (
-      <MatchCardItem
+      <UltraPremiumMatchCard
         match={match}
         cardWidth={cardDimensions.cardWidth}
         cardHeight={cardDimensions.cardHeight}
-        onPress={() => handleMatchPress(match)}
+        onPress={handleMatchPress}
         isOnline={onlineUserIds.has(match.matchedUserId)}
-        fontSizes={fontSizes}
-        spacing={spacing}
-        isCompactMode={isCompactMode}
-        isVerySmallScreen={isVerySmallScreen}
         reduceMotion={reduceMotion}
         index={index}
       />
     ),
-    [cardDimensions, handleMatchPress, onlineUserIds, fontSizes, spacing, isCompactMode, isVerySmallScreen, reduceMotion]
+    [cardDimensions, handleMatchPress, onlineUserIds, reduceMotion]
   );
 
   const keyExtractor = useCallback((item: Match) => item.id, []);
@@ -256,14 +252,16 @@ export const MatchesScreen: React.FC = () => {
     [cardDimensions.numColumns, isLandscape, isTablet, width]
   );
 
-  // Calculate content padding
+  // Calculate content padding - increased for tablet to account for tab bar
   const contentPadding = useMemo(() => ({
-    paddingBottom: Math.max(insets.bottom + 120, 140),
+    paddingBottom: isTablet
+      ? Math.max(insets.bottom + 160, 180) // More padding for tablets
+      : Math.max(insets.bottom + 120, 140),
     paddingHorizontal: spacing.l,
     paddingLeft: (isLandscape ? spacing.m : insets.left) + spacing.l,
     paddingRight: (isLandscape ? spacing.m : insets.right) + spacing.l,
     paddingTop: spacing.listHeaderMargin,
-  }), [insets, spacing, isLandscape]);
+  }), [insets, spacing, isLandscape, isTablet]);
 
   return (
     <View style={styles.container}>

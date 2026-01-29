@@ -343,7 +343,7 @@ export const MatchesHeader: React.FC<MatchesHeaderProps> = ({
                 ]}
                 numberOfLines={2}
               >
-                {greeting}! {matchCount > 0 ? `${matchCount} people are waiting` : 'Find your match'}
+                {greeting}! {matchCount > 0 ? `${matchCount} ${matchCount === 1 ? 'person is' : 'people are'} waiting` : 'Find your match'}
               </Text>
             )}
           </View>

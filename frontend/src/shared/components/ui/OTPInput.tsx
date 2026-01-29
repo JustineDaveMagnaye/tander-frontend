@@ -29,10 +29,50 @@ import {
   Pressable,
   Platform,
   Animated,
+  Easing,
 } from 'react-native';
 import { Text } from './Text';
 import { colors } from '@shared/styles/colors';
 import { useResponsive } from '@shared/hooks/useResponsive';
+
+// Blinking Cursor Component
+const BlinkingCursor: React.FC<{ height: number }> = ({ height }) => {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const blink = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    blink.start();
+    return () => blink.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.cursor,
+        {
+          height,
+          opacity,
+          backgroundColor: colors.teal[500],
+        },
+      ]}
+    />
+  );
+};
 
 interface OTPInputProps {
   length?: number;
@@ -183,6 +223,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({
           const isFilled = !!digit;
 
           // Border color logic - premium states
+          // Error only shows on filled boxes or focused box to avoid scaring users prematurely
           let borderColor: string;
           let borderWidth: number;
           let backgroundColor: string;
@@ -191,19 +232,23 @@ export const OTPInput: React.FC<OTPInputProps> = ({
             borderColor = colors.gray[300];
             borderWidth = 2;
             backgroundColor = colors.gray[100];
-          } else if (error) {
+          } else if (isFocused) {
+            // Focused always takes priority - show teal for good UX
+            borderColor = error ? colors.semantic.error : colors.teal[500];
+            borderWidth = 2.5;
+            backgroundColor = error ? 'rgba(244, 67, 54, 0.04)' : 'rgba(20, 184, 166, 0.04)';
+          } else if (error && isFilled) {
+            // Only show error state on filled boxes
             borderColor = colors.semantic.error;
             borderWidth = 2.5;
             backgroundColor = 'rgba(244, 67, 54, 0.04)';
-          } else if (isFocused) {
-            borderColor = colors.teal[500];
-            borderWidth = 2.5;
-            backgroundColor = 'rgba(20, 184, 166, 0.04)';
           } else if (isFilled) {
+            // Filled with no error - show success orange
             borderColor = colors.orange[400];
             borderWidth = 2;
             backgroundColor = 'rgba(249, 115, 22, 0.06)';
           } else {
+            // Empty unfocused box - neutral gray
             borderColor = colors.gray[300];
             borderWidth = 2;
             backgroundColor = colors.white;
@@ -259,13 +304,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({
                   ref={(ref) => {
                     inputRefs.current[index] = ref;
                   }}
-                  style={[
-                    styles.hiddenInput,
-                    {
-                      fontSize,
-                      color: colors.gray[900],
-                    },
-                  ]}
+                  style={styles.hiddenInput}
                   value={digit}
                   onChangeText={(text) => handleChange(text, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
@@ -277,7 +316,8 @@ export const OTPInput: React.FC<OTPInputProps> = ({
                   textAlign="center"
                   editable={!disabled}
                   accessible={false}
-                  caretHidden={Platform.OS === 'ios'} // Hide caret on iOS for cleaner look
+                  caretHidden
+                  selectionColor="transparent"
                 />
 
                 {/* Visual digit display - shows on top */}
@@ -306,15 +346,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({
 
                   {/* Blinking cursor for focused empty box */}
                   {isFocused && !digit && !disabled && (
-                    <View
-                      style={[
-                        styles.cursor,
-                        {
-                          height: fontSize * 0.7,
-                          backgroundColor: colors.teal[500],
-                        },
-                      ]}
-                    />
+                    <BlinkingCursor height={fontSize * 0.7} />
                   )}
                 </View>
               </Pressable>
@@ -345,20 +377,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-    opacity: Platform.OS === 'ios' ? 0.01 : 0, // Nearly invisible
+    opacity: 0,
+    color: 'transparent',
+    backgroundColor: 'transparent',
     textAlign: 'center',
     fontWeight: '700',
+    zIndex: 1,
+    // Ensure text is completely invisible
+    ...(Platform.OS === 'web' ? { caretColor: 'transparent' } : {}),
   },
   digitDisplay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+    zIndex: 2,
   },
   cursor: {
-    position: 'absolute',
-    width: 2,
-    borderRadius: 1,
-    // Blinking animation handled by opacity (native behavior)
+    width: 3,
+    borderRadius: 1.5,
   },
 });
 

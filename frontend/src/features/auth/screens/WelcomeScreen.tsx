@@ -1,31 +1,23 @@
 /**
- * TANDER WelcomeScreen - Premium Edition
- * A Warm, Trust-Inspiring Welcome Experience for Filipino Seniors (60+)
+ * TANDER WelcomeScreen - Super Premium iPhone UI/UX
+ * Inspired by Apple's design language with refined glassmorphism
  *
- * Design Philosophy:
- * - Emotional warmth through soft, romantic gradients
- * - Premium feel with subtle glassmorphism and refined shadows
- * - Senior-friendly with large touch targets (56-64px) and high contrast
- * - Smooth, delightful animations that don't overwhelm
- * - 100% responsive across all devices (320px phones to 1280px+ tablets)
- *
- * Key Features:
- * - 3-second splash display before revealing navigation buttons
- * - WCAG AA/AAA compliant contrast ratios
- * - Reduce motion support for accessibility
- * - Optimized layouts for portrait and landscape orientations
- * - Premium micro-interactions and entrance animations
+ * Design Principles:
+ * - Clean, minimal iOS aesthetic with SF-style typography
+ * - Refined glassmorphism with subtle depth
+ * - Smooth, delightful micro-interactions
+ * - Senior-friendly (56-64px touch targets, 18px+ fonts)
+ * - Fully responsive portrait & landscape layouts
  */
 
-import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   StatusBar,
   ScrollView,
-  Platform,
   AccessibilityInfo,
   Animated,
   Image,
@@ -34,65 +26,80 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors } from '@shared/styles/colors';
-import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
 import type { AuthStackParamList } from '@navigation/types';
+import { useResponsive } from '@shared/hooks/useResponsive';
 
-// Import the Tander logo
 const TanderLogo = require('../../../../assets/icons/tander-logo.png');
 
 // ============================================================================
-// PREMIUM COLOR PALETTE - Warm, Romantic, Trustworthy
+// PREMIUM iOS DESIGN SYSTEM
 // ============================================================================
 
-const PREMIUM_COLORS = {
-  // Gradient backgrounds - warmer, more romantic feel
-  gradientTop: '#FF8A65', // Warm coral-orange
-  gradientMiddle: '#FF7043', // Deeper coral
-  gradientBottom: '#26A69A', // Trust-inspiring teal
-  gradientAccent: '#FFAB91', // Soft peach highlight
+const iOS = {
+  // Refined warm sunset to ocean gradient
+  gradient: {
+    colors: ['#FF9466', '#FF7849', '#FF5C35', '#20C997', '#12B886'] as const,
+    locations: [0, 0.22, 0.42, 0.72, 1] as const,
+  },
 
   // Glass effects
-  glassWhite: 'rgba(255, 255, 255, 0.95)',
-  glassTint: 'rgba(255, 255, 255, 0.12)',
-  glassStroke: 'rgba(255, 255, 255, 0.35)',
+  glass: {
+    white: 'rgba(255, 255, 255, 0.92)',
+    whiteBorder: 'rgba(255, 255, 255, 0.6)',
+    tint: 'rgba(255, 255, 255, 0.15)',
+    overlay: 'rgba(255, 255, 255, 0.08)',
+  },
 
-  // Text on gradient
-  textPrimary: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.92)',
-  textMuted: 'rgba(255, 255, 255, 0.75)',
+  // Text colors
+  text: {
+    primary: '#FFFFFF',
+    secondary: 'rgba(255, 255, 255, 0.9)',
+    muted: 'rgba(255, 255, 255, 0.7)',
+    dark: '#1C1C1E',
+    darkSecondary: '#3C3C43',
+    darkMuted: '#8E8E93',
+  },
 
-  // Card backgrounds
-  cardBackground: 'rgba(255, 255, 255, 0.96)',
-  cardShadow: 'rgba(0, 0, 0, 0.12)',
+  // Feature card colors
+  feature: {
+    heart: { bg: 'rgba(255, 107, 138, 0.12)', icon: '#FF6B8A' },
+    users: { bg: 'rgba(32, 201, 151, 0.12)', icon: '#20C997' },
+    phone: { bg: 'rgba(255, 148, 102, 0.12)', icon: '#FF9466' },
+  },
 
-  // Button colors
-  buttonPrimaryBg: '#FFFFFF',
-  buttonPrimaryText: '#E65100', // Deep orange for excellent contrast
-  buttonSecondaryBorder: 'rgba(255, 255, 255, 0.9)',
+  // Spacing (8pt grid)
+  space: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
 
-  // Decorative
-  heartPink: '#FF6B8A',
-  warmGlow: 'rgba(255, 183, 77, 0.25)',
-} as const;
+  // Border radius
+  radius: {
+    sm: 12,
+    md: 16,
+    lg: 20,
+    xl: 24,
+    xxl: 28,
+    pill: 100,
+  },
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Duration to show splash before revealing buttons (in milliseconds) */
-const SPLASH_DURATION = 3000;
-
-/** Animation timing constants */
-const ANIMATION_TIMING = {
-  logoEntry: 800,
-  taglineEntry: 600,
-  featureStagger: 150,
-  contentEntry: 500,
-  buttonReveal: 500,
-  pulseInterval: 3000,
-  shimmerDuration: 2000,
+  // Typography - SF Pro inspired
+  type: {
+    largeTitle: { fontSize: 42, fontWeight: '800' as const, letterSpacing: 1.5 },
+    title1: { fontSize: 32, fontWeight: '700' as const, letterSpacing: 0.5 },
+    title2: { fontSize: 24, fontWeight: '700' as const, letterSpacing: 0.3 },
+    headline: { fontSize: 20, fontWeight: '600' as const, letterSpacing: 0.2 },
+    body: { fontSize: 18, fontWeight: '500' as const, letterSpacing: 0.1 },
+    callout: { fontSize: 16, fontWeight: '500' as const, letterSpacing: 0 },
+    subhead: { fontSize: 15, fontWeight: '400' as const, letterSpacing: 0 },
+    footnote: { fontSize: 14, fontWeight: '400' as const, letterSpacing: 0 },
+  },
 } as const;
 
 // ============================================================================
@@ -105,371 +112,167 @@ interface WelcomeScreenProps {
   navigation: WelcomeScreenNavigationProp;
 }
 
-interface FeatureCardData {
+interface FeatureItem {
   id: string;
   icon: keyof typeof Feather.glyphMap;
-  iconBgColor: string;
-  iconColor: string;
+  colors: { bg: string; icon: string };
   title: string;
   subtitle: string;
 }
 
-interface ResponsiveSizes {
-  logoSize: number;
-  logoContainerSize: number;
-  logoOuterGlowSize: number;
-  titleSize: number;
-  subtitleSize: number;
-  taglineSize: number;
-  buttonHeight: number;
-  buttonTextSize: number;
-  featureTitleSize: number;
-  featureSubtitleSize: number;
-  featureIconSize: number;
-  featureIconContainerSize: number;
-  cardPadding: number;
-  cardBorderRadius: number;
-  screenPadding: number;
-  sectionSpacing: number;
-  buttonSpacing: number;
-  privacyIconSize: number;
-  privacyTextSize: number;
-}
-
 // ============================================================================
-// FEATURE CARD DATA - Enhanced with titles and subtitles
+// FEATURE DATA
 // ============================================================================
 
-const FEATURES: FeatureCardData[] = [
+const FEATURES: FeatureItem[] = [
   {
-    id: 'companionship',
+    id: 'heart',
     icon: 'heart',
-    iconBgColor: 'rgba(255, 107, 138, 0.15)',
-    iconColor: PREMIUM_COLORS.heartPink,
+    colors: iOS.feature.heart,
     title: 'Genuine Connection',
     subtitle: 'Find meaningful companionship',
   },
   {
-    id: 'friendships',
+    id: 'users',
     icon: 'users',
-    iconBgColor: 'rgba(38, 166, 154, 0.15)',
-    iconColor: colors.teal[500],
+    colors: iOS.feature.users,
     title: 'Lasting Bonds',
     subtitle: 'Build real friendships that matter',
   },
   {
-    id: 'easy',
+    id: 'phone',
     icon: 'smartphone',
-    iconBgColor: 'rgba(255, 138, 101, 0.15)',
-    iconColor: '#FF8A65',
+    colors: iOS.feature.phone,
     title: 'Simple to Use',
     subtitle: 'Designed for comfort and ease',
   },
 ];
 
 // ============================================================================
-// RESPONSIVE SIZE CALCULATOR - Enhanced for premium feel
+// ANIMATED ORB COMPONENT - Floating background elements
 // ============================================================================
 
-const calculateResponsiveSizes = (
-  width: number,
-  height: number,
-  isLandscape: boolean,
-  isTablet: boolean,
-  moderateScale: (size: number, factor?: number) => number,
-  hp: (percentage: number) => number,
-  wp: (percentage: number) => number
-): ResponsiveSizes => {
-  const isSmallPhone = width < BREAKPOINTS.xs + 56;
-  const isMediumPhone = width >= BREAKPOINTS.xs + 56 && width < BREAKPOINTS.largePhone;
-  const isLargePhone = width >= BREAKPOINTS.largePhone && width < BREAKPOINTS.tablet;
-  const isSmallTablet = width >= BREAKPOINTS.tablet && width < BREAKPOINTS.largeTablet;
-  const isLargeTablet = width >= BREAKPOINTS.largeTablet;
-
-  // Logo sizing with premium scaling
-  let logoSize: number;
-  let logoContainerSize: number;
-  let logoOuterGlowSize: number;
-
-  if (isLandscape) {
-    logoSize = Math.min(hp(25), wp(14), 110);
-    logoContainerSize = logoSize + 28;
-    logoOuterGlowSize = logoSize + 56;
-  } else if (isLargeTablet) {
-    logoSize = moderateScale(180, 0.3);
-    logoContainerSize = logoSize + 48;
-    logoOuterGlowSize = logoSize + 80;
-  } else if (isSmallTablet) {
-    logoSize = moderateScale(160, 0.3);
-    logoContainerSize = logoSize + 44;
-    logoOuterGlowSize = logoSize + 72;
-  } else if (isLargePhone) {
-    logoSize = moderateScale(140, 0.4);
-    logoContainerSize = logoSize + 36;
-    logoOuterGlowSize = logoSize + 64;
-  } else if (isMediumPhone) {
-    logoSize = moderateScale(120, 0.4);
-    logoContainerSize = logoSize + 32;
-    logoOuterGlowSize = logoSize + 56;
-  } else {
-    logoSize = moderateScale(100, 0.4);
-    logoContainerSize = logoSize + 28;
-    logoOuterGlowSize = logoSize + 48;
-  }
-
-  // Typography sizing - premium, readable sizes
-  let titleSize: number;
-  let subtitleSize: number;
-  let taglineSize: number;
-  let featureTitleSize: number;
-  let featureSubtitleSize: number;
-  let buttonTextSize: number;
-  let privacyTextSize: number;
-
-  if (isLandscape) {
-    titleSize = Math.min(hp(10), wp(6), 42);
-    subtitleSize = Math.min(hp(4.5), wp(3), 20);
-    taglineSize = Math.min(hp(3.5), wp(2.5), 16);
-    featureTitleSize = Math.max(15, Math.min(hp(3.5), 17));
-    featureSubtitleSize = Math.max(13, Math.min(hp(2.8), 14));
-    buttonTextSize = Math.max(17, Math.min(hp(4.5), 20));
-    privacyTextSize = Math.max(12, Math.min(hp(2.8), 14));
-  } else if (isLargeTablet) {
-    titleSize = 64;
-    subtitleSize = 26;
-    taglineSize = 20;
-    featureTitleSize = 22;
-    featureSubtitleSize = 18;
-    buttonTextSize = 24;
-    privacyTextSize = 17;
-  } else if (isSmallTablet) {
-    titleSize = 58;
-    subtitleSize = 24;
-    taglineSize = 19;
-    featureTitleSize = 21;
-    featureSubtitleSize = 17;
-    buttonTextSize = 23;
-    privacyTextSize = 16;
-  } else if (isLargePhone) {
-    titleSize = 52;
-    subtitleSize = 22;
-    taglineSize = 18;
-    featureTitleSize = 20;
-    featureSubtitleSize = 16;
-    buttonTextSize = 21;
-    privacyTextSize = 15;
-  } else if (isMediumPhone) {
-    titleSize = 48;
-    subtitleSize = 20;
-    taglineSize = 17;
-    featureTitleSize = 19;
-    featureSubtitleSize = 15;
-    buttonTextSize = 20;
-    privacyTextSize = 14;
-  } else {
-    titleSize = 44;
-    subtitleSize = 19;
-    taglineSize = 16;
-    featureTitleSize = 18;
-    featureSubtitleSize = 14;
-    buttonTextSize = 19;
-    privacyTextSize = 13;
-  }
-
-  // Button heights - generous for seniors
-  let buttonHeight: number;
-  if (isLandscape) {
-    buttonHeight = Math.max(54, Math.min(hp(15), 60));
-  } else if (isTablet) {
-    buttonHeight = 76;
-  } else if (isLargePhone) {
-    buttonHeight = 68;
-  } else {
-    buttonHeight = 64;
-  }
-
-  // Feature card sizing - premium proportions
-  let featureIconSize: number;
-  let featureIconContainerSize: number;
-  let cardPadding: number;
-  let cardBorderRadius: number;
-
-  if (isLandscape) {
-    featureIconSize = 20;
-    featureIconContainerSize = 44;
-    cardPadding = 14;
-    cardBorderRadius = 16;
-  } else if (isTablet) {
-    featureIconSize = 32;
-    featureIconContainerSize = 72;
-    cardPadding = 28;
-    cardBorderRadius = 24;
-  } else if (isLargePhone) {
-    featureIconSize = 28;
-    featureIconContainerSize = 64;
-    cardPadding = 24;
-    cardBorderRadius = 20;
-  } else {
-    featureIconSize = 26;
-    featureIconContainerSize = 58;
-    cardPadding = 20;
-    cardBorderRadius = 18;
-  }
-
-  // Screen padding
-  let screenPadding: number;
-  if (isSmallPhone) {
-    screenPadding = 20;
-  } else if (isMediumPhone) {
-    screenPadding = 24;
-  } else if (isLargePhone) {
-    screenPadding = 28;
-  } else if (isSmallTablet) {
-    screenPadding = 40;
-  } else {
-    screenPadding = 48;
-  }
-
-  const sectionSpacing = isTablet ? 56 : isLandscape ? 20 : 40;
-  const buttonSpacing = isTablet ? 20 : 16;
-  const privacyIconSize = isTablet ? 22 : 20;
-
-  return {
-    logoSize,
-    logoContainerSize,
-    logoOuterGlowSize,
-    titleSize,
-    subtitleSize,
-    taglineSize,
-    buttonHeight,
-    buttonTextSize,
-    featureTitleSize,
-    featureSubtitleSize,
-    featureIconSize,
-    featureIconContainerSize,
-    cardPadding,
-    cardBorderRadius,
-    screenPadding,
-    sectionSpacing,
-    buttonSpacing,
-    privacyIconSize,
-    privacyTextSize,
-  };
-};
-
-// ============================================================================
-// PREMIUM FEATURE CARD COMPONENT
-// ============================================================================
-
-interface FeatureCardProps {
-  feature: FeatureCardData;
-  sizes: ResponsiveSizes;
-  isCompact?: boolean;
-  animatedValue: Animated.Value;
-  index: number;
+interface AnimatedOrbProps {
+  size: number;
+  initialX: number;
+  initialY: number;
+  duration: number;
+  delay: number;
+  reduceMotion: boolean;
 }
 
-const FeatureCard: React.FC<FeatureCardProps> = ({
-  feature,
-  sizes,
-  isCompact = false,
-  animatedValue,
-  index,
+const AnimatedOrb: React.FC<AnimatedOrbProps> = ({
+  size,
+  initialX,
+  initialY,
+  duration,
+  delay,
+  reduceMotion,
 }) => {
-  const translateY = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [30, 0],
-  });
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
-  if (isCompact) {
-    return (
-      <Animated.View
-        style={[
-          styles.landscapeFeatureCard,
-          {
-            borderRadius: sizes.cardBorderRadius,
-            padding: sizes.cardPadding,
-            opacity: animatedValue,
-            transform: [{ translateY }],
-          },
-        ]}
-        accessible={true}
-        accessibilityRole="text"
-        accessibilityLabel={`${feature.title}. ${feature.subtitle}`}
-      >
-        <View
-          style={[
-            styles.landscapeFeatureIconContainer,
-            {
-              width: sizes.featureIconContainerSize,
-              height: sizes.featureIconContainerSize,
-              borderRadius: sizes.featureIconContainerSize * 0.3,
-              backgroundColor: feature.iconBgColor,
-            },
-          ]}
-        >
-          <Feather name={feature.icon} size={sizes.featureIconSize} color={feature.iconColor} />
-        </View>
-        <View style={styles.landscapeFeatureTextContainer}>
-          <Text
-            style={[styles.landscapeFeatureTitle, { fontSize: sizes.featureTitleSize }]}
-            numberOfLines={1}
-          >
-            {feature.title}
-          </Text>
-          <Text
-            style={[styles.landscapeFeatureSubtitle, { fontSize: sizes.featureSubtitleSize }]}
-            numberOfLines={1}
-          >
-            {feature.subtitle}
-          </Text>
-        </View>
-      </Animated.View>
+  useEffect(() => {
+    // Fade in
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 1000,
+      delay,
+      useNativeDriver: true,
+    }).start();
+
+    if (reduceMotion) return;
+
+    // Float animation
+    const float = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: -20,
+          duration: duration / 2,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: duration / 2,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
     );
-  }
+
+    const timer = setTimeout(() => float.start(), delay);
+    return () => {
+      clearTimeout(timer);
+      float.stop();
+    };
+  }, [reduceMotion, delay, duration, translateY, opacity]);
 
   return (
     <Animated.View
       style={[
-        styles.featureCard,
+        styles.orb,
         {
-          borderRadius: sizes.cardBorderRadius,
-          padding: sizes.cardPadding,
-          opacity: animatedValue,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          left: `${initialX}%`,
+          top: `${initialY}%`,
+          opacity,
           transform: [{ translateY }],
         },
       ]}
-      accessible={true}
-      accessibilityRole="text"
-      accessibilityLabel={`${feature.title}. ${feature.subtitle}`}
+    />
+  );
+};
+
+// ============================================================================
+// FEATURE CARD COMPONENT
+// ============================================================================
+
+interface FeatureCardProps {
+  feature: FeatureItem;
+  animValue: Animated.Value;
+  compact?: boolean;
+}
+
+const FeatureCard: React.FC<FeatureCardProps> = ({ feature, animValue, compact }) => {
+  const translateY = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [40, 0],
+  });
+
+  const iconSize = compact ? 22 : 28;
+  const containerSize = compact ? 48 : 56;
+
+  return (
+    <Animated.View
+      style={[
+        compact ? styles.featureCardCompact : styles.featureCard,
+        {
+          opacity: animValue,
+          transform: [{ translateY }],
+        },
+      ]}
     >
-      {/* Icon with colored background */}
       <View
         style={[
           styles.featureIconContainer,
           {
-            width: sizes.featureIconContainerSize,
-            height: sizes.featureIconContainerSize,
-            borderRadius: sizes.featureIconContainerSize * 0.28,
-            backgroundColor: feature.iconBgColor,
+            width: containerSize,
+            height: containerSize,
+            borderRadius: containerSize * 0.28,
+            backgroundColor: feature.colors.bg,
           },
         ]}
       >
-        <Feather name={feature.icon} size={sizes.featureIconSize} color={feature.iconColor} />
+        <Feather name={feature.icon} size={iconSize} color={feature.colors.icon} />
       </View>
-
-      {/* Text content */}
       <View style={styles.featureTextContainer}>
-        <Text
-          style={[styles.featureTitle, { fontSize: sizes.featureTitleSize }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.featureTitle, compact && styles.featureTitleCompact]}>
           {feature.title}
         </Text>
-        <Text
-          style={[styles.featureSubtitle, { fontSize: sizes.featureSubtitleSize }]}
-          numberOfLines={2}
-        >
+        <Text style={[styles.featureSubtitle, compact && styles.featureSubtitleCompact]}>
           {feature.subtitle}
         </Text>
       </View>
@@ -478,248 +281,92 @@ const FeatureCard: React.FC<FeatureCardProps> = ({
 };
 
 // ============================================================================
-// PREMIUM ANIMATED BUTTON COMPONENT
+// PREMIUM BUTTON COMPONENT
 // ============================================================================
 
-interface AnimatedButtonProps {
+interface PremiumButtonProps {
   onPress: () => void;
   title: string;
   variant: 'primary' | 'secondary';
-  height: number;
-  textSize: number;
-  accessibilityHint: string;
+  animValue?: Animated.Value;
   style?: object;
-  animatedValue?: Animated.Value;
 }
 
-const AnimatedButton: React.FC<AnimatedButtonProps> = ({
+const PremiumButton: React.FC<PremiumButtonProps> = ({
   onPress,
   title,
   variant,
-  height,
-  textSize,
-  accessibilityHint,
+  animValue,
   style,
-  animatedValue,
 }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const shadowAnim = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const isPrimary = variant === 'primary';
 
   const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.97,
-        useNativeDriver: true,
-        tension: 150,
-        friction: 10,
-      }),
-      Animated.timing(shadowAnim, {
-        toValue: 0.6,
-        duration: 100,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
   };
 
   const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 150,
-        friction: 10,
-      }),
-      Animated.timing(shadowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
   };
 
-  const isPrimary = variant === 'primary';
-
-  const buttonTranslateY = animatedValue?.interpolate({
+  const translateY = animValue?.interpolate({
     inputRange: [0, 1],
-    outputRange: [40, 0],
+    outputRange: [50, 0],
   });
 
   return (
     <Animated.View
       style={[
         {
+          opacity: animValue,
           transform: [
-            { scale: scaleAnim },
-            ...(buttonTranslateY ? [{ translateY: buttonTranslateY }] : []),
+            { scale },
+            ...(translateY ? [{ translateY }] : []),
           ],
-          opacity: animatedValue,
         },
         style,
       ]}
     >
       {isPrimary ? (
-        <TouchableOpacity
-          activeOpacity={0.95}
+        <Pressable
           onPress={onPress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          style={[
-            styles.primaryButton,
-            {
-              height,
-              minHeight: 56,
-            },
-          ]}
-          accessible={true}
-          accessibilityLabel={title}
-          accessibilityRole="button"
-          accessibilityHint={accessibilityHint}
+          style={styles.primaryButton}
         >
           <LinearGradient
-            colors={['#FF7043', '#F4511E']}
+            colors={['#FF7849', '#FF5C35']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.primaryButtonGradient}
           >
-            <Text style={[styles.primaryButtonText, { fontSize: textSize }]}>
-              {title}
-            </Text>
-            <Feather name="arrow-right" size={textSize + 2} color={PREMIUM_COLORS.textPrimary} />
+            <Text style={styles.primaryButtonText}>{title}</Text>
+            <Feather name="arrow-right" size={22} color="#FFFFFF" />
           </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
       ) : (
-        <TouchableOpacity
-          activeOpacity={0.85}
+        <Pressable
           onPress={onPress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          style={[
-            styles.secondaryButton,
-            { height, minHeight: 56 },
-          ]}
-          accessible={true}
-          accessibilityLabel={title}
-          accessibilityRole="button"
-          accessibilityHint={accessibilityHint}
+          style={styles.secondaryButton}
         >
-          <Text style={[styles.secondaryButtonText, { fontSize: textSize }]}>
-            {title}
-          </Text>
-        </TouchableOpacity>
+          <Text style={styles.secondaryButtonText}>{title}</Text>
+        </Pressable>
       )}
     </Animated.View>
-  );
-};
-
-// ============================================================================
-// DECORATIVE FLOATING HEARTS COMPONENT
-// ============================================================================
-
-interface FloatingHeartsProps {
-  isTablet: boolean;
-  isLandscape: boolean;
-  reduceMotion: boolean;
-}
-
-const FloatingHearts: React.FC<FloatingHeartsProps> = ({ isTablet, isLandscape, reduceMotion }) => {
-  const float1 = useRef(new Animated.Value(0)).current;
-  const float2 = useRef(new Animated.Value(0)).current;
-  const float3 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduceMotion) return;
-
-    const createFloatAnimation = (value: Animated.Value, duration: number, delay: number) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(value, {
-            toValue: 1,
-            duration: duration / 2,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(value, {
-            toValue: 0,
-            duration: duration / 2,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      );
-    };
-
-    const anim1 = createFloatAnimation(float1, 4000, 0);
-    const anim2 = createFloatAnimation(float2, 5000, 1000);
-    const anim3 = createFloatAnimation(float3, 4500, 500);
-
-    anim1.start();
-    anim2.start();
-    anim3.start();
-
-    return () => {
-      anim1.stop();
-      anim2.stop();
-      anim3.stop();
-    };
-  }, [reduceMotion, float1, float2, float3]);
-
-  const translateY1 = float1.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -15],
-  });
-
-  const translateY2 = float2.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -20],
-  });
-
-  const translateY3 = float3.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -12],
-  });
-
-  const baseSize = isTablet ? 60 : isLandscape ? 35 : 45;
-
-  return (
-    <>
-      <Animated.View
-        style={[
-          styles.floatingHeart,
-          styles.floatingHeart1,
-          {
-            width: baseSize,
-            height: baseSize,
-            borderRadius: baseSize / 2,
-            transform: [{ translateY: translateY1 }],
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.floatingHeart,
-          styles.floatingHeart2,
-          {
-            width: baseSize * 0.7,
-            height: baseSize * 0.7,
-            borderRadius: (baseSize * 0.7) / 2,
-            transform: [{ translateY: translateY2 }],
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.floatingHeart,
-          styles.floatingHeart3,
-          {
-            width: baseSize * 0.5,
-            height: baseSize * 0.5,
-            borderRadius: (baseSize * 0.5) / 2,
-            transform: [{ translateY: translateY3 }],
-          },
-        ]}
-      />
-    </>
   );
 };
 
@@ -729,484 +376,329 @@ const FloatingHearts: React.FC<FloatingHeartsProps> = ({ isTablet, isLandscape, 
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const {
-    width,
-    height,
-    isLandscape,
-    isTablet,
-    isSmallScreen,
-    hp,
-    wp,
-    moderateScale,
-  } = useResponsive();
+  const { isLandscape, isTablet, wp, hp } = useResponsive();
 
-  // ============================================================================
-  // STATE
-  // ============================================================================
-
+  // State
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [showButtons, setShowButtons] = useState(false);
-  const [focusCount, setFocusCount] = useState(0);
+  const [showContent, setShowContent] = useState(false);
   const isNavigating = useRef(false);
 
-  // ============================================================================
-  // ANIMATION VALUES
-  // ============================================================================
-
+  // Animation values
   const logoAnim = useRef(new Animated.Value(0)).current;
   const titleAnim = useRef(new Animated.Value(0)).current;
-  const taglineAnim = useRef(new Animated.Value(0)).current;
+  const subtitleAnim = useRef(new Animated.Value(0)).current;
   const featureAnims = useRef(FEATURES.map(() => new Animated.Value(0))).current;
   const buttonsAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // ============================================================================
-  // RESPONSIVE SIZES
-  // ============================================================================
-
-  const sizes = useMemo(
-    () => calculateResponsiveSizes(width, height, isLandscape, isTablet, moderateScale, hp, wp),
-    [width, height, isLandscape, isTablet, moderateScale, hp, wp]
-  );
-
-  // ============================================================================
-  // EFFECTS
-  // ============================================================================
-
-  // Check reduce motion accessibility setting
+  // Check reduce motion
   useEffect(() => {
-    const checkReduceMotion = async () => {
-      try {
-        const enabled = await AccessibilityInfo.isReduceMotionEnabled();
-        setReduceMotion(enabled);
-      } catch {
-        setReduceMotion(false);
-      }
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion
-    );
-    return () => subscription?.remove();
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub?.remove();
   }, []);
 
-  // Reset on screen focus
+  // Reset on focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       isNavigating.current = false;
-      setShowButtons(false);
-
-      // Reset all animations
+      setShowContent(false);
       logoAnim.setValue(0);
       titleAnim.setValue(0);
-      taglineAnim.setValue(0);
-      featureAnims.forEach((anim) => anim.setValue(0));
+      subtitleAnim.setValue(0);
+      featureAnims.forEach(a => a.setValue(0));
       buttonsAnim.setValue(0);
       pulseAnim.setValue(1);
-      glowAnim.setValue(0);
 
-      setFocusCount((prev) => prev + 1);
+      // Start animations
+      startAnimations();
     });
     return unsubscribe;
-  }, [navigation, logoAnim, titleAnim, taglineAnim, featureAnims, buttonsAnim, pulseAnim, glowAnim]);
+  }, [navigation]);
 
-  // Premium entrance animations sequence
-  useEffect(() => {
+  // Start animation sequence
+  const startAnimations = useCallback(() => {
     if (reduceMotion) {
       logoAnim.setValue(1);
       titleAnim.setValue(1);
-      taglineAnim.setValue(1);
-      featureAnims.forEach((anim) => anim.setValue(1));
+      subtitleAnim.setValue(1);
+      featureAnims.forEach(a => a.setValue(1));
       buttonsAnim.setValue(1);
-      glowAnim.setValue(1);
-      setShowButtons(true);
+      setShowContent(true);
       return;
     }
 
-    // Phase 1: Logo entrance with spring
-    const logoAnimation = Animated.spring(logoAnim, {
+    // Logo entrance
+    Animated.spring(logoAnim, {
       toValue: 1,
-      tension: 35,
+      tension: 40,
       friction: 8,
       useNativeDriver: true,
-    });
+      delay: 200,
+    }).start();
 
-    // Phase 2: Title fade in
-    const titleAnimation = Animated.timing(titleAnim, {
+    // Title
+    Animated.timing(titleAnim, {
       toValue: 1,
-      duration: ANIMATION_TIMING.taglineEntry,
+      duration: 600,
+      delay: 500,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    });
+    }).start();
 
-    // Phase 3: Tagline
-    const taglineAnimation = Animated.timing(taglineAnim, {
+    // Subtitle
+    Animated.timing(subtitleAnim, {
       toValue: 1,
-      duration: ANIMATION_TIMING.taglineEntry,
+      duration: 600,
+      delay: 700,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    });
+    }).start();
 
-    // Phase 4: Feature cards stagger
-    const featureAnimations = featureAnims.map((anim, index) =>
+    // Features staggered
+    featureAnims.forEach((anim, i) => {
       Animated.timing(anim, {
         toValue: 1,
-        duration: 400,
-        delay: index * ANIMATION_TIMING.featureStagger,
-        easing: Easing.out(Easing.back(1.1)),
+        duration: 500,
+        delay: 900 + i * 120,
+        easing: Easing.out(Easing.back(1.2)),
         useNativeDriver: true,
-      })
-    );
-
-    // Glow animation
-    const glowAnimation = Animated.timing(glowAnim, {
-      toValue: 1,
-      duration: 1200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      }).start();
     });
 
-    // Start sequence
-    Animated.sequence([
-      Animated.delay(100),
-      logoAnimation,
-    ]).start();
-
-    Animated.sequence([
-      Animated.delay(500),
-      titleAnimation,
-    ]).start();
-
-    Animated.sequence([
-      Animated.delay(700),
-      taglineAnimation,
-    ]).start();
-
-    Animated.sequence([
-      Animated.delay(900),
-      Animated.stagger(ANIMATION_TIMING.featureStagger, featureAnimations),
-    ]).start();
-
-    Animated.sequence([
-      Animated.delay(300),
-      glowAnimation,
-    ]).start();
-
-    // 3-second timer for button reveal
-    const splashTimer = setTimeout(() => {
-      setShowButtons(true);
-
+    // Buttons after 2.5s
+    setTimeout(() => {
+      setShowContent(true);
       Animated.spring(buttonsAnim, {
         toValue: 1,
-        tension: 45,
+        tension: 50,
         friction: 9,
         useNativeDriver: true,
       }).start();
-    }, SPLASH_DURATION);
+    }, 2500);
+  }, [reduceMotion, logoAnim, titleAnim, subtitleAnim, featureAnims, buttonsAnim]);
 
-    return () => {
-      clearTimeout(splashTimer);
-    };
-  }, [reduceMotion, logoAnim, titleAnim, taglineAnim, featureAnims, buttonsAnim, glowAnim, focusCount]);
+  // Initial animation
+  useEffect(() => {
+    startAnimations();
+  }, []);
 
-  // Subtle pulse animation for logo
+  // Logo pulse
   useEffect(() => {
     if (reduceMotion) return;
-
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.02,
-          duration: ANIMATION_TIMING.pulseInterval / 2,
+          toValue: 1.03,
+          duration: 2000,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: ANIMATION_TIMING.pulseInterval / 2,
+          duration: 2000,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
     );
-
-    const timer = setTimeout(() => {
-      pulse.start();
-    }, 1500);
-
+    const timer = setTimeout(() => pulse.start(), 1500);
     return () => {
       clearTimeout(timer);
       pulse.stop();
     };
-  }, [reduceMotion, pulseAnim, focusCount]);
+  }, [reduceMotion, pulseAnim]);
 
-  // ============================================================================
-  // NAVIGATION HANDLERS
-  // ============================================================================
-
+  // Navigation handlers
   const handleGetStarted = useCallback(() => {
-    if (isNavigating.current || !showButtons) return;
+    if (isNavigating.current || !showContent) return;
     isNavigating.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     navigation.navigate('SignUp');
-  }, [navigation, showButtons]);
+  }, [navigation, showContent]);
 
   const handleSignIn = useCallback(() => {
-    if (isNavigating.current || !showButtons) return;
+    if (isNavigating.current || !showContent) return;
     isNavigating.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('Login');
-  }, [navigation, showButtons]);
+  }, [navigation, showContent]);
 
-  // ============================================================================
-  // ANIMATION INTERPOLATIONS
-  // ============================================================================
+  // Animation interpolations
+  const logoScale = Animated.multiply(
+    logoAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
+    pulseAnim
+  );
 
-  const logoScale = logoAnim.interpolate({
+  const titleTranslate = titleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 1],
+    outputRange: [30, 0],
   });
 
-  const logoOpacity = logoAnim;
-
-  const titleTranslateY = titleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [25, 0],
-  });
-
-  const taglineTranslateY = taglineAnim.interpolate({
+  const subtitleTranslate = subtitleAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [20, 0],
   });
 
-  const combinedLogoScale = Animated.multiply(logoScale, pulseAnim);
+  // Responsive sizes
+  const logoSize = isLandscape
+    ? Math.min(hp(30), wp(15), 140)
+    : isTablet
+    ? 180
+    : Math.min(wp(38), 160);
 
-  const glowOpacity = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.6],
-  });
+  const logoContainerSize = logoSize + 32;
 
   // ============================================================================
-  // RENDER - PORTRAIT CONTENT
+  // PORTRAIT LAYOUT
   // ============================================================================
 
-  const renderPortraitContent = () => {
-    const contentMaxWidth = isTablet ? 580 : undefined;
-
-    return (
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: insets.top + (isTablet ? 56 : 40),
-            paddingBottom: insets.bottom + (isTablet ? 48 : 32),
-            paddingHorizontal: sizes.screenPadding,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={contentMaxWidth ? { alignSelf: 'center', width: '100%', maxWidth: contentMaxWidth } : undefined}>
-
-          {/* Logo and Header Section */}
-          <View style={[styles.logoSection, { marginBottom: sizes.sectionSpacing }]}>
-            {/* Animated glow behind logo */}
-            <Animated.View
-              style={[
-                styles.logoGlow,
-                {
-                  width: sizes.logoOuterGlowSize + 60,
-                  height: sizes.logoOuterGlowSize + 60,
-                  borderRadius: (sizes.logoOuterGlowSize + 60) / 2,
-                  opacity: glowOpacity,
-                },
-              ]}
-            />
-
-            {/* Logo container with premium styling */}
-            <Animated.View
-              style={[
-                styles.logoWrapper,
-                {
-                  opacity: logoOpacity,
-                  transform: [{ scale: combinedLogoScale }],
-                },
-              ]}
-            >
-              {/* Outer decorative ring */}
-              <View
-                style={[
-                  styles.logoOuterRing,
-                  {
-                    width: sizes.logoOuterGlowSize,
-                    height: sizes.logoOuterGlowSize,
-                    borderRadius: sizes.logoOuterGlowSize / 2,
-                  },
-                ]}
-              />
-
-              {/* Main logo container */}
-              <View
-                style={[
-                  styles.logoContainer,
-                  {
-                    width: sizes.logoContainerSize,
-                    height: sizes.logoContainerSize,
-                    borderRadius: sizes.logoContainerSize / 2,
-                  },
-                ]}
-              >
-                <Image
-                  source={TanderLogo}
-                  style={{
-                    width: sizes.logoSize,
-                    height: sizes.logoSize,
-                  }}
-                  resizeMode="contain"
-                  accessible={true}
-                  accessibilityLabel="Tander logo - two interlocking hearts representing connection"
-                />
-              </View>
-            </Animated.View>
-
-            {/* App Title */}
-            <Animated.Text
-              style={[
-                styles.title,
-                {
-                  fontSize: sizes.titleSize,
-                  opacity: titleAnim,
-                  transform: [{ translateY: titleTranslateY }],
-                },
-              ]}
-              accessible={true}
-              accessibilityRole="header"
-            >
-              TANDER
-            </Animated.Text>
-
-            {/* Tagline */}
-            <Animated.Text
-              style={[
-                styles.tagline,
-                {
-                  fontSize: sizes.subtitleSize,
-                  opacity: taglineAnim,
-                  transform: [{ translateY: taglineTranslateY }],
-                },
-              ]}
-              accessible={true}
-            >
-              Where Meaningful Connections Begin
-            </Animated.Text>
-
-            {/* Sub-tagline */}
-            <Animated.Text
-              style={[
-                styles.subTagline,
-                {
-                  fontSize: sizes.taglineSize,
-                  opacity: taglineAnim,
-                  transform: [{ translateY: taglineTranslateY }],
-                },
-              ]}
-            >
-              Made for Filipino seniors 60+
-            </Animated.Text>
-          </View>
-
-          {/* Feature Cards Section */}
-          <View
-            style={[
-              styles.featuresSection,
-              {
-                marginBottom: sizes.sectionSpacing,
-                gap: isTablet ? 20 : 16,
-              },
-            ]}
-            accessible={true}
-            accessibilityRole="list"
-            accessibilityLabel="App features"
-          >
-            {FEATURES.map((feature, index) => (
-              <FeatureCard
-                key={feature.id}
-                feature={feature}
-                sizes={sizes}
-                animatedValue={featureAnims[index]}
-                index={index}
-              />
-            ))}
-          </View>
-
-          {/* Buttons Section */}
+  const renderPortrait = () => (
+    <ScrollView
+      contentContainerStyle={[
+        styles.portraitContent,
+        {
+          paddingTop: insets.top + 32,
+          paddingBottom: insets.bottom + 32,
+          paddingHorizontal: isTablet ? 48 : 24,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+    >
+      <View style={[styles.portraitInner, isTablet && { maxWidth: 520, alignSelf: 'center' }]}>
+        {/* Logo Section */}
+        <View style={styles.logoSection}>
+          {/* Glow effect */}
           <Animated.View
             style={[
-              styles.buttonsSection,
+              styles.logoGlow,
               {
-                opacity: buttonsAnim,
-                gap: sizes.buttonSpacing,
+                width: logoContainerSize + 80,
+                height: logoContainerSize + 80,
+                borderRadius: (logoContainerSize + 80) / 2,
+                opacity: logoAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
               },
             ]}
-            pointerEvents={showButtons ? 'auto' : 'none'}
+          />
+
+          {/* Logo */}
+          <Animated.View
+            style={[
+              styles.logoContainer,
+              {
+                width: logoContainerSize,
+                height: logoContainerSize,
+                borderRadius: logoContainerSize / 2,
+                opacity: logoAnim,
+                transform: [{ scale: logoScale }],
+              },
+            ]}
           >
-            {/* Primary Button */}
-            <AnimatedButton
-              onPress={handleGetStarted}
-              title="Get Started"
-              variant="primary"
-              height={sizes.buttonHeight}
-              textSize={sizes.buttonTextSize}
-              accessibilityHint="Tap to create a new account and start finding connections"
-              animatedValue={buttonsAnim}
+            <Image
+              source={TanderLogo}
+              style={{ width: logoSize, height: logoSize }}
+              resizeMode="contain"
             />
+          </Animated.View>
 
-            {/* Secondary Button */}
-            <AnimatedButton
-              onPress={handleSignIn}
-              title="I Already Have an Account"
-              variant="secondary"
-              height={sizes.buttonHeight}
-              textSize={sizes.buttonTextSize}
-              accessibilityHint="Tap to sign in to your existing Tander account"
-              animatedValue={buttonsAnim}
+          {/* Title */}
+          <Animated.Text
+            style={[
+              styles.title,
+              {
+                fontSize: isTablet ? 56 : 46,
+                opacity: titleAnim,
+                transform: [{ translateY: titleTranslate }],
+              },
+            ]}
+          >
+            TANDER
+          </Animated.Text>
+
+          {/* Tagline */}
+          <Animated.Text
+            style={[
+              styles.tagline,
+              {
+                fontSize: isTablet ? 22 : 19,
+                opacity: subtitleAnim,
+                transform: [{ translateY: subtitleTranslate }],
+              },
+            ]}
+          >
+            Where Meaningful Connections Begin
+          </Animated.Text>
+
+          {/* Sub-tagline */}
+          <Animated.Text
+            style={[
+              styles.subTagline,
+              {
+                fontSize: isTablet ? 17 : 15,
+                opacity: subtitleAnim,
+                transform: [{ translateY: subtitleTranslate }],
+              },
+            ]}
+          >
+            Made for Filipino seniors 60+
+          </Animated.Text>
+        </View>
+
+        {/* Features Section */}
+        <View style={[styles.featuresSection, { marginVertical: isTablet ? 48 : 36 }]}>
+          {FEATURES.map((feature, index) => (
+            <FeatureCard
+              key={feature.id}
+              feature={feature}
+                            animValue={featureAnims[index]}
             />
+          ))}
+        </View>
 
-            {/* Trust Badge */}
-            <Animated.View
-              style={[styles.trustBadge, { opacity: buttonsAnim }]}
-              accessible={true}
-              accessibilityRole="text"
-              accessibilityLabel="Your privacy and safety are our top priority"
-            >
-              <View style={styles.trustBadgeIcon}>
-                <Feather name="shield" size={sizes.privacyIconSize} color={colors.teal[400]} />
-              </View>
-              <Text style={[styles.trustBadgeText, { fontSize: sizes.privacyTextSize }]}>
-                Your privacy and safety are our top priority
-              </Text>
-            </Animated.View>
+        {/* Buttons Section */}
+        <View style={styles.buttonsSection} pointerEvents={showContent ? 'auto' : 'none'}>
+          <PremiumButton
+            onPress={handleGetStarted}
+            title="Get Started"
+            variant="primary"
+            animValue={buttonsAnim}
+          />
+
+          <PremiumButton
+            onPress={handleSignIn}
+            title="I Already Have an Account"
+            variant="secondary"
+            animValue={buttonsAnim}
+            style={{ marginTop: 16 }}
+          />
+
+          {/* Trust badge */}
+          <Animated.View style={[styles.trustBadge, { opacity: buttonsAnim }]}>
+            <View style={styles.trustBadgeIcon}>
+              <Feather name="shield" size={18} color="#20C997" />
+            </View>
+            <Text style={styles.trustBadgeText}>
+              Your privacy and safety are our top priority
+            </Text>
           </Animated.View>
         </View>
-      </ScrollView>
-    );
-  };
+      </View>
+    </ScrollView>
+  );
 
   // ============================================================================
-  // RENDER - LANDSCAPE CONTENT
+  // LANDSCAPE LAYOUT
   // ============================================================================
 
-  const renderLandscapeContent = () => {
-    const leftPadding = Math.max(insets.left, 20) + 20;
-    const rightPadding = Math.max(insets.right, 20) + 20;
-    const topPadding = Math.max(insets.top, 12) + 12;
-    const bottomPadding = Math.max(insets.bottom, 12) + 12;
-
-    const availableWidth = width - leftPadding - rightPadding;
-    const leftSideWidth = isTablet ? availableWidth * 0.52 : availableWidth * 0.48;
-    const rightSideWidth = isTablet ? Math.min(availableWidth * 0.42, 420) : Math.min(availableWidth * 0.46, 360);
+  const renderLandscape = () => {
+    const leftPadding = Math.max(insets.left, 24) + 24;
+    const rightPadding = Math.max(insets.right, 24) + 24;
+    const topPadding = Math.max(insets.top, 16) + 16;
+    const bottomPadding = Math.max(insets.bottom, 16) + 16;
 
     return (
       <View
@@ -1221,107 +713,87 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         ]}
       >
         {/* Left Side - Branding */}
-        <View style={[styles.landscapeLeft, { flex: 1, maxWidth: leftSideWidth }]}>
+        <View style={styles.landscapeLeft}>
           {/* Logo glow */}
           <Animated.View
             style={[
               styles.logoGlow,
               {
-                width: sizes.logoOuterGlowSize + 40,
-                height: sizes.logoOuterGlowSize + 40,
-                borderRadius: (sizes.logoOuterGlowSize + 40) / 2,
-                opacity: glowOpacity,
-                position: 'absolute',
+                width: logoContainerSize + 60,
+                height: logoContainerSize + 60,
+                borderRadius: (logoContainerSize + 60) / 2,
+                opacity: logoAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.4],
+                }),
               },
             ]}
           />
 
+          {/* Logo */}
           <Animated.View
             style={[
-              styles.logoWrapper,
+              styles.logoContainer,
               {
+                width: logoContainerSize,
+                height: logoContainerSize,
+                borderRadius: logoContainerSize / 2,
                 opacity: logoAnim,
-                transform: [{ scale: combinedLogoScale }],
-                marginBottom: 16,
+                transform: [{ scale: logoScale }],
               },
             ]}
           >
-            <View
-              style={[
-                styles.logoOuterRing,
-                {
-                  width: sizes.logoOuterGlowSize,
-                  height: sizes.logoOuterGlowSize,
-                  borderRadius: sizes.logoOuterGlowSize / 2,
-                },
-              ]}
+            <Image
+              source={TanderLogo}
+              style={{ width: logoSize, height: logoSize }}
+              resizeMode="contain"
             />
-            <View
-              style={[
-                styles.logoContainer,
-                {
-                  width: sizes.logoContainerSize,
-                  height: sizes.logoContainerSize,
-                  borderRadius: sizes.logoContainerSize / 2,
-                },
-              ]}
-            >
-              <Image
-                source={TanderLogo}
-                style={{ width: sizes.logoSize, height: sizes.logoSize }}
-                resizeMode="contain"
-                accessible={true}
-                accessibilityLabel="Tander logo"
-              />
-            </View>
           </Animated.View>
 
+          {/* Title */}
           <Animated.Text
             style={[
               styles.title,
               {
-                fontSize: sizes.titleSize,
+                fontSize: Math.min(hp(12), 42),
+                marginTop: 16,
                 opacity: titleAnim,
-                transform: [{ translateY: titleTranslateY }],
-                marginBottom: 8,
+                transform: [{ translateY: titleTranslate }],
               },
             ]}
-            accessible={true}
-            accessibilityRole="header"
           >
             TANDER
           </Animated.Text>
 
+          {/* Tagline */}
           <Animated.Text
             style={[
               styles.tagline,
               {
-                fontSize: sizes.subtitleSize,
-                opacity: taglineAnim,
-                transform: [{ translateY: taglineTranslateY }],
-                marginBottom: 20,
+                fontSize: Math.min(hp(4.5), 18),
+                marginTop: 8,
+                opacity: subtitleAnim,
+                transform: [{ translateY: subtitleTranslate }],
               },
             ]}
           >
             Where Meaningful{'\n'}Connections Begin
           </Animated.Text>
 
-          {/* Compact Features */}
-          <View style={[styles.landscapeFeatures, { maxWidth: Math.min(leftSideWidth - 24, 340) }]}>
+          {/* Features - Compact */}
+          <View style={styles.landscapeFeatures}>
             {FEATURES.map((feature, index) => (
               <FeatureCard
                 key={feature.id}
                 feature={feature}
-                sizes={sizes}
-                isCompact={true}
-                animatedValue={featureAnims[index]}
-                index={index}
+                                animValue={featureAnims[index]}
+                compact
               />
             ))}
           </View>
         </View>
 
-        {/* Decorative Divider */}
+        {/* Divider */}
         <View style={styles.landscapeDivider}>
           <View style={styles.landscapeDividerLine} />
           <View style={styles.landscapeDividerDot} />
@@ -1332,48 +804,35 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         <Animated.View
           style={[
             styles.landscapeRight,
-            {
-              maxWidth: rightSideWidth,
-              opacity: buttonsAnim,
-            },
+            { opacity: buttonsAnim },
           ]}
-          pointerEvents={showButtons ? 'auto' : 'none'}
+          pointerEvents={showContent ? 'auto' : 'none'}
         >
-          <Text style={[styles.landscapeHeading, { fontSize: Math.max(22, sizes.titleSize * 0.55) }]}>
+          <Text style={styles.landscapeHeading}>
             Ready to find{'\n'}your connection?
           </Text>
 
-          <AnimatedButton
+          <PremiumButton
             onPress={handleGetStarted}
             title="Get Started"
             variant="primary"
-            height={sizes.buttonHeight}
-            textSize={sizes.buttonTextSize}
-            accessibilityHint="Create a new account"
+            animValue={buttonsAnim}
             style={{ width: '100%', marginBottom: 14 }}
-            animatedValue={buttonsAnim}
           />
 
-          <AnimatedButton
+          <PremiumButton
             onPress={handleSignIn}
             title="Sign In"
             variant="secondary"
-            height={Math.max(52, sizes.buttonHeight - 8)}
-            textSize={Math.max(16, sizes.buttonTextSize - 2)}
-            accessibilityHint="Sign in to existing account"
+            animValue={buttonsAnim}
             style={{ width: '100%' }}
-            animatedValue={buttonsAnim}
           />
 
-          <View style={[styles.trustBadge, { marginTop: 20 }]}>
+          <View style={[styles.trustBadge, { marginTop: 24 }]}>
             <View style={styles.trustBadgeIcon}>
-              <Feather
-                name="shield"
-                size={Math.max(16, sizes.privacyIconSize - 2)}
-                color={colors.teal[400]}
-              />
+              <Feather name="shield" size={16} color="#20C997" />
             </View>
-            <Text style={[styles.trustBadgeText, { fontSize: Math.max(12, sizes.privacyTextSize - 1) }]}>
+            <Text style={[styles.trustBadgeText, { fontSize: 13 }]}>
               Privacy & safety first
             </Text>
           </View>
@@ -1388,200 +847,155 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={Platform.OS === 'android'}
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* Premium Gradient */}
+      <LinearGradient
+        colors={iOS.gradient.colors as unknown as string[]}
+        locations={iOS.gradient.locations as unknown as number[]}
+        style={StyleSheet.absoluteFill}
       />
 
-      {/* Premium Gradient Background */}
-      <LinearGradient
-        colors={[
-          PREMIUM_COLORS.gradientTop,
-          PREMIUM_COLORS.gradientMiddle,
-          PREMIUM_COLORS.gradientBottom,
-        ]}
-        locations={[0, 0.45, 1]}
-        style={styles.gradient}
-      >
-        {/* Decorative floating elements */}
-        <FloatingHearts isTablet={isTablet} isLandscape={isLandscape} reduceMotion={reduceMotion} />
+      {/* Floating orbs */}
+      <AnimatedOrb
+        size={isTablet ? 300 : 220}
+        initialX={-15}
+        initialY={-8}
+        duration={6000}
+        delay={0}
+        reduceMotion={reduceMotion}
+      />
+      <AnimatedOrb
+        size={isTablet ? 200 : 150}
+        initialX={75}
+        initialY={35}
+        duration={7000}
+        delay={500}
+        reduceMotion={reduceMotion}
+      />
+      <AnimatedOrb
+        size={isTablet ? 160 : 120}
+        initialX={-10}
+        initialY={70}
+        duration={5500}
+        delay={1000}
+        reduceMotion={reduceMotion}
+      />
 
-        {/* Decorative circles */}
-        <View
-          style={[
-            styles.decorCircle,
-            styles.decorCircle1,
-            {
-              width: isTablet ? 400 : isLandscape ? 200 : 300,
-              height: isTablet ? 400 : isLandscape ? 200 : 300,
-              borderRadius: isTablet ? 200 : isLandscape ? 100 : 150,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.decorCircle,
-            styles.decorCircle2,
-            {
-              width: isTablet ? 300 : isLandscape ? 150 : 220,
-              height: isTablet ? 300 : isLandscape ? 150 : 220,
-              borderRadius: isTablet ? 150 : isLandscape ? 75 : 110,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.decorCircle,
-            styles.decorCircle3,
-            {
-              width: isTablet ? 200 : isLandscape ? 100 : 160,
-              height: isTablet ? 200 : isLandscape ? 100 : 160,
-              borderRadius: isTablet ? 100 : isLandscape ? 50 : 80,
-            },
-          ]}
-        />
-
-        {/* Main Content */}
-        {isLandscape ? renderLandscapeContent() : renderPortraitContent()}
-      </LinearGradient>
+      {/* Content */}
+      {isLandscape ? renderLandscape() : renderPortrait()}
     </View>
   );
 };
 
 // ============================================================================
-// STYLES - Premium, Refined Design
+// STYLES
 // ============================================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  gradient: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-  },
 
-  // ============================================================================
-  // DECORATIVE ELEMENTS
-  // ============================================================================
-  decorCircle: {
+  // Floating orbs
+  orb: {
     position: 'absolute',
-    backgroundColor: PREMIUM_COLORS.glassTint,
-  },
-  decorCircle1: {
-    top: -80,
-    right: -60,
-  },
-  decorCircle2: {
-    top: '35%',
-    left: -100,
-  },
-  decorCircle3: {
-    bottom: '15%',
-    right: -50,
-  },
-
-  floatingHeart: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 107, 138, 0.15)',
+    backgroundColor: iOS.glass.overlay,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 138, 0.25)',
-  },
-  floatingHeart1: {
-    top: '12%',
-    right: '8%',
-  },
-  floatingHeart2: {
-    top: '65%',
-    left: '5%',
-  },
-  floatingHeart3: {
-    bottom: '25%',
-    right: '15%',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 
   // ============================================================================
-  // LOGO SECTION
+  // PORTRAIT STYLES
   // ============================================================================
+
+  portraitContent: {
+    flexGrow: 1,
+  },
+  portraitInner: {
+    flex: 1,
+    width: '100%',
+  },
+
+  // Logo section
   logoSection: {
     alignItems: 'center',
+    marginBottom: 8,
   },
   logoGlow: {
     position: 'absolute',
-    backgroundColor: PREMIUM_COLORS.warmGlow,
-  },
-  logoWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-  logoOuterRing: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 200, 150, 0.35)',
   },
   logoContainer: {
-    backgroundColor: PREMIUM_COLORS.glassWhite,
+    backgroundColor: iOS.glass.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.25)',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 1,
-    shadowRadius: 32,
-    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.15,
+    shadowRadius: 40,
+    elevation: 25,
     borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
+    borderColor: 'rgba(255, 255, 255, 0.9)',
   },
   title: {
     fontWeight: '800',
-    color: PREMIUM_COLORS.textPrimary,
-    letterSpacing: 2,
-    marginBottom: 12,
+    color: iOS.text.primary,
+    letterSpacing: 3,
+    marginTop: 24,
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 6,
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   tagline: {
-    color: PREMIUM_COLORS.textPrimary,
-    textAlign: 'center',
+    color: iOS.text.primary,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginTop: 12,
     textShadowColor: 'rgba(0, 0, 0, 0.15)',
-    textShadowOffset: { width: 0, height: 2 },
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
-    marginBottom: 8,
   },
   subTagline: {
-    color: PREMIUM_COLORS.textSecondary,
-    textAlign: 'center',
+    color: iOS.text.secondary,
     fontWeight: '500',
-    letterSpacing: 0.3,
+    textAlign: 'center',
+    marginTop: 8,
   },
 
-  // ============================================================================
-  // FEATURE CARDS
-  // ============================================================================
+  // Features section
   featuresSection: {
-    // Gap set dynamically
+    gap: 14,
   },
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
-    backgroundColor: PREMIUM_COLORS.cardBackground,
-    shadowColor: PREMIUM_COLORS.cardShadow,
+    backgroundColor: iOS.glass.white,
+    borderRadius: iOS.radius.lg,
+    padding: 18,
+    gap: 16,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 16,
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
     elevation: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
+    borderColor: iOS.glass.whiteBorder,
+  },
+  featureCardCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: iOS.glass.white,
+    borderRadius: iOS.radius.md,
+    padding: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: iOS.glass.whiteBorder,
   },
   featureIconContainer: {
     justifyContent: 'center',
@@ -1591,30 +1005,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    color: colors.gray[800],
+    fontSize: 18,
     fontWeight: '700',
-    marginBottom: 4,
+    color: iOS.text.dark,
+    marginBottom: 3,
+  },
+  featureTitleCompact: {
+    fontSize: 15,
+    marginBottom: 2,
   },
   featureSubtitle: {
-    color: colors.gray[500],
+    fontSize: 15,
     fontWeight: '500',
-    lineHeight: 22,
+    color: iOS.text.darkMuted,
+    lineHeight: 20,
+  },
+  featureSubtitleCompact: {
+    fontSize: 13,
+    lineHeight: 17,
   },
 
-  // ============================================================================
-  // BUTTONS
-  // ============================================================================
+  // Buttons section
   buttonsSection: {
-    // Gap set dynamically
+    marginTop: 'auto',
   },
   primaryButton: {
-    borderRadius: 9999,
+    height: 64,
+    borderRadius: iOS.radius.pill,
     overflow: 'hidden',
-    shadowColor: 'rgba(244, 81, 30, 0.4)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
+    shadowColor: '#FF5C35',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
     shadowRadius: 20,
-    elevation: 12,
+    elevation: 15,
   },
   primaryButtonGradient: {
     flex: 1,
@@ -1625,122 +1048,105 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   primaryButtonText: {
-    color: PREMIUM_COLORS.textPrimary,
+    fontSize: 19,
     fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   secondaryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 2.5,
-    borderColor: PREMIUM_COLORS.buttonSecondaryBorder,
-    borderRadius: 9999,
+    height: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: iOS.radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: PREMIUM_COLORS.textPrimary,
+    fontSize: 17,
     fontWeight: '600',
+    color: iOS.text.primary,
     letterSpacing: 0.3,
   },
+
+  // Trust badge
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 24,
     gap: 10,
-    paddingTop: 16,
   },
   trustBadgeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   trustBadgeText: {
-    color: PREMIUM_COLORS.textSecondary,
+    fontSize: 14,
     fontWeight: '500',
+    color: iOS.text.secondary,
   },
 
   // ============================================================================
-  // LANDSCAPE LAYOUT
+  // LANDSCAPE STYLES
   // ============================================================================
+
   landscapeContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
   landscapeLeft: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    maxWidth: '50%',
   },
   landscapeRight: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    maxWidth: 380,
+    paddingHorizontal: 24,
   },
   landscapeDivider: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: '60%',
-    marginHorizontal: 24,
+    height: '55%',
+    marginHorizontal: 28,
   },
   landscapeDividerLine: {
     flex: 1,
     width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   landscapeDividerDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    marginVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    marginVertical: 10,
   },
   landscapeFeatures: {
     width: '100%',
+    maxWidth: 320,
+    marginTop: 20,
     gap: 10,
-    marginTop: 16,
-  },
-  landscapeFeatureCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: PREMIUM_COLORS.cardBackground,
-    shadowColor: PREMIUM_COLORS.cardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  landscapeFeatureIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  landscapeFeatureTextContainer: {
-    flex: 1,
-  },
-  landscapeFeatureTitle: {
-    color: colors.gray[800],
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  landscapeFeatureSubtitle: {
-    color: colors.gray[500],
-    fontWeight: '500',
   },
   landscapeHeading: {
+    fontSize: 26,
     fontWeight: '700',
-    color: PREMIUM_COLORS.textPrimary,
-    marginBottom: 28,
+    color: iOS.text.primary,
     textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 34,
     textShadowColor: 'rgba(0, 0, 0, 0.15)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
-    lineHeight: 32,
   },
 });
 

@@ -76,7 +76,7 @@ async function lockOrientationForDevice(): Promise<void> {
   } catch (error) {
     // Log error in dev mode
     if (__DEV__) {
-      console.error('[OrientationLock] Failed to set orientation:', error);
+      console.warn('[OrientationLock] Failed to set orientation:', error);
     }
   }
 }

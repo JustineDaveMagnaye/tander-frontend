@@ -1,396 +1,652 @@
 /**
- * TANDER Profile Setup Screen - Premium Edition
- * Step 3 of 3: Essential dating profile info (FINAL STEP)
+ * TANDER Profile Setup Screen - Super Premium iOS Design
+ * Step 3 of 3: Build Your Profile
  *
- * Design Philosophy:
- * - Premium gradient backgrounds matching WelcomeScreen aesthetic
- * - Glassmorphism cards with floating hearts decoration
- * - Senior-friendly with large touch targets (56-64px)
- * - Smooth entrance animations respecting reduce motion
- * - 100% responsive across all devices
- * - WCAG AA/AAA compliant contrast ratios
- * - Less typing, more tapping - chip selectors for gender/interests
- *
- * Key Features:
- * - Premium coral-to-teal gradient background
- * - Floating hearts decoration with animations
- * - Decorative background circles
- * - Glassmorphic card containers
- * - Large, accessible photo upload
- * - Date picker with visual calendar
- * - City picker with autocomplete
- * - Smooth entrance animations
- * - Progress indicator (Step 3 of 3 - Final Step)
+ * Design Principles:
+ * - Clean, minimal iOS aesthetic with SF-style typography
+ * - Generous white space and breathing room
+ * - Subtle depth with refined shadows
+ * - Smooth micro-interactions
+ * - WCAG AA accessible
+ * - Senior-friendly (56px+ touch targets, 18px+ fonts)
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
-  KeyboardAvoidingView,
-  Platform,
+  Text,
+  StyleSheet,
   ScrollView,
-  Animated,
   StatusBar,
   Pressable,
-  AccessibilityInfo,
   TextInput,
+  Image,
+  Alert,
+  Platform,
+  Animated,
   Easing,
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  AccessibilityInfo,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@shared/components';
-import { colors } from '@shared/styles/colors';
-import { spacing, shadows, borderRadius } from '@shared/styles/spacing';
-import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
+import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useResponsive } from '@shared/hooks/useResponsive';
 import { completeProfile } from '@services/api';
 import { uploadProfilePhoto } from '@services/api/profileApi';
 import { useAuthStore, selectCurrentUsername } from '@store/authStore';
 import { storage, STORAGE_KEYS } from '@services/storage/asyncStorage';
-
 import { ProfileSetupScreenProps } from './types';
-import { styles } from './styles';
-import {
-  PhotoUpload,
-  ChipSelector,
-  InputField,
-  DatePicker,
-  CityPicker,
-} from './components';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================================================
-// PREMIUM COLOR PALETTE - Matching WelcomeScreen and LoadingScreen
+// PREMIUM iOS DESIGN SYSTEM
 // ============================================================================
-const PREMIUM_COLORS = {
-  gradientTop: '#FF8A65',      // Warm coral-orange
-  gradientMiddle: '#FF7043',   // Deeper coral
-  gradientBottom: '#26A69A',   // Trust-inspiring teal
+const iOS = {
+  colors: {
+    // Backgrounds
+    background: '#F2F2F7',
+    card: '#FFFFFF',
 
-  glassWhite: 'rgba(255, 255, 255, 0.95)',
-  glassTint: 'rgba(255, 255, 255, 0.12)',
-  glassCard: 'rgba(255, 255, 255, 0.98)',
+    // Text
+    label: '#000000',
+    secondaryLabel: '#3C3C43',
+    tertiaryLabel: '#8E8E93',
+    placeholder: '#C7C7CC',
 
-  textPrimary: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.92)',
+    // System colors
+    teal: '#30D5C8',
+    tealDark: '#20B2AA',
+    tealLight: 'rgba(48, 213, 200, 0.1)',
+    orange: '#F97316',
+    orangeDark: '#EA580C',
+    orangeLight: 'rgba(249, 115, 22, 0.1)',
+    red: '#FF3B30',
+    green: '#34C759',
+    blue: '#007AFF',
 
-  heartPink: 'rgba(255, 107, 138, 0.6)',
-  warmGlow: 'rgba(255, 183, 77, 0.3)',
-} as const;
+    // Separators & borders
+    separator: 'rgba(60, 60, 67, 0.12)',
+    opaqueSeparator: '#C6C6C8',
 
-// ============================================================================
-// ANIMATION TIMING
-// ============================================================================
-const ANIMATION_TIMING = {
-  headerFade: 600,
-  cardEntrance: 500,
-  cardDelay: 200,
-  heartFloat: 3500,
+    // Fills
+    systemFill: 'rgba(120, 120, 128, 0.2)',
+    secondaryFill: 'rgba(120, 120, 128, 0.16)',
+    tertiaryFill: 'rgba(118, 118, 128, 0.12)',
+  },
+
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 20,
+    xl: 24,
+    xxl: 32,
+    xxxl: 48,
+  },
+
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
+    pill: 100,
+  },
+
+  typography: {
+    largeTitle: { fontSize: 34, fontWeight: '700' as const, letterSpacing: 0.4 },
+    title1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: 0.36 },
+    title2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: 0.35 },
+    title3: { fontSize: 20, fontWeight: '600' as const, letterSpacing: 0.38 },
+    headline: { fontSize: 17, fontWeight: '600' as const, letterSpacing: -0.4 },
+    body: { fontSize: 17, fontWeight: '400' as const, letterSpacing: -0.4 },
+    callout: { fontSize: 16, fontWeight: '400' as const, letterSpacing: -0.3 },
+    subhead: { fontSize: 15, fontWeight: '400' as const, letterSpacing: -0.2 },
+    footnote: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.1 },
+    caption1: { fontSize: 12, fontWeight: '400' as const, letterSpacing: 0 },
+  },
 } as const;
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const GENDER_OPTIONS = ['Male', 'Female'];
-const INTERESTED_IN_OPTIONS = ['Men', 'Women', 'Both'];
+const GENDER_OPTIONS = [
+  { label: 'Male', value: 'Male', icon: 'user' as const },
+  { label: 'Female', value: 'Female', icon: 'user' as const },
+];
 
-const ERROR_MESSAGES = {
-  displayName: 'Please enter your display name',
-  birthDate: 'Please select your birth date',
-  gender: 'Please select your gender',
-  interestedIn: 'Please select who you\'re interested in',
-  city: 'Please select your city',
-  saveFailed: 'Failed to save profile. Please try again.',
-};
+const INTERESTED_OPTIONS = [
+  { label: 'Men', value: 'Men', icon: 'users' as const },
+  { label: 'Women', value: 'Women', icon: 'users' as const },
+  { label: 'Both', value: 'Both', icon: 'heart' as const },
+];
 
-const PLACEHOLDERS = {
-  displayName: 'How should we call you?',
-  birthDate: 'Select your birth date',
-  city: 'Select your city',
-};
-
-const HINTS = {
-  displayName: 'This is how other members will see you',
-  birthDate: 'Must be 50 years or older',
-  city: 'Your location helps find nearby matches',
-};
+const PHILIPPINE_CITIES = [
+  'Manila', 'Quezon City', 'Davao City', 'Caloocan', 'Cebu City',
+  'Zamboanga City', 'Taguig', 'Antipolo', 'Pasig', 'Cagayan de Oro',
+  'Paranaque', 'Dasmarinas', 'Valenzuela', 'Bacoor', 'General Santos',
+  'Las Pinas', 'Makati', 'San Jose del Monte', 'Muntinlupa', 'Lapu-Lapu City',
+];
 
 // ============================================================================
-// FLOATING HEART DECORATION COMPONENT
+// STEP INDICATOR COMPONENT - Matching SignUp screen design
 // ============================================================================
-interface FloatingHeartProps {
-  size: number;
-  positionX: number;
-  positionY: number;
-  delay: number;
-  reduceMotion: boolean;
-}
+const STEP_LABELS = ['Account', 'Verify', 'Profile'];
 
-const FloatingHeart: React.FC<FloatingHeartProps> = ({
-  size,
-  positionX,
-  positionY,
-  delay,
-  reduceMotion,
+const StepIndicator: React.FC<{ currentStep: number; totalSteps: number }> = ({
+  currentStep,
+  totalSteps
 }) => {
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduceMotion) {
-      fadeAnim.setValue(0.3);
-      return;
-    }
-
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      delay,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-
-    const floatLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: 1,
-          duration: ANIMATION_TIMING.heartFloat,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: ANIMATION_TIMING.heartFloat,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    const timer = setTimeout(() => floatLoop.start(), delay);
-
-    return () => {
-      clearTimeout(timer);
-      floatLoop.stop();
-    };
-  }, [floatAnim, fadeAnim, delay, reduceMotion]);
-
-  const translateY = floatAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -15],
-  });
-
-  const opacity = fadeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.3],
-  });
-
   return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: `${positionX}%`,
-        top: `${positionY}%`,
-        opacity,
-        transform: [{ translateY }],
-      }}
-      pointerEvents="none"
-    >
-      <View
-        style={{
-          width: size + 10,
-          height: size + 10,
-          borderRadius: (size + 10) / 2,
-          backgroundColor: 'rgba(255, 107, 138, 0.1)',
-          borderWidth: 1,
-          borderColor: 'rgba(255, 107, 138, 0.2)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <Feather name="heart" size={size} color={PREMIUM_COLORS.heartPink} />
-      </View>
-    </Animated.View>
-  );
-};
-
-// ============================================================================
-// STEP INDICATOR COMPONENT
-// ============================================================================
-interface StepIndicatorProps {
-  currentStep: number;
-  totalSteps: number;
-  isTablet: boolean;
-}
-
-const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, totalSteps, isTablet }) => {
-  return (
-    <View style={{ marginBottom: spacing.l, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.s }}>
+    <View style={styles.stepContainer}>
+      <View style={styles.stepRow}>
         {Array.from({ length: totalSteps }).map((_, index) => {
-          const stepNumber = index + 1;
-          const isCompleted = stepNumber < currentStep;
-          const isActive = stepNumber === currentStep;
+          const stepNum = index + 1;
+          const isCompleted = stepNum < currentStep;
+          const isActive = stepNum === currentStep;
 
           return (
-            <React.Fragment key={stepNumber}>
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  backgroundColor: isCompleted
-                    ? colors.teal[500]
-                    : isActive
-                      ? colors.orange[500]
-                      : colors.gray[300],
-                  borderWidth: isActive ? 2 : 0,
-                  borderColor: colors.orange[200],
-                }}
-              >
-                {isCompleted && (
-                  <Text style={{ color: colors.white, fontSize: 8, fontWeight: '700' }}>
-                    ✓
-                  </Text>
-                )}
-                {isActive && (
-                  <View
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: 2,
-                      backgroundColor: colors.white,
-                    }}
-                  />
-                )}
+            <React.Fragment key={stepNum}>
+              <View style={styles.stepItem}>
+                <View style={[
+                  styles.stepCircle,
+                  isCompleted && styles.stepCircleCompleted,
+                  isActive && styles.stepCircleActive,
+                ]}>
+                  {isCompleted ? (
+                    <Feather name="check" size={14} color="#FFFFFF" />
+                  ) : (
+                    <Text style={[
+                      styles.stepNumber,
+                      (isCompleted || isActive) && styles.stepNumberActive,
+                    ]}>
+                      {stepNum}
+                    </Text>
+                  )}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  isCompleted && styles.stepLabelCompleted,
+                  isActive && styles.stepLabelActive,
+                ]}>
+                  {STEP_LABELS[index]}
+                </Text>
               </View>
-              {stepNumber < totalSteps && (
-                <View
-                  style={{
-                    width: 40,
-                    height: 3,
-                    backgroundColor: isCompleted ? colors.teal[500] : colors.gray[300],
-                    marginHorizontal: spacing.xs,
-                  }}
-                />
+              {stepNum < totalSteps && (
+                <View style={[
+                  styles.stepLine,
+                  isCompleted && styles.stepLineCompleted,
+                ]} />
               )}
             </React.Fragment>
           );
         })}
       </View>
-      <Text
-        style={{
-          color: colors.gray[700],
-          fontWeight: '600',
-          fontSize: isTablet ? 15 : 14,
-        }}
-      >
-        Step {currentStep} of {totalSteps}: Build Your Profile
-      </Text>
     </View>
   );
 };
 
 // ============================================================================
-// PRIMARY BUTTON COMPONENT
+// PHOTO UPLOAD COMPONENT
 // ============================================================================
-interface PrimaryButtonProps {
-  title: string;
-  loadingTitle: string;
-  onPress: () => void;
-  loading: boolean;
-  disabled?: boolean;
-  height: number;
-  fontSize: number;
+interface PhotoUploadProps {
+  photoUri: string | null;
+  onPhotoChange: (uri: string | null) => void;
 }
 
-const PrimaryButton: React.FC<PrimaryButtonProps> = ({
-  title,
-  loadingTitle,
-  onPress,
-  loading,
-  disabled = false,
-  height,
-  fontSize,
-}) => {
+const PhotoUpload: React.FC<PhotoUploadProps> = ({ photoUri, onPhotoChange }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 10,
-    }).start();
-  };
+  const handlePress = useCallback(async () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
 
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 10,
-    }).start();
-  };
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-  const isDisabled = loading || disabled;
+    Alert.alert(
+      'Add Photo',
+      'Choose how to add your profile photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Camera access is required to take photos.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              onPhotoChange(result.assets[0].uri);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          },
+        },
+        {
+          text: 'Choose from Library',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Photo library access is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              onPhotoChange(result.assets[0].uri);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }, [onPhotoChange, scaleAnim]);
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        disabled={isDisabled}
-        style={{
-          borderRadius: 9999,
-          overflow: 'hidden',
-          ...shadows.medium,
-          opacity: isDisabled && !loading ? 0.5 : 1,
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={loading ? loadingTitle : title}
-        accessibilityState={{ disabled: isDisabled }}
-      >
-        <LinearGradient
-          colors={
-            isDisabled && !loading
-              ? ['#D1D5DB', '#C7CBD1']
-              : colors.gradient.primaryButton
-          }
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{
-            height,
-            minHeight: 56,
-            justifyContent: 'center',
-            alignItems: 'center',
-            flexDirection: 'row',
-            gap: spacing.s,
-            paddingHorizontal: spacing.xl,
-          }}
-        >
-          {loading && (
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                borderWidth: 2,
-                borderColor: 'rgba(255,255,255,0.3)',
-                borderTopColor: colors.white,
-              }}
-            />
+    <View style={styles.photoSection}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Pressable onPress={handlePress} style={styles.photoContainer}>
+          {photoUri ? (
+            <>
+              <Image source={{ uri: photoUri }} style={styles.photoImage} />
+              <View style={styles.photoEditBadge}>
+                <Feather name="camera" size={14} color="#FFFFFF" />
+              </View>
+            </>
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Feather name="camera" size={32} color={iOS.colors.tertiaryLabel} />
+              <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+            </View>
           )}
-          <Text style={{ color: colors.white, fontWeight: '700', fontSize }}>
-            {loading ? loadingTitle : title}
-          </Text>
-          {!loading && <Feather name="arrow-right" size={fontSize + 2} color={colors.white} />}
-        </LinearGradient>
+        </Pressable>
+      </Animated.View>
+      <Text style={styles.photoHint}>Add a photo (optional)</Text>
+    </View>
+  );
+};
+
+// ============================================================================
+// INPUT FIELD COMPONENT
+// ============================================================================
+interface InputFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  hint?: string;
+  icon: keyof typeof Feather.glyphMap;
+  autoFocus?: boolean;
+}
+
+const InputField = React.forwardRef<TextInput, InputFieldProps>(({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  hint,
+  icon,
+  autoFocus,
+}, ref) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const hasValue = value.length > 0;
+
+  return (
+    <View style={styles.fieldCard}>
+      <View style={styles.fieldHeader}>
+        <View style={[
+          styles.fieldIcon,
+          (isFocused || hasValue) && styles.fieldIconActive,
+        ]}>
+          <Feather
+            name={icon}
+            size={18}
+            color={(isFocused || hasValue) ? iOS.colors.orange : iOS.colors.tertiaryLabel}
+          />
+        </View>
+        <View style={styles.fieldLabelContainer}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {hint && <Text style={styles.fieldHint}>{hint}</Text>}
+        </View>
+      </View>
+      <View style={[
+        styles.fieldInputContainer,
+        isFocused && styles.fieldInputContainerFocused,
+        hasValue && !isFocused && styles.fieldInputContainerFilled,
+      ]}>
+        <TextInput
+          ref={ref}
+          style={styles.fieldInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={iOS.colors.placeholder}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          autoFocus={autoFocus}
+        />
+      </View>
+    </View>
+  );
+});
+
+// ============================================================================
+// CHIP SELECTOR COMPONENT
+// ============================================================================
+interface ChipOption {
+  label: string;
+  value: string;
+  icon: keyof typeof Feather.glyphMap;
+}
+
+interface ChipSelectorProps {
+  label: string;
+  hint?: string;
+  options: ChipOption[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  icon: keyof typeof Feather.glyphMap;
+}
+
+const ChipSelector: React.FC<ChipSelectorProps> = ({
+  label,
+  hint,
+  options,
+  selectedValue,
+  onSelect,
+  icon,
+}) => {
+  const hasSelection = selectedValue !== '';
+
+  const handleSelect = (value: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onSelect(value);
+  };
+
+  return (
+    <View style={styles.fieldCard}>
+      <View style={styles.fieldHeader}>
+        <View style={[
+          styles.fieldIcon,
+          hasSelection && styles.fieldIconActive,
+        ]}>
+          <Feather
+            name={icon}
+            size={18}
+            color={hasSelection ? iOS.colors.orange : iOS.colors.tertiaryLabel}
+          />
+        </View>
+        <View style={styles.fieldLabelContainer}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {hint && <Text style={styles.fieldHint}>{hint}</Text>}
+        </View>
+      </View>
+      <View style={styles.chipRow}>
+        {options.map((option) => {
+          const isSelected = selectedValue === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => handleSelect(option.value)}
+              style={[
+                styles.chip,
+                isSelected && styles.chipSelected,
+              ]}
+            >
+              <Feather
+                name={option.icon}
+                size={16}
+                color={isSelected ? '#FFFFFF' : iOS.colors.secondaryLabel}
+              />
+              <Text style={[
+                styles.chipText,
+                isSelected && styles.chipTextSelected,
+              ]}>
+                {option.label}
+              </Text>
+              {isSelected && (
+                <View style={styles.chipCheck}>
+                  <Feather name="check" size={14} color="#FFFFFF" />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
+// DATE PICKER COMPONENT
+// ============================================================================
+interface DatePickerFieldProps {
+  label: string;
+  hint?: string;
+  value: Date | null;
+  onChange: (date: Date | null) => void;
+}
+
+const DatePickerField: React.FC<DatePickerFieldProps> = ({
+  label,
+  hint,
+  value,
+  onChange,
+}) => {
+  const [showPicker, setShowPicker] = useState(false);
+  const hasValue = value !== null;
+
+  // Calculate max date (must be 50+ years old)
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() - 50);
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowPicker(true);
+  };
+
+  const handleChange = (_event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowPicker(false);
+    }
+    if (selectedDate) {
+      onChange(selectedDate);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  return (
+    <View style={styles.fieldCard}>
+      <View style={styles.fieldHeader}>
+        <View style={[
+          styles.fieldIcon,
+          hasValue && styles.fieldIconActive,
+        ]}>
+          <Feather
+            name="calendar"
+            size={18}
+            color={hasValue ? iOS.colors.orange : iOS.colors.tertiaryLabel}
+          />
+        </View>
+        <View style={styles.fieldLabelContainer}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {hint && <Text style={styles.fieldHint}>{hint}</Text>}
+        </View>
+      </View>
+
+      <Pressable
+        onPress={handlePress}
+        style={[
+          styles.dateButton,
+          hasValue && styles.dateButtonFilled,
+        ]}
+      >
+        <Text style={[
+          styles.dateButtonText,
+          hasValue && styles.dateButtonTextFilled,
+        ]}>
+          {value ? formatDate(value) : 'Select your birth date'}
+        </Text>
+        <Feather name="chevron-right" size={20} color={iOS.colors.tertiaryLabel} />
       </Pressable>
-    </Animated.View>
+
+      {showPicker && (
+        <View style={styles.datePickerContainer}>
+          <DateTimePicker
+            value={value || maxDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleChange}
+            maximumDate={maxDate}
+            minimumDate={new Date(1920, 0, 1)}
+          />
+          {Platform.OS === 'ios' && (
+            <Pressable
+              onPress={() => setShowPicker(false)}
+              style={styles.datePickerDone}
+            >
+              <Text style={styles.datePickerDoneText}>Done</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ============================================================================
+// CITY PICKER COMPONENT
+// ============================================================================
+interface CityPickerProps {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (city: string) => void;
+}
+
+const CityPicker: React.FC<CityPickerProps> = ({
+  label,
+  hint,
+  value,
+  onChange,
+}) => {
+  const [showPicker, setShowPicker] = useState(false);
+  const hasValue = value !== '';
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowPicker(true);
+  };
+
+  const handleSelectCity = (city: string) => {
+    onChange(city);
+    setShowPicker(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  return (
+    <View style={styles.fieldCard}>
+      <View style={styles.fieldHeader}>
+        <View style={[
+          styles.fieldIcon,
+          hasValue && styles.fieldIconActive,
+        ]}>
+          <Feather
+            name="map-pin"
+            size={18}
+            color={hasValue ? iOS.colors.orange : iOS.colors.tertiaryLabel}
+          />
+        </View>
+        <View style={styles.fieldLabelContainer}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {hint && <Text style={styles.fieldHint}>{hint}</Text>}
+        </View>
+      </View>
+
+      <Pressable
+        onPress={handlePress}
+        style={[
+          styles.dateButton,
+          hasValue && styles.dateButtonFilled,
+        ]}
+      >
+        <Text style={[
+          styles.dateButtonText,
+          hasValue && styles.dateButtonTextFilled,
+        ]}>
+          {value || 'Select your city'}
+        </Text>
+        <Feather name="chevron-right" size={20} color={iOS.colors.tertiaryLabel} />
+      </Pressable>
+
+      <Modal
+        visible={showPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <View style={styles.cityPickerOverlay}>
+          <Pressable style={styles.cityPickerBackdrop} onPress={() => setShowPicker(false)} />
+          <View style={styles.cityPickerContainer}>
+            <View style={styles.cityPickerHeader}>
+              <Text style={styles.cityPickerTitle}>Select City</Text>
+              <Pressable onPress={() => setShowPicker(false)} style={styles.cityPickerClose}>
+                <Feather name="x" size={24} color={iOS.colors.label} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.cityList} showsVerticalScrollIndicator={false}>
+              {PHILIPPINE_CITIES.map((city) => (
+                <Pressable
+                  key={city}
+                  onPress={() => handleSelectCity(city)}
+                  style={[
+                    styles.cityItem,
+                    value === city && styles.cityItemSelected,
+                  ]}
+                >
+                  <Text style={[
+                    styles.cityItemText,
+                    value === city && styles.cityItemTextSelected,
+                  ]}>
+                    {city}
+                  </Text>
+                  {value === city && (
+                    <Feather name="check" size={20} color={iOS.colors.teal} />
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -402,18 +658,9 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   route,
 }) => {
   const insets = useSafeAreaInsets();
-  const {
-    width,
-    height,
-    isLandscape,
-    isTablet,
-    isSmallScreen,
-    wp,
-    hp,
-    moderateScale,
-  } = useResponsive();
+  const { isTablet, isLandscape } = useResponsive();
 
-  // Get username from route params or authStore
+  // Get username
   const storeUsername = useAuthStore(selectCurrentUsername);
   const username = route.params?.username || storeUsername || '';
 
@@ -421,107 +668,58 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   const [displayName, setDisplayName] = useState('');
   const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [city, setCity] = useState('');
-  const [gender, setGender] = useState<'Male' | 'Female' | ''>('');
-  const [interestedIn, setInterestedIn] = useState<'Men' | 'Women' | 'Both' | ''>('');
+  const [gender, setGender] = useState('');
+  const [interestedIn, setInterestedIn] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
 
-  // Refs
-  const displayNameRef = useRef<TextInput>(null);
+  // Animations
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(40)).current;
 
-  // Animation values
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const cardTranslateY = useRef(new Animated.Value(40)).current;
+  // Sizing
+  const cardMaxWidth = isTablet ? 480 : SCREEN_WIDTH - 48;
 
-  // Responsive sizes
-  const titleSize = isLandscape
-    ? Math.min(hp(10), wp(6), 38)
-    : isTablet
-      ? 48
-      : 36;
-  const subtitleSize = isLandscape
-    ? Math.min(hp(4), wp(3), 20)
-    : isTablet
-      ? 22
-      : 19;
-  const labelFontSize = isTablet ? 18 : 16;
-  const inputFontSize = isTablet ? 18 : 16;
-  const inputHeight = isTablet ? 64 : 58;
-  const buttonHeight = isTablet ? 68 : 60;
-  const buttonFontSize = isTablet ? 20 : 18;
-  const maxFormWidth = isTablet ? 600 : 500;
-  const heartSize = isTablet ? 28 : 22;
-
-  // Decorative circle sizes
-  const decorCircleLarge = isTablet ? 350 : isLandscape ? 200 : 280;
-  const decorCircleMedium = isTablet ? 250 : isLandscape ? 140 : 200;
-  const decorCircleSmall = isTablet ? 150 : isLandscape ? 90 : 130;
-
-  // Check for reduce motion preference
+  // Check reduce motion
   useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion
-    );
-    return () => subscription.remove();
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub?.remove();
   }, []);
 
-  // Entrance animations
+  // Entrance animation
   useEffect(() => {
     if (reduceMotion) {
-      headerOpacity.setValue(1);
-      cardOpacity.setValue(1);
-      cardTranslateY.setValue(0);
+      fadeIn.setValue(1);
+      slideUp.setValue(0);
       return;
     }
-
-    Animated.stagger(150, [
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: ANIMATION_TIMING.headerFade,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(cardOpacity, {
-          toValue: 1,
-          duration: ANIMATION_TIMING.cardEntrance,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardTranslateY, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]),
+    Animated.parallel([
+      Animated.timing(fadeIn, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(slideUp, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, [reduceMotion, headerOpacity, cardOpacity, cardTranslateY]);
+  }, [reduceMotion]);
 
-  // Format Date to MM/DD/YYYY string for API
-  const formatDateToString = useCallback((date: Date): string => {
+  // Format date for API
+  const formatDateToString = (date: Date): string => {
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
     const year = date.getFullYear();
     return `${month}/${day}/${year}`;
-  }, []);
+  };
 
-  // Handle back navigation
-  const handleBack = useCallback(() => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
+  // Calculate age from birth date
+  const calculateAge = (birthDateValue: Date): number => {
+    const today = new Date();
+    let age = today.getFullYear() - birthDateValue.getFullYear();
+    const monthDiff = today.getMonth() - birthDateValue.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDateValue.getDate())) {
+      age--;
     }
-  }, [navigation]);
+    return age;
+  };
 
   // Handle continue
   const handleContinue = useCallback(async () => {
@@ -530,32 +728,27 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
     // Validation
     if (!displayName.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(ERROR_MESSAGES.displayName);
-      displayNameRef.current?.focus();
+      setError('Please enter your display name');
       return;
     }
-
     if (!birthDate) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(ERROR_MESSAGES.birthDate);
+      setError('Please select your birth date');
       return;
     }
-
     if (!gender) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(ERROR_MESSAGES.gender);
+      setError('Please select your gender');
       return;
     }
-
     if (!interestedIn) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(ERROR_MESSAGES.interestedIn);
+      setError('Please select who you\'re interested in');
       return;
     }
-
-    if (!city.trim()) {
+    if (!city) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(ERROR_MESSAGES.city);
+      setError('Please select your city');
       return;
     }
 
@@ -567,16 +760,14 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       if (interestedIn === 'Women') interestedInJson = '["female"]';
       else if (interestedIn === 'Both') interestedInJson = '["male","female"]';
 
-      // Format date for API
-      const birthDateStr = formatDateToString(birthDate);
-
       await completeProfile(
         {
           username,
           nickName: displayName.trim(),
           firstName: displayName.trim(),
           lastName: '',
-          birthDate: birthDateStr,
+          birthDate: formatDateToString(birthDate),
+          age: calculateAge(birthDate),
           city: city.trim(),
           country: 'Philippines',
           gender: gender.toLowerCase() as 'male' | 'female',
@@ -585,7 +776,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
         true
       );
 
-      // Upload profile photo if available
+      // Upload photo if available
       if (photoUri) {
         try {
           await uploadProfilePhoto({
@@ -594,481 +785,785 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
             name: 'profile-photo.jpg',
           });
         } catch (photoErr) {
-          console.warn('Profile photo upload failed, continuing:', photoErr);
+          console.warn('Photo upload failed:', photoErr);
         }
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setLoading(false);
 
-      // Registration complete - user will be redirected to login
-      // The completeProfile API already sets registrationPhase to 'profile_completed'
-      // We need to set it to 'verified' to skip ID verification
+      // Complete registration - update both store AND storage
       const { useAuthStore } = await import('@store/authStore');
       useAuthStore.setState({ registrationPhase: 'verified', isAuthenticated: false });
 
-      // Navigate to Login with success message
+      // CRITICAL: Persist to storage so the phase survives app reload
+      await storage.setItem(STORAGE_KEYS.REGISTRATION_PHASE, 'verified');
+      // Clear temporary registration data
+      await storage.removeItem(STORAGE_KEYS.CURRENT_USERNAME);
+      await storage.removeItem('CURRENT_EMAIL');
+
       navigation.reset({
         index: 0,
         routes: [{ name: 'Login', params: { registrationComplete: true } }],
       });
     } catch (err: any) {
       setLoading(false);
-      setError(err?.message || ERROR_MESSAGES.saveFailed);
+      setError(err?.message || 'Failed to save profile. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-  }, [displayName, birthDate, gender, interestedIn, city, photoUri, username, formatDateToString, navigation]);
+  }, [displayName, birthDate, gender, interestedIn, city, photoUri, username, navigation]);
 
-  // Form padding
-  const formPadding = isLandscape
-    ? isTablet
-      ? wp(4)
-      : wp(3)
-    : isSmallScreen
-      ? spacing.m
-      : spacing.l;
+  const canContinue = displayName && birthDate && gender && interestedIn && city && !loading;
 
-  // Render form content
-  const renderForm = () => (
-    <Animated.View
-      style={{
-        opacity: cardOpacity,
-        transform: [{ translateY: cardTranslateY }],
-        maxWidth: maxFormWidth,
-        alignSelf: 'center',
-        width: '100%',
-        backgroundColor: PREMIUM_COLORS.glassCard,
-        borderRadius: isTablet ? 32 : 24,
-        padding: isTablet ? spacing.xl : spacing.l,
-        ...shadows.large,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-      }}
-    >
+  // Render form content (shared between portrait and landscape)
+  const renderFormContent = () => (
+    <>
       {/* Step Indicator */}
-      <StepIndicator currentStep={3} totalSteps={3} isTablet={isTablet} />
+      <StepIndicator currentStep={3} totalSteps={3} />
 
       {/* Photo Upload */}
-      <PhotoUpload
-        photoUri={photoUri}
-        onPhotoChange={setPhotoUri}
-        size={isTablet ? 140 : 120}
-        accessibilityLabel="Upload profile photo"
-      />
+      <PhotoUpload photoUri={photoUri} onPhotoChange={setPhotoUri} />
 
       {/* Display Name */}
       <InputField
-        ref={displayNameRef}
         label="Display Name *"
         value={displayName}
         onChangeText={setDisplayName}
-        placeholder={PLACEHOLDERS.displayName}
-        hint={HINTS.displayName}
-        height={inputHeight}
-        fontSize={inputFontSize}
-        labelFontSize={labelFontSize}
-        captionFontSize={isTablet ? 15 : 13}
-        accessibilityLabel="Display name"
-        returnKeyType="done"
+        placeholder="How should we call you?"
+        hint="This is how other members will see you"
         icon="user"
       />
 
       {/* Birth Date */}
-      <DatePicker
+      <DatePickerField
         label="Birth Date *"
+        hint="Must be 50 years or older"
         value={birthDate}
         onChange={setBirthDate}
-        placeholder={PLACEHOLDERS.birthDate}
-        hint={HINTS.birthDate}
-        height={inputHeight}
-        fontSize={inputFontSize}
-        labelFontSize={labelFontSize}
-        captionFontSize={isTablet ? 15 : 13}
-        accessibilityLabel="Birth date"
       />
 
       {/* Gender */}
       <ChipSelector
         label="I am a *"
+        hint="Select your gender"
         options={GENDER_OPTIONS}
         selectedValue={gender}
-        onSelect={(value) => setGender(value as 'Male' | 'Female')}
-        labelFontSize={labelFontSize}
-        chipPaddingH={isTablet ? 24 : 20}
-        chipPaddingV={isTablet ? 16 : 14}
-        accessibilityLabel="Gender"
+        onSelect={setGender}
         icon="user"
-        hint="Select your gender"
       />
 
       {/* Interested In */}
       <ChipSelector
         label="Looking for *"
-        options={INTERESTED_IN_OPTIONS}
-        selectedValue={interestedIn}
-        onSelect={(value) => setInterestedIn(value as 'Men' | 'Women' | 'Both')}
-        labelFontSize={labelFontSize}
-        chipPaddingH={isTablet ? 24 : 20}
-        chipPaddingV={isTablet ? 16 : 14}
-        accessibilityLabel="Interested in"
-        icon="heart"
         hint="Who would you like to meet?"
+        options={INTERESTED_OPTIONS}
+        selectedValue={interestedIn}
+        onSelect={setInterestedIn}
+        icon="heart"
       />
 
       {/* City */}
       <CityPicker
         label="City *"
+        hint="Your location helps find nearby matches"
         value={city}
         onChange={setCity}
-        placeholder={PLACEHOLDERS.city}
-        hint={HINTS.city}
-        height={inputHeight}
-        fontSize={inputFontSize}
-        labelFontSize={labelFontSize}
-        captionFontSize={isTablet ? 15 : 13}
-        accessibilityLabel="City"
       />
 
       {/* Error Message */}
       {error && (
-        <View
-          style={{
-            backgroundColor: 'rgba(244, 67, 54, 0.08)',
-            borderRadius: borderRadius.large,
-            padding: spacing.m,
-            marginTop: spacing.m,
-            borderWidth: 1,
-            borderColor: 'rgba(244, 67, 54, 0.25)',
-          }}
-          accessibilityLiveRegion="polite"
-        >
-          <Text
-            style={{
-              color: colors.semantic.error,
-              fontWeight: '600',
-              fontSize: inputFontSize,
-              textAlign: 'center',
-            }}
-          >
-            {error}
-          </Text>
+        <View style={styles.errorBadge}>
+          <Feather name="alert-circle" size={16} color={iOS.colors.red} />
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
       {/* Continue Button */}
-      <View style={{ marginTop: spacing.l }}>
-        <PrimaryButton
-          title="Continue to Verification"
-          loadingTitle="Saving Profile..."
-          onPress={handleContinue}
-          loading={loading}
-          disabled={!displayName || !birthDate || !gender || !interestedIn || !city}
-          height={buttonHeight}
-          fontSize={buttonFontSize}
-        />
+      <Pressable
+        onPress={handleContinue}
+        disabled={!canContinue}
+        style={({ pressed }) => [
+          styles.continueButton,
+          canContinue && styles.continueButtonEnabled,
+          pressed && canContinue && styles.continueButtonPressed,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <>
+            <Text style={[
+              styles.continueButtonText,
+              canContinue && styles.continueButtonTextEnabled,
+            ]}>
+              Complete Profile
+            </Text>
+            <Feather
+              name="arrow-right"
+              size={20}
+              color={canContinue ? '#FFFFFF' : iOS.colors.tertiaryLabel}
+            />
+          </>
+        )}
+      </Pressable>
+
+      {/* Trust Badge */}
+      <View style={styles.trustBadge}>
+        <Feather name="shield" size={14} color={iOS.colors.tertiaryLabel} />
+        <Text style={styles.trustText}>Your information is secure</Text>
       </View>
-    </Animated.View>
+    </>
   );
 
-  // Landscape Layout
+  // ============================================================================
+  // LANDSCAPE LAYOUT - Matching SignUp screen design
+  // ============================================================================
   if (isLandscape) {
     return (
-      <View style={{ flex: 1 }}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent={Platform.OS === 'android'}
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+        {/* Gradient Background */}
+        <LinearGradient
+          colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
+          locations={[0, 0.4, 1]}
+          style={StyleSheet.absoluteFill}
         />
 
-        <LinearGradient
-          colors={[
-            PREMIUM_COLORS.gradientTop,
-            PREMIUM_COLORS.gradientMiddle,
-            PREMIUM_COLORS.gradientBottom,
-          ]}
-          locations={[0, 0.45, 1]}
-          style={{ flex: 1 }}
-        >
-          {/* Decorative circles */}
-          <View
-            style={{
-              position: 'absolute',
-              width: decorCircleLarge,
-              height: decorCircleLarge,
-              borderRadius: decorCircleLarge / 2,
-              backgroundColor: PREMIUM_COLORS.glassTint,
-              top: -decorCircleLarge * 0.3,
-              right: -decorCircleLarge * 0.2,
-            }}
-          />
-          <View
-            style={{
-              position: 'absolute',
-              width: decorCircleMedium,
-              height: decorCircleMedium,
-              borderRadius: decorCircleMedium / 2,
-              backgroundColor: PREMIUM_COLORS.glassTint,
-              top: '40%',
-              left: -decorCircleMedium * 0.35,
-            }}
-          />
-
-          {/* Floating hearts */}
-          {!reduceMotion && (
-            <>
-              <FloatingHeart size={heartSize} positionX={10} positionY={12} delay={0} reduceMotion={reduceMotion} />
-              <FloatingHeart size={heartSize * 0.8} positionX={88} positionY={15} delay={300} reduceMotion={reduceMotion} />
-              <FloatingHeart size={heartSize * 0.7} positionX={12} positionY={75} delay={600} reduceMotion={reduceMotion} />
-            </>
-          )}
-
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              paddingTop: insets.top + hp(2),
-              paddingBottom: insets.bottom + hp(2),
-              paddingLeft: insets.left + wp(2),
-              paddingRight: insets.right + wp(2),
-            }}
+        <View style={[styles.landscapeContainer, { paddingTop: insets.top }]}>
+          {/* Left Panel - Branding */}
+          <Animated.View
+            style={[
+              styles.landscapeLeftPanel,
+              {
+                paddingLeft: insets.left + iOS.spacing.xl,
+                opacity: fadeIn,
+              },
+            ]}
           >
-            {/* Left Panel - Header */}
-            <View style={{ flex: 0.35, justifyContent: 'center', paddingHorizontal: spacing.l }}>
-              {navigation.canGoBack() && (
-                <Pressable
-                  onPress={handleBack}
-                  style={{
-                    width: 56,
-                    height: 56,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: spacing.l,
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Go back"
-                >
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      borderWidth: 2,
-                      borderColor: 'rgba(255,255,255,0.3)',
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Feather name="chevron-left" size={24} color={PREMIUM_COLORS.textPrimary} />
-                  </View>
-                </Pressable>
-              )}
+            <View style={styles.landscapeBranding}>
+              {/* Icon */}
+              <View style={styles.landscapeIconCircle}>
+                <Feather name="user-plus" size={32} color="#FFFFFF" />
+              </View>
 
-              <Animated.View style={{ opacity: headerOpacity }}>
-                <Text
-                  variant="h1"
-                  color={PREMIUM_COLORS.textPrimary}
-                  style={{
-                    fontSize: titleSize,
-                    fontWeight: '800',
-                    marginBottom: spacing.s,
-                    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-                    textShadowOffset: { width: 0, height: 2 },
-                    textShadowRadius: 4,
-                  }}
-                >
-                  Let's Meet You
-                </Text>
-                <Text
-                  variant="bodyLarge"
-                  color={PREMIUM_COLORS.textSecondary}
-                  style={{
-                    fontSize: subtitleSize,
-                    fontWeight: '500',
-                    lineHeight: subtitleSize * 1.4,
-                  }}
-                >
-                  Share a few details so others can find you
-                </Text>
-              </Animated.View>
+              <Text style={styles.landscapeTitle}>Let's Meet You</Text>
+              <Text style={styles.landscapeSubtitle}>
+                Share a few details so{'\n'}others can find you
+              </Text>
+
+              {/* Progress dots for landscape */}
+              <View style={styles.landscapeProgress}>
+                <View style={[styles.progressDot, styles.progressDotCompleted]} />
+                <View style={[styles.progressDot, styles.progressDotCompleted]} />
+                <View style={[styles.progressDot, styles.progressDotActive]} />
+              </View>
             </View>
+          </Animated.View>
 
-            {/* Right Panel - Form */}
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ flex: 0.65 }}
+          {/* Right Panel - Form */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={[styles.landscapeRightPanel, { paddingRight: insets.right + iOS.spacing.xl }]}
+          >
+            <Animated.View
+              style={[
+                styles.landscapeCard,
+                {
+                  opacity: fadeIn,
+                  transform: [{ translateY: slideUp }],
+                },
+              ]}
             >
               <ScrollView
-                contentContainerStyle={{
-                  paddingVertical: hp(2),
-                  paddingHorizontal: formPadding,
-                  flexGrow: 1,
-                  justifyContent: 'center',
-                }}
-                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.landscapeScrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                {renderForm()}
+                {renderFormContent()}
               </ScrollView>
-            </KeyboardAvoidingView>
-          </View>
-        </LinearGradient>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
       </View>
     );
   }
 
-  // Portrait Layout
+  // ============================================================================
+  // PORTRAIT LAYOUT
+  // ============================================================================
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={Platform.OS === 'android'}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* Gradient Background */}
+      <LinearGradient
+        colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFill}
       />
 
-      <LinearGradient
-        colors={[
-          PREMIUM_COLORS.gradientTop,
-          PREMIUM_COLORS.gradientMiddle,
-          PREMIUM_COLORS.gradientBottom,
-        ]}
-        locations={[0, 0.45, 1]}
+      {/* Decorative circles */}
+      <View style={[styles.decorCircle, styles.decorCircle1]} />
+      <View style={[styles.decorCircle, styles.decorCircle2]} />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        {/* Decorative circles */}
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleLarge,
-            height: decorCircleLarge,
-            borderRadius: decorCircleLarge / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            top: -decorCircleLarge * 0.25,
-            right: -decorCircleLarge * 0.2,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleMedium,
-            height: decorCircleMedium,
-            borderRadius: decorCircleMedium / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            top: '30%',
-            left: -decorCircleMedium * 0.3,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleSmall,
-            height: decorCircleSmall,
-            borderRadius: decorCircleSmall / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            bottom: '20%',
-            right: -decorCircleSmall * 0.2,
-          }}
-        />
-
-        {/* Floating hearts */}
-        {!reduceMotion && (
-          <>
-            <FloatingHeart size={heartSize} positionX={8} positionY={10} delay={0} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.8} positionX={85} positionY={8} delay={400} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.7} positionX={10} positionY={65} delay={700} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.6} positionX={88} positionY={55} delay={500} reduceMotion={reduceMotion} />
-          </>
-        )}
-
-        {/* Header */}
-        <View
-          style={{
-            paddingTop: insets.top + spacing.m,
-            paddingBottom: spacing.xl + 16,
-            paddingHorizontal: spacing.l,
-          }}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {navigation.canGoBack() && (
-            <Pressable
-              onPress={handleBack}
-              style={{
-                width: 56,
-                height: 56,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginLeft: -spacing.xs,
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  borderWidth: 2,
-                  borderColor: 'rgba(255,255,255,0.3)',
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Feather name="chevron-left" size={24} color={PREMIUM_COLORS.textPrimary} />
-              </View>
-            </Pressable>
-          )}
-
-          <Animated.View style={{ opacity: headerOpacity }}>
-            <Text
-              variant="h1"
-              color={PREMIUM_COLORS.textPrimary}
-              style={{
-                fontSize: titleSize,
-                fontWeight: '800',
-                marginTop: spacing.s,
-                textShadowColor: 'rgba(0, 0, 0, 0.2)',
-                textShadowOffset: { width: 0, height: 2 },
-                textShadowRadius: 4,
-              }}
-            >
-              Let's Meet You
-            </Text>
-            <Text
-              variant="bodyLarge"
-              color={PREMIUM_COLORS.textSecondary}
-              style={{
-                fontSize: subtitleSize,
-                marginTop: spacing.xs,
-                fontWeight: '500',
-                lineHeight: subtitleSize * 1.4,
-              }}
-            >
-              Share a few details to get started
+          {/* Header */}
+          <Animated.View
+            style={[
+              styles.header,
+              { opacity: fadeIn, transform: [{ translateY: slideUp }] },
+            ]}
+          >
+            <Text style={styles.title}>Let's Meet You</Text>
+            <Text style={styles.subtitle}>
+              Share a few details so others can find you
             </Text>
           </Animated.View>
-        </View>
 
-        {/* Form Container */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1, marginTop: -spacing.m }}
-        >
-          <ScrollView
-            contentContainerStyle={{
-              paddingTop: spacing.l,
-              paddingHorizontal: formPadding,
-              paddingBottom: insets.bottom + spacing.xxl,
-              flexGrow: 1,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          {/* Main Card */}
+          <Animated.View
+            style={[
+              styles.card,
+              { maxWidth: cardMaxWidth, opacity: fadeIn, transform: [{ translateY: slideUp }] },
+            ]}
           >
-            {renderForm()}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
+            {renderFormContent()}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
+
+// ============================================================================
+// STYLES
+// ============================================================================
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+
+  // Decorative circles
+  decorCircle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  decorCircle1: {
+    width: 300,
+    height: 300,
+    top: -100,
+    right: -80,
+  },
+  decorCircle2: {
+    width: 200,
+    height: 200,
+    bottom: 100,
+    left: -60,
+  },
+
+  // Header
+  header: {
+    alignItems: 'flex-start',
+    width: '100%',
+    marginBottom: iOS.spacing.xl,
+  },
+  title: {
+    ...iOS.typography.largeTitle,
+    color: '#FFFFFF',
+    marginBottom: iOS.spacing.xs,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  subtitle: {
+    ...iOS.typography.body,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+
+  // Card
+  card: {
+    width: '100%',
+    backgroundColor: iOS.colors.card,
+    borderRadius: iOS.radius.xxl,
+    padding: iOS.spacing.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+
+  // Step Indicator - Matching SignUp screen design
+  stepContainer: {
+    marginBottom: iOS.spacing.xl,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepItem: {
+    alignItems: 'center',
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: iOS.colors.tertiaryFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: iOS.spacing.xs,
+  },
+  stepCircleActive: {
+    backgroundColor: iOS.colors.orange,
+  },
+  stepCircleCompleted: {
+    backgroundColor: iOS.colors.teal,
+  },
+  stepNumber: {
+    ...iOS.typography.footnote,
+    fontWeight: '600',
+    color: iOS.colors.tertiaryLabel,
+  },
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+  },
+  stepLabelActive: {
+    color: iOS.colors.orange,
+    fontWeight: '600',
+  },
+  stepLabelCompleted: {
+    color: iOS.colors.teal,
+    fontWeight: '600',
+  },
+  stepLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: iOS.colors.separator,
+    marginHorizontal: iOS.spacing.sm,
+    marginBottom: iOS.spacing.lg,
+  },
+  stepLineCompleted: {
+    backgroundColor: iOS.colors.teal,
+  },
+
+  // Photo Upload
+  photoSection: {
+    alignItems: 'center',
+    marginBottom: iOS.spacing.xl,
+  },
+  photoContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    overflow: 'hidden',
+  },
+  photoImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: iOS.colors.teal,
+  },
+  photoEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: iOS.colors.teal,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: iOS.colors.card,
+  },
+  photoPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: iOS.colors.tertiaryFill,
+    borderWidth: 2,
+    borderColor: iOS.colors.separator,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoPlaceholderText: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+    marginTop: iOS.spacing.xs,
+  },
+  photoHint: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+    marginTop: iOS.spacing.sm,
+  },
+
+  // Field Card - Matching SignUp screen InputCard design
+  fieldCard: {
+    backgroundColor: iOS.colors.card,
+    borderRadius: iOS.radius.lg,
+    padding: iOS.spacing.md,
+    marginBottom: iOS.spacing.md,
+    borderWidth: 1,
+    borderColor: iOS.colors.separator,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  fieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: iOS.spacing.sm,
+  },
+  fieldIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: iOS.colors.tertiaryFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: iOS.spacing.md,
+  },
+  fieldIconActive: {
+    backgroundColor: iOS.colors.orangeLight,
+  },
+  fieldLabelContainer: {
+    flex: 1,
+  },
+  fieldLabel: {
+    ...iOS.typography.headline,
+    color: iOS.colors.label,
+  },
+  fieldHint: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+    marginTop: 2,
+  },
+  fieldInputContainer: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: iOS.radius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  fieldInputContainerFocused: {
+    borderColor: iOS.colors.orange,
+    backgroundColor: iOS.colors.orangeLight,
+  },
+  fieldInputContainerFilled: {
+    backgroundColor: iOS.colors.orangeLight,
+  },
+  fieldInput: {
+    ...iOS.typography.body,
+    color: iOS.colors.label,
+    paddingHorizontal: iOS.spacing.md,
+    paddingVertical: iOS.spacing.md,
+    minHeight: 52,
+  },
+
+  // Chip Selector - Matching SignUp screen method toggle style
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: iOS.spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: iOS.spacing.lg,
+    paddingVertical: iOS.spacing.sm + 4,
+    borderRadius: iOS.radius.sm,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 0,
+    gap: iOS.spacing.sm,
+  },
+  chipSelected: {
+    backgroundColor: iOS.colors.orange,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  chipText: {
+    ...iOS.typography.subhead,
+    color: iOS.colors.secondaryLabel,
+    fontWeight: '500',
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  chipCheck: {
+    marginLeft: iOS.spacing.xs,
+  },
+
+  // Date Button - Matching SignUp screen inputWrapper
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2F2F7',
+    borderRadius: iOS.radius.md,
+    paddingHorizontal: iOS.spacing.md,
+    paddingVertical: iOS.spacing.md,
+    minHeight: 52,
+  },
+  dateButtonFilled: {
+    backgroundColor: iOS.colors.orangeLight,
+  },
+  dateButtonText: {
+    ...iOS.typography.body,
+    color: iOS.colors.placeholder,
+  },
+  dateButtonTextFilled: {
+    color: iOS.colors.label,
+  },
+  datePickerContainer: {
+    marginTop: iOS.spacing.sm,
+    backgroundColor: iOS.colors.tertiaryFill,
+    borderRadius: iOS.radius.md,
+    overflow: 'hidden',
+  },
+  datePickerDone: {
+    alignItems: 'flex-end',
+    padding: iOS.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: iOS.colors.separator,
+  },
+  datePickerDoneText: {
+    ...iOS.typography.headline,
+    color: iOS.colors.teal,
+  },
+
+  // City Picker
+  cityPickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  cityPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  cityPickerContainer: {
+    backgroundColor: iOS.colors.card,
+    borderTopLeftRadius: iOS.radius.xxl,
+    borderTopRightRadius: iOS.radius.xxl,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  cityPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: iOS.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: iOS.colors.separator,
+  },
+  cityPickerTitle: {
+    ...iOS.typography.headline,
+    color: iOS.colors.label,
+  },
+  cityPickerClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: iOS.colors.tertiaryFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cityList: {
+    paddingHorizontal: iOS.spacing.md,
+  },
+  cityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: iOS.spacing.md,
+    paddingHorizontal: iOS.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: iOS.colors.separator,
+  },
+  cityItemSelected: {
+    backgroundColor: iOS.colors.orangeLight,
+    marginHorizontal: -iOS.spacing.sm,
+    paddingHorizontal: iOS.spacing.md,
+    borderRadius: iOS.radius.md,
+    borderBottomWidth: 0,
+  },
+  cityItemText: {
+    ...iOS.typography.body,
+    color: iOS.colors.label,
+  },
+  cityItemTextSelected: {
+    color: iOS.colors.orangeDark,
+    fontWeight: '600',
+  },
+
+  // Error Badge
+  errorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: iOS.spacing.sm,
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    paddingVertical: iOS.spacing.sm + 2,
+    paddingHorizontal: iOS.spacing.md,
+    borderRadius: iOS.radius.pill,
+    marginBottom: iOS.spacing.lg,
+  },
+  errorText: {
+    ...iOS.typography.subhead,
+    color: iOS.colors.red,
+    fontWeight: '500',
+  },
+
+  // Continue Button - Matching SignUp screen pill shape
+  continueButton: {
+    height: 56,
+    borderRadius: iOS.radius.pill,
+    backgroundColor: iOS.colors.tertiaryFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: iOS.spacing.sm,
+    marginTop: iOS.spacing.lg,
+    marginBottom: iOS.spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  continueButtonEnabled: {
+    backgroundColor: iOS.colors.orange,
+    shadowColor: iOS.colors.orange,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  continueButtonPressed: {
+    backgroundColor: iOS.colors.orangeDark,
+    transform: [{ scale: 0.98 }],
+  },
+  continueButtonText: {
+    ...iOS.typography.headline,
+    color: iOS.colors.tertiaryLabel,
+  },
+  continueButtonTextEnabled: {
+    color: '#FFFFFF',
+  },
+
+  // Trust Badge
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: iOS.spacing.xs,
+  },
+  trustText: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+  },
+
+  // ============================================================================
+  // LANDSCAPE STYLES - Matching SignUp screen design
+  // ============================================================================
+  landscapeContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  landscapeLeftPanel: {
+    width: '35%',
+    justifyContent: 'center',
+    paddingVertical: iOS.spacing.xl,
+  },
+  landscapeBranding: {
+    alignItems: 'flex-start',
+  },
+  landscapeIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: iOS.spacing.lg,
+  },
+  landscapeTitle: {
+    ...iOS.typography.title1,
+    color: '#FFFFFF',
+    marginBottom: iOS.spacing.sm,
+  },
+  landscapeSubtitle: {
+    ...iOS.typography.body,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 24,
+  },
+  landscapeProgress: {
+    flexDirection: 'row',
+    marginTop: iOS.spacing.xxl,
+    gap: iOS.spacing.sm,
+  },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  progressDotCompleted: {
+    backgroundColor: iOS.colors.teal,
+  },
+  progressDotActive: {
+    backgroundColor: '#FFFFFF',
+    width: 24,
+  },
+  landscapeRightPanel: {
+    flex: 1,
+    paddingVertical: iOS.spacing.lg,
+  },
+  landscapeScrollContent: {
+    padding: iOS.spacing.xl,
+  },
+  landscapeCard: {
+    flex: 1,
+    backgroundColor: iOS.colors.card,
+    borderRadius: iOS.radius.xxl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+});
 
 export default ProfileSetupScreen;

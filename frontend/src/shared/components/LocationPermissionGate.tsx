@@ -270,50 +270,51 @@ CheckingPermissionScreen.displayName = 'CheckingPermissionScreen';
 export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ children }) => {
   const [gateStatus, setGateStatus] = useState<GateStatus>('checking');
   const [isRetrying, setIsRetrying] = useState(false);
+  const [promptAttempts, setPromptAttempts] = useState(0);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const periodicCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const autoPromptRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
    * Check permission and determine gate status
-   * This is the core logic that implements Tinder-like behavior
+   * AGGRESSIVE: Always re-prompt if not granted
    */
   const checkPermissionStatus = useCallback(async () => {
     try {
       const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
 
-      console.log(`[LocationGate] Check: status=${status}, canAskAgain=${canAskAgain}, platform=${Platform.OS}`);
+      console.log(`[LocationGate] Check: status=${status}, canAskAgain=${canAskAgain}, attempts=${promptAttempts}`);
 
       if (status === Location.PermissionStatus.GRANTED) {
-        // Permission is currently granted
-        // Note: For "Allow Once" on iOS/Android, this will be true temporarily
-        // On next app launch, it will reset to UNDETERMINED - handled by checking on mount
         setGateStatus('granted');
+        // Clear any pending timers
+        if (periodicCheckRef.current) clearInterval(periodicCheckRef.current);
+        if (autoPromptRef.current) clearTimeout(autoPromptRef.current);
         return;
       }
 
       if (status === Location.PermissionStatus.DENIED) {
         if (canAskAgain) {
-          // User denied but we can still ask again (soft deny)
-          // Show the permission modal to request again
+          // AGGRESSIVE: Keep prompting even after soft deny
           setGateStatus('prompt');
         } else {
-          // User permanently denied or selected "Don't ask again"
-          // Show the "Unable to Connect" screen
+          // Permanently denied - show settings screen
           setGateStatus('denied');
         }
         return;
       }
 
-      // UNDETERMINED - never asked or "Allow Once" expired
+      // UNDETERMINED - prompt immediately
       setGateStatus('prompt');
     } catch (error) {
-      console.error('[LocationGate] Error checking permission:', error);
-      // On error, try to prompt
+      console.warn('[LocationGate] Error checking permission:', error);
       setGateStatus('prompt');
     }
-  }, []);
+  }, [promptAttempts]);
 
   /**
    * Request permission from the OS
+   * AGGRESSIVE: Auto re-prompt after delay if denied
    */
   const handleRequestPermission = useCallback(async () => {
     try {
@@ -321,6 +322,7 @@ export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ 
       const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
 
       console.log(`[LocationGate] Request result: status=${status}, canAskAgain=${canAskAgain}`);
+      setPromptAttempts(prev => prev + 1);
 
       if (status === Location.PermissionStatus.GRANTED) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -329,15 +331,21 @@ export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ 
         // Permanently denied
         setGateStatus('denied');
       } else {
-        // User dismissed or denied but can ask again
-        // Stay on prompt screen - they'll see it again when they return
+        // AGGRESSIVE: User dismissed - wait 2 seconds and check again
+        // This will re-show the modal when they come back
         setGateStatus('prompt');
+
+        // Auto re-prompt after short delay
+        if (autoPromptRef.current) clearTimeout(autoPromptRef.current);
+        autoPromptRef.current = setTimeout(() => {
+          checkPermissionStatus();
+        }, 1500);
       }
     } catch (error) {
-      console.error('[LocationGate] Error requesting permission:', error);
+      console.warn('[LocationGate] Error requesting permission:', error);
       setGateStatus('prompt');
     }
-  }, []);
+  }, [checkPermissionStatus]);
 
   /**
    * Open device settings
@@ -350,7 +358,7 @@ export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ 
         await Linking.openSettings();
       }
     } catch (error) {
-      console.error('[LocationGate] Error opening settings:', error);
+      console.warn('[LocationGate] Error opening settings:', error);
     }
   }, []);
 
@@ -364,21 +372,28 @@ export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ 
   }, [checkPermissionStatus]);
 
   /**
-   * Handle app state changes - re-check permission when app comes to foreground
-   * This is KEY for Tinder-like behavior:
-   * - If user granted "Allow Once", it resets on app restart → will prompt again
-   * - If user changed settings while app was in background → re-check
+   * AGGRESSIVE: Handle app state changes
+   * Re-check on EVERY foreground event
    */
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      // Only check when coming back to foreground from background/inactive
+      // Check when coming back to foreground
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
-        console.log('[LocationGate] App came to foreground, re-checking permission...');
-        await checkPermissionStatus();
+        console.log('[LocationGate] App resumed - forcing permission check');
+        // Small delay to ensure system has settled
+        setTimeout(() => {
+          checkPermissionStatus();
+        }, 300);
       }
+
+      // AGGRESSIVE: Also check when going to background (to prepare for return)
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('[LocationGate] App going to background - will re-check on return');
+      }
+
       appStateRef.current = nextAppState;
     };
 
@@ -387,10 +402,35 @@ export const LocationPermissionGate: React.FC<LocationPermissionGateProps> = ({ 
   }, [checkPermissionStatus]);
 
   /**
+   * AGGRESSIVE: Periodic check while app is active
+   * Checks every 5 seconds if permission is still not granted
+   */
+  useEffect(() => {
+    if (gateStatus !== 'granted') {
+      periodicCheckRef.current = setInterval(() => {
+        console.log('[LocationGate] Periodic check...');
+        checkPermissionStatus();
+      }, 5000);
+    }
+
+    return () => {
+      if (periodicCheckRef.current) {
+        clearInterval(periodicCheckRef.current);
+      }
+    };
+  }, [gateStatus, checkPermissionStatus]);
+
+  /**
    * Initial permission check on mount
    */
   useEffect(() => {
     checkPermissionStatus();
+
+    // Cleanup on unmount
+    return () => {
+      if (periodicCheckRef.current) clearInterval(periodicCheckRef.current);
+      if (autoPromptRef.current) clearTimeout(autoPromptRef.current);
+    };
   }, [checkPermissionStatus]);
 
   // Render based on gate status

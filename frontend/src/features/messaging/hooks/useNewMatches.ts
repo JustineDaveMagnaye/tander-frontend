@@ -82,7 +82,7 @@ export function useNewMatches(): UseNewMatchesReturn {
 
       setNewMatches(converted);
     } catch (err) {
-      console.error('[useNewMatches] Error fetching:', err);
+      console.warn('[useNewMatches] Error fetching:', err);
       setError(err instanceof Error ? err.message : 'Failed to load new matches');
     } finally {
       setIsLoading(false);

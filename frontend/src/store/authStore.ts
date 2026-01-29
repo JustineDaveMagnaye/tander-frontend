@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { User, ProfileData } from '@shared/types';
 import { authApi } from '../services/api/authApi';
 import { storage, STORAGE_KEYS } from '../services/storage/asyncStorage';
+import { syncTokenToNative } from '../services/storage/tokenStorage';
 
 type RegistrationPhase = 'none' | 'registered' | 'email_pending' | 'email_verified' | 'otp_pending' | 'otp_verified' | 'profile_completed' | 'verified';
 
@@ -401,6 +402,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Network validation on startup causes issues with React Native fetch
         try {
           const userData = JSON.parse(userDataStr);
+
+          // Sync token to native SharedPreferences for native API calls (e.g., decline call)
+          syncTokenToNative();
+
           set({
             isAuthenticated: true,
             user: userData,
@@ -411,7 +416,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
           return;
         } catch (parseError) {
-          console.error('[AUTH] Failed to parse stored user data:', parseError);
+          console.warn('[AUTH] Failed to parse stored user data:', parseError);
           await storage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
           await storage.removeItem(STORAGE_KEYS.USER_DATA);
         }
@@ -455,7 +460,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
       });
     } catch (error) {
-      console.error('Error checking auth status:', error);
+      console.warn('Error checking auth status:', error);
       set({
         isAuthenticated: false,
         user: null,

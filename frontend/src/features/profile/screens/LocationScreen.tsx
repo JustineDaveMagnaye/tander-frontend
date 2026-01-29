@@ -633,7 +633,7 @@ export const LocationScreen: React.FC<LocationScreenProps> = ({ onBack }) => {
           });
         }
       } catch (err) {
-        console.error('Failed to load location settings:', err);
+        console.warn('Failed to load location settings:', err);
       }
     };
     loadSettings();
@@ -694,7 +694,7 @@ export const LocationScreen: React.FC<LocationScreenProps> = ({ onBack }) => {
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      console.error('Failed to get location:', err);
+      console.warn('Failed to get location:', err);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         'Location Unavailable',
@@ -741,7 +741,7 @@ export const LocationScreen: React.FC<LocationScreenProps> = ({ onBack }) => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onBack();
     } catch (err) {
-      console.error('Failed to save location:', err);
+      console.warn('Failed to save location:', err);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to save location. Please try again.');
     } finally {

@@ -1,79 +1,13 @@
 /**
- * TANDER Forgot Password Screen
- * Senior-friendly password reset flow with Phone OTP as primary method
- *
- * Refactored for:
- * - Better code organization (split into components and hooks)
- * - Improved performance (memoization, reduced re-renders)
- * - Better state management (useReducer)
- * - Enhanced accessibility
- * - Proper error handling and cleanup
- * - Security improvements
- *
- * FULL RESPONSIVENESS ENHANCEMENTS:
- * ===================================
- * Device Coverage:
- * - iPhone SE (320px portrait, 568px landscape)
- * - iPhone 8/X/11/12/13/14/15/16 (375-430px)
- * - iPad Mini/Air/Pro (768-1024px)
- * - Android phones (360-430px)
- * - Android tablets (600-1280px)
- *
- * Orientation Support:
- * - Portrait: Full-width form with centered max-width (700px on tablets)
- * - Landscape: Split-panel layout (35% header, 65% form)
- *   - Phones: Optimized vertical space usage, smaller padding
- *   - Tablets: Larger form width (up to 700px), comfortable spacing
- *
- * Responsive Features:
- * - Form padding: Dynamically adjusts based on screen size and orientation
- *   - Small phones (320px): Minimal padding for max space
- *   - Standard phones: Normal padding
- *   - Tablets portrait: Generous padding
- *   - Tablets landscape: Balanced padding
- *   - Phone landscape: Compact padding for limited vertical space
- *
- * - Form width:
- *   - Tablets: 85% width, max 700px (increased from 560px)
- *   - Landscape phones: 65% width, max 520px
- *   - Small phones: Full width with minimal margins
- *
- * - Input/Button heights:
- *   - Phones: 64px (portrait), 56px (landscape)
- *   - Tablets: 72px (portrait), 56px (landscape)
- *   - Minimum: 56px (WCAG touch target compliance)
- *
- * - OTP Input:
- *   - Box size: 52-72px based on device and orientation
- *   - Font size: 26-36px for excellent readability
- *   - Gap: Responsive spacing (xs to m)
- *
- * - Typography:
- *   - Title: 24-42px (WCAG minimum 24px)
- *   - Body: 18-22px (WCAG minimum 18px)
- *   - Captions: 14-18px
- *   - All sizes clamped to prevent overflow
- *
- * Supports:
- * - All screen sizes (small phones to large tablets)
- * - Portrait and landscape orientations
- * - iOS 13+ and Android API 24+ (all supported versions)
- * - Accessibility features for seniors (WCAG AAA where possible)
- * - Reduced motion preferences
- * - RTL layouts (partial)
- * - Safe area insets (notch, Dynamic Island, home indicator)
- *
- * Flow:
- * 1. Select method (Phone OTP recommended / Email)
- * 2. Enter phone/email and send OTP
- * 3. Verify OTP code (with responsive 6-digit input)
- * 4. Create new password
- * 5. Success confirmation
+ * TANDER Forgot Password Screen - Premium iOS Edition
+ * Clean, modern iOS-style design with card-based form fields
+ * Orange + Teal color theme matching the registration flow
  */
 
 import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import {
   View,
+  Text,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -81,17 +15,16 @@ import {
   Pressable,
   StatusBar,
   Keyboard,
+  StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from '@shared/components';
-import { colors } from '@shared/styles/colors';
-import { spacing } from '@shared/styles/spacing';
+import { Feather } from '@expo/vector-icons';
 
 // Local imports
 import { ForgotPasswordScreenProps } from './types';
-import { ResetStep } from './constants';
-import { styles, LAYOUT, getResponsiveFormPadding } from './styles';
+import { iOS, STEPS, STEP_LABELS, ResetStep } from './constants';
 import { useForgotPasswordForm, useForgotPasswordApi, useResponsiveSizes } from './hooks';
 import {
   MethodStep,
@@ -126,108 +59,56 @@ class ErrorBoundary extends React.Component<
 
 // Error fallback component
 const ErrorFallback = ({ onRetry }: { onRetry: () => void }) => (
-  <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }]}>
-    <Text variant="h3" color={colors.semantic.error} style={{ marginBottom: spacing.m }}>
+  <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: iOS.spacing.xl }]}>
+    <Text style={[iOS.typography.title2, { color: iOS.colors.error, marginBottom: iOS.spacing.md }]}>
       Something went wrong
     </Text>
-    <Text variant="body" color={colors.neutral.textSecondary} style={{ textAlign: 'center', marginBottom: spacing.l }}>
+    <Text style={[iOS.typography.body, { color: iOS.colors.secondaryLabel, textAlign: 'center', marginBottom: iOS.spacing.lg }]}>
       We encountered an error. Please try again.
     </Text>
     <Pressable
       onPress={onRetry}
       style={{
-        backgroundColor: colors.orange.primary,
-        paddingHorizontal: spacing.xl,
-        paddingVertical: spacing.m,
-        borderRadius: 25,
+        backgroundColor: iOS.colors.orange,
+        paddingHorizontal: iOS.spacing.xl,
+        paddingVertical: iOS.spacing.md,
+        borderRadius: iOS.radius.pill,
       }}
     >
-      <Text variant="button" color={colors.white}>
+      <Text style={[iOS.typography.headline, { color: iOS.colors.white }]}>
         Try Again
       </Text>
     </Pressable>
   </View>
 );
 
-// Header content based on step
-const HEADER_CONTENT: Record<ResetStep, { title: string; titleLandscape: string; subtitle: string; subtitleLandscape: string }> = {
-  method: {
-    title: 'Forgot Password?',
-    titleLandscape: 'Reset Password',
-    subtitle: "No worries, we'll help you",
-    subtitleLandscape: "We'll help you",
-  },
-  verify: {
-    title: 'Enter Code',
-    titleLandscape: 'Enter Code',
-    subtitle: 'Check your phone for the code',
-    subtitleLandscape: 'Check your phone',
-  },
-  password: {
-    title: 'New Password',
-    titleLandscape: 'New Password',
-    subtitle: 'Create a strong password',
-    subtitleLandscape: 'Create a strong one',
-  },
-  success: {
-    title: 'Success!',
-    titleLandscape: 'Success!',
-    subtitle: 'Password reset complete',
-    subtitleLandscape: 'Password reset complete',
-  },
-};
-
 // Main screen component
 function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) {
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const isTablet = Math.min(width, height) >= 600;
   const sizes = useResponsiveSizes();
-  const { isLandscape, isTablet, isSmallScreen, wp, hp } = sizes;
 
-  // G5-R-008: Track keyboard visibility for landscape mode optimization
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  // Track keyboard visibility
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Keyboard listeners for landscape mode optimization
+  // Keyboard listeners
   useEffect(() => {
-    const keyboardWillShow = Keyboard.addListener(
+    const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        setIsKeyboardVisible(true);
-        // Scroll to focused input when keyboard appears in landscape
-        if (isLandscape) {
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        }
-      }
+      () => setKeyboardVisible(true)
     );
-
-    const keyboardWillHide = Keyboard.addListener(
+    const hideSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setIsKeyboardVisible(false);
-      }
+      () => setKeyboardVisible(false)
     );
-
     return () => {
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
+      showSub.remove();
+      hideSub.remove();
     };
-  }, [isLandscape]);
-
-  // Get responsive form padding (G1-R-003 fix) - Enhanced with landscape support
-  const formPadding = useMemo(
-    () => getResponsiveFormPadding(isSmallScreen, isTablet, isLandscape),
-    [isSmallScreen, isTablet, isLandscape]
-  );
-
-  // G5-R-008: Adjust keyboard vertical offset for landscape
-  const keyboardVerticalOffset = useMemo(() => {
-    if (Platform.OS === 'ios') {
-      return isLandscape ? 60 : 0;
-    }
-    return 0;
-  }, [isLandscape]);
+  }, []);
 
   // Form state and validation
   const {
@@ -252,9 +133,7 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
   });
 
   // Animation values
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const formOpacity = useRef(new Animated.Value(0)).current;
-  const formTranslateY = useRef(new Animated.Value(30)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
   const hasAnimated = useRef(false);
 
   // Entrance animation (only once)
@@ -263,33 +142,17 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
     hasAnimated.current = true;
 
     if (state.reduceMotion) {
-      headerOpacity.setValue(1);
-      formOpacity.setValue(1);
-      formTranslateY.setValue(0);
+      cardAnim.setValue(1);
       return;
     }
 
-    Animated.stagger(100, [
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(formOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(formTranslateY, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-  }, [state.reduceMotion, headerOpacity, formOpacity, formTranslateY]);
+    Animated.spring(cardAnim, {
+      toValue: 1,
+      tension: 50,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  }, [state.reduceMotion, cardAnim]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -310,7 +173,6 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
   }, [navigation]);
 
   const handleSendOTP = useCallback(async () => {
-    // Validate before sending
     const validation = state.method === 'phone' ? validatePhone() : validateEmail();
     if (!validation.isValid) {
       safeHaptic(HapticType.Error);
@@ -351,16 +213,63 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
   }, [dispatch]);
 
   // Memoized values
-  const headerContent = useMemo(() => {
-    const content = HEADER_CONTENT[state.step];
-    return {
-      title: isLandscape ? content.titleLandscape : content.title,
-      subtitle: isLandscape ? content.subtitleLandscape : content.subtitle,
-    };
-  }, [state.step, isLandscape]);
-
   const maskedContact = useMemo(() => getMaskedContact(), [getMaskedContact]);
   const passwordRequirements = useMemo(() => getPasswordRequirements(), [getPasswordRequirements]);
+
+  // Get current step index for step indicator
+  const currentStepIndex = STEPS.indexOf(state.step);
+
+  // Render step indicator
+  const renderStepIndicator = () => {
+    if (state.step === 'success') return null;
+
+    return (
+      <View style={styles.stepContainer}>
+        <View style={styles.stepRow}>
+          {STEPS.slice(0, 3).map((step, index) => {
+            const isCompleted = index < currentStepIndex;
+            const isActive = index === currentStepIndex;
+
+            return (
+              <React.Fragment key={step}>
+                <View style={styles.stepItem}>
+                  <View style={[
+                    styles.stepCircle,
+                    isActive && styles.stepCircleActive,
+                    isCompleted && styles.stepCircleCompleted,
+                  ]}>
+                    {isCompleted ? (
+                      <Feather name="check" size={16} color={iOS.colors.white} />
+                    ) : (
+                      <Text style={[
+                        styles.stepNumber,
+                        (isActive || isCompleted) && styles.stepNumberActive,
+                      ]}>
+                        {index + 1}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.stepLabel,
+                    isActive && styles.stepLabelActive,
+                    isCompleted && styles.stepLabelCompleted,
+                  ]}>
+                    {STEP_LABELS[step]}
+                  </Text>
+                </View>
+                {index < 2 && (
+                  <View style={[
+                    styles.stepLine,
+                    isCompleted && styles.stepLineCompleted,
+                  ]} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
 
   // Render current step content
   const renderStepContent = () => {
@@ -419,208 +328,329 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
     }
   };
 
-  // Render form card
-  const renderForm = () => (
-    <Animated.View
-      style={[
-        styles.formCard,
-        {
-          opacity: formOpacity,
-          transform: [{ translateY: formTranslateY }],
-          maxWidth: sizes.maxFormWidth,
-          alignSelf: 'center',
-          width: '100%',
-          // G1-R-003: Responsive padding for small screens
-          padding: formPadding,
-        },
-      ]}
-    >
-      {renderStepContent()}
-    </Animated.View>
-  );
-
-  // Render back button
-  const renderBackButton = () => {
-    if (state.step === 'success') return null;
-
-    return (
-      <Pressable
-        onPress={handleBack}
-        style={({ pressed }) => [
-          styles.backButton,
-          pressed && styles.backButtonPressed,
-        ]}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <View style={styles.backButtonIcon}>
-          <Text style={styles.backArrow}>{'‹'}</Text>
-        </View>
-      </Pressable>
-    );
-  };
-
-  // Landscape layout
+  // ============================================================================
+  // LANDSCAPE LAYOUT
+  // ============================================================================
   if (isLandscape) {
     return (
       <View style={styles.container}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent={Platform.OS === 'android'}
-        />
-
-        <View
-          style={[
-            styles.landscapeContainer,
-            {
-              paddingTop: insets.top + hp(2),
-              paddingBottom: insets.bottom + hp(2),
-              paddingLeft: insets.left + wp(2),
-              paddingRight: insets.right + wp(2),
-            },
-          ]}
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <LinearGradient
+          colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
+          locations={[0, 0.4, 1]}
+          style={styles.gradient}
         >
-          {/* Left side - Auth Gradient Header */}
-          <LinearGradient
-            colors={colors.gradient.authBackground}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={[styles.landscapeHeader, { flex: LAYOUT.landscapeHeaderFlex }]}
-          >
-            {renderBackButton()}
+          <View style={[styles.landscapeContainer, { paddingTop: insets.top }]}>
+            {/* Left Panel - Branding */}
+            <View style={[styles.landscapeLeft, { paddingLeft: insets.left + iOS.spacing.xl }]}>
+              {/* Back Button */}
+              {state.step !== 'success' && (
+                <Pressable
+                  onPress={handleBack}
+                  style={styles.landscapeBackButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go back"
+                >
+                  <View style={styles.backButtonIcon}>
+                    <Feather name="chevron-left" size={24} color={iOS.colors.white} />
+                  </View>
+                </Pressable>
+              )}
 
-            <Animated.View style={[styles.headerContent, { opacity: headerOpacity }]}>
-              <Text
-                variant="h1"
-                color={colors.white}
-                style={[styles.headerTitle, { fontSize: sizes.titleSize }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {headerContent.title}
-              </Text>
-              <Text
-                variant="bodyLarge"
-                color="rgba(255,255,255,0.9)"
-                style={[styles.headerSubtitle, { fontSize: sizes.subtitleSize, marginTop: hp(1) }]}
-                numberOfLines={2}
-              >
-                {headerContent.subtitle}
-              </Text>
-            </Animated.View>
+              <View style={styles.landscapeBranding}>
+                <View style={styles.landscapeIconCircle}>
+                  <Feather name="key" size={32} color={iOS.colors.white} />
+                </View>
+                <Text style={styles.landscapeTitle}>
+                  {state.step === 'success' ? 'Success!' : 'Reset Password'}
+                </Text>
+                <Text style={styles.landscapeSubtitle}>
+                  {state.step === 'method' && "We'll help you get back\ninto your account"}
+                  {state.step === 'verify' && 'Enter the code we sent\nto verify your identity'}
+                  {state.step === 'password' && 'Create a new password\nthat you\'ll remember'}
+                  {state.step === 'success' && 'Your password has been\nsuccessfully reset'}
+                </Text>
+                <View style={styles.landscapeProgress}>
+                  {STEPS.slice(0, 3).map((step, index) => (
+                    <View
+                      key={step}
+                      style={[
+                        styles.progressDot,
+                        index <= currentStepIndex && styles.progressDotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+            </View>
 
-            <View style={styles.headerDecoration} />
-          </LinearGradient>
-
-          {/* Right side - Form - Enhanced for better screen utilization */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={[styles.landscapeForm, { flex: LAYOUT.landscapeFormFlex }]}
-            keyboardVerticalOffset={keyboardVerticalOffset}
-          >
-            <ScrollView
-              ref={scrollViewRef}
-              contentContainerStyle={[
-                styles.scrollContent,
-                {
-                  // G5-R-008: Reduce vertical padding when keyboard is visible in landscape
-                  paddingVertical: isKeyboardVisible ? hp(1) : hp(2),
-                  // Enhanced: Better horizontal padding for landscape
-                  paddingHorizontal: isTablet ? wp(5) : wp(3),
-                  flexGrow: 1,
-                  justifyContent: 'center', // Center form vertically in landscape
-                },
-              ]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              // G5-R-008: Auto-scroll to focused input
-              keyboardDismissMode="interactive"
+            {/* Right Panel - Form */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[styles.landscapeRight, { paddingRight: insets.right + iOS.spacing.xl }]}
             >
-              {renderForm()}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
+              <Animated.View
+                style={[
+                  styles.landscapeCard,
+                  {
+                    opacity: cardAnim,
+                    transform: [{
+                      translateY: cardAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [30, 0],
+                      }),
+                    }],
+                  },
+                ]}
+              >
+                <ScrollView
+                  ref={scrollViewRef}
+                  contentContainerStyle={[
+                    styles.landscapeScrollContent,
+                    { paddingBottom: keyboardVisible ? 40 : iOS.spacing.lg },
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {renderStepIndicator()}
+                  {renderStepContent()}
+                </ScrollView>
+              </Animated.View>
+            </KeyboardAvoidingView>
+          </View>
+        </LinearGradient>
       </View>
     );
   }
 
-  // Portrait layout
+  // ============================================================================
+  // PORTRAIT LAYOUT
+  // ============================================================================
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={Platform.OS === 'android'}
-      />
-
-      {/* Auth Gradient Header */}
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <LinearGradient
-        colors={colors.gradient.authBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={[
-          styles.header,
+        colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
+        locations={[0, 0.4, 1]}
+        style={styles.gradient}
+      >
+        <View style={[
+          styles.safeContainer,
           {
-            paddingTop: insets.top + spacing.m,
-            paddingBottom: spacing.xxl + 20,
+            paddingTop: insets.top + iOS.spacing.lg,
+            paddingBottom: insets.bottom,
+            paddingHorizontal: iOS.spacing.lg,
           },
-        ]}
-      >
-        {renderBackButton()}
+        ]}>
+          {/* Header */}
+          <View style={styles.header}>
+            {/* Back Button */}
+            {state.step !== 'success' && (
+              <Pressable
+                onPress={handleBack}
+                style={styles.backButton}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <View style={styles.backButtonIcon}>
+                  <Feather name="chevron-left" size={24} color={iOS.colors.white} />
+                </View>
+              </Pressable>
+            )}
+            <Text style={styles.title}>
+              {state.step === 'success' ? 'Success!' : 'Reset Password'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {state.step === 'method' && "We'll help you get back into your account"}
+              {state.step === 'verify' && 'Enter the verification code'}
+              {state.step === 'password' && 'Create a new password'}
+              {state.step === 'success' && 'Your password has been reset'}
+            </Text>
+          </View>
 
-        <Animated.View style={[styles.headerContent, { opacity: headerOpacity }]}>
-          <Text
-            variant="h1"
-            color={colors.white}
-            style={[styles.headerTitle, { fontSize: sizes.titleSize }]}
+          {/* Main Card */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
           >
-            {headerContent.title}
-          </Text>
-          <Text
-            variant="bodyLarge"
-            color="rgba(255,255,255,0.9)"
-            style={[styles.headerSubtitle, { fontSize: sizes.subtitleSize }]}
-          >
-            {headerContent.subtitle}
-          </Text>
-        </Animated.View>
-
-        <View style={styles.headerDecoration} />
+            <Animated.View
+              style={[
+                styles.mainCard,
+                {
+                  opacity: cardAnim,
+                  transform: [{
+                    translateY: cardAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [50, 0],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              <ScrollView
+                ref={scrollViewRef}
+                contentContainerStyle={[
+                  styles.scrollContent,
+                  { paddingBottom: keyboardVisible ? 40 : iOS.spacing.lg },
+                ]}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {renderStepIndicator()}
+                {renderStepContent()}
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
       </LinearGradient>
-
-      {/* Form Section - Enhanced for tablets */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.formContainer}
-      >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: insets.bottom + spacing.xxl,
-              flexGrow: 1,
-              // Enhanced: Better horizontal padding for tablets
-              paddingHorizontal: isTablet ? wp(8) : spacing.l,
-              // Center content on tablets
-              justifyContent: isTablet ? 'flex-start' : undefined,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {renderForm()}
-        </ScrollView>
-      </KeyboardAvoidingView>
     </View>
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  gradient: { flex: 1 },
+  safeContainer: { flex: 1 },
+
+  // Header
+  header: { marginBottom: iOS.spacing.lg },
+  backButton: { marginBottom: iOS.spacing.md },
+  backButtonIcon: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  title: {
+    ...iOS.typography.largeTitle,
+    color: iOS.colors.white,
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitle: {
+    ...iOS.typography.body,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: iOS.spacing.xs,
+  },
+
+  // Main Card
+  keyboardView: { flex: 1 },
+  mainCard: {
+    flex: 1,
+    backgroundColor: iOS.colors.white,
+    borderRadius: iOS.radius.xxl,
+    ...iOS.shadow.large,
+  },
+  scrollContent: { padding: iOS.spacing.lg },
+
+  // Step Indicator - Orange for active, Teal for completed
+  stepContainer: { marginBottom: iOS.spacing.xl },
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  stepItem: { alignItems: 'center' },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: iOS.colors.tertiaryFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: iOS.spacing.xs,
+  },
+  stepCircleActive: { backgroundColor: iOS.colors.orange },
+  stepCircleCompleted: { backgroundColor: iOS.colors.teal },
+  stepNumber: {
+    ...iOS.typography.footnote,
+    fontWeight: '600',
+    color: iOS.colors.tertiaryLabel,
+  },
+  stepNumberActive: { color: iOS.colors.white },
+  stepLabel: {
+    ...iOS.typography.caption1,
+    color: iOS.colors.tertiaryLabel,
+  },
+  stepLabelActive: { color: iOS.colors.orange, fontWeight: '600' },
+  stepLabelCompleted: { color: iOS.colors.teal, fontWeight: '600' },
+  stepLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: iOS.colors.separator,
+    marginHorizontal: iOS.spacing.sm,
+    marginBottom: iOS.spacing.lg,
+  },
+  stepLineCompleted: { backgroundColor: iOS.colors.teal },
+
+  // Landscape Layout
+  landscapeContainer: { flex: 1, flexDirection: 'row' },
+  landscapeLeft: {
+    width: '35%',
+    justifyContent: 'center',
+    paddingVertical: iOS.spacing.xl,
+  },
+  landscapeBackButton: {
+    position: 'absolute',
+    top: iOS.spacing.md,
+    left: iOS.spacing.xl,
+  },
+  landscapeBranding: { alignItems: 'flex-start' },
+  landscapeIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: iOS.spacing.lg,
+  },
+  landscapeTitle: {
+    ...iOS.typography.title1,
+    color: iOS.colors.white,
+    marginBottom: iOS.spacing.sm,
+  },
+  landscapeSubtitle: {
+    ...iOS.typography.body,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 24,
+  },
+  landscapeProgress: {
+    flexDirection: 'row',
+    marginTop: iOS.spacing.xxl,
+    gap: iOS.spacing.sm,
+  },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  progressDotActive: {
+    backgroundColor: iOS.colors.white,
+    width: 24,
+  },
+  landscapeRight: {
+    flex: 1,
+    paddingVertical: iOS.spacing.lg,
+  },
+  landscapeCard: {
+    flex: 1,
+    backgroundColor: iOS.colors.white,
+    borderRadius: iOS.radius.xxl,
+    ...iOS.shadow.large,
+  },
+  landscapeScrollContent: { padding: iOS.spacing.xl },
+});
+
 // Wrapped with error boundary
 export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
   const handleRetry = useCallback(() => {
-    // Force re-mount by navigating
     props.navigation.replace('ForgotPassword');
   }, [props.navigation]);
 
@@ -631,7 +661,6 @@ export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
   );
 }
 
-// Display name for React DevTools
 ForgotPasswordScreen.displayName = 'ForgotPasswordScreen';
 
 export default ForgotPasswordScreen;

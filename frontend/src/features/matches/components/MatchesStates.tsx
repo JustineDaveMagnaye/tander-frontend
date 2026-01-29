@@ -13,7 +13,7 @@
  * - WCAG AA contrast compliance
  */
 
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -163,20 +163,63 @@ const AnimatedHeart: React.FC<{
 };
 
 /**
- * Skeleton Card for Loading State
+ * Enhanced Skeleton Card - Matches actual card layout exactly
  */
 const SkeletonCard: React.FC<{
   width: number;
   height: number;
   reduceMotion: boolean;
-}> = ({ width, height, reduceMotion }) => {
-  const infoHeight = height * 0.28;
-  const imageHeight = height - infoHeight;
-  const borderRadius = Math.min(24, width * 0.1);
+  index: number;
+}> = ({ width, height, reduceMotion, index }) => {
+  const INFO_SECTION_HEIGHT = 115;
+  const imageHeight = height - INFO_SECTION_HEIGHT;
+  const borderRadius = 20;
+  const MINI_AVATAR_SIZE = 38;
+
+  // Staggered entrance animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      fadeAnim.setValue(1);
+      slideAnim.setValue(0);
+      return;
+    }
+
+    const delay = index * 100; // Staggered delay
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim, index, reduceMotion]);
 
   return (
-    <View style={[styles.skeletonCard, { width, height, borderRadius }]}>
-      {/* Image skeleton */}
+    <Animated.View
+      style={[
+        styles.skeletonCard,
+        {
+          width,
+          height,
+          borderRadius,
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      {/* Photo skeleton - matches UltraPremiumMatchCard photo section */}
       <View
         style={[
           styles.skeletonImage,
@@ -188,34 +231,170 @@ const SkeletonCard: React.FC<{
         ]}
       >
         <Shimmer
-          width="100%"
+          width={width}
           height={imageHeight}
           borderRadius={0}
           reduceMotion={reduceMotion}
+          warmTint
+          delay={index * 80}
         />
+
+        {/* Fake online indicator placeholder */}
+        <View style={styles.skeletonOnlineDot} />
       </View>
 
-      {/* Info skeleton */}
-      <View
-        style={[
-          styles.skeletonInfo,
-          {
-            height: infoHeight,
-            borderBottomLeftRadius: borderRadius,
-            borderBottomRightRadius: borderRadius,
-            padding: 12,
-          },
-        ]}
-      >
-        <Shimmer width="70%" height={18} borderRadius={6} reduceMotion={reduceMotion} />
-        <View style={{ height: 8 }} />
-        <Shimmer width="50%" height={14} borderRadius={4} reduceMotion={reduceMotion} />
-        <View style={{ height: 6 }} />
-        <Shimmer width="40%" height={12} borderRadius={4} reduceMotion={reduceMotion} />
+      {/* Info section skeleton - matches UltraPremiumMatchCard info section exactly */}
+      <View style={[styles.skeletonInfo, { height: INFO_SECTION_HEIGHT }]}>
+        {/* Row 1: Mini avatar + Name + Badges */}
+        <View style={styles.skeletonPrimaryRow}>
+          {/* Mini avatar */}
+          <Shimmer
+            width={MINI_AVATAR_SIZE}
+            height={MINI_AVATAR_SIZE}
+            borderRadius={MINI_AVATAR_SIZE / 2}
+            reduceMotion={reduceMotion}
+            delay={index * 80 + 100}
+          />
+          {/* Name skeleton */}
+          <View style={styles.skeletonNameContainer}>
+            <Shimmer
+              width="75%"
+              height={18}
+              borderRadius={6}
+              reduceMotion={reduceMotion}
+              delay={index * 80 + 150}
+            />
+          </View>
+          {/* Badge placeholder */}
+          <Shimmer
+            width={48}
+            height={22}
+            borderRadius={11}
+            reduceMotion={reduceMotion}
+            warmTint
+            delay={index * 80 + 200}
+          />
+        </View>
+
+        {/* Row 2: Location skeleton */}
+        <View style={styles.skeletonLocationRow}>
+          <Shimmer
+            width={14}
+            height={14}
+            borderRadius={3}
+            reduceMotion={reduceMotion}
+            delay={index * 80 + 250}
+          />
+          <Shimmer
+            width="55%"
+            height={14}
+            borderRadius={4}
+            reduceMotion={reduceMotion}
+            delay={index * 80 + 300}
+          />
+        </View>
+
+        {/* Row 3: Time skeleton */}
+        <View style={styles.skeletonMetaRow}>
+          <Shimmer
+            width={12}
+            height={12}
+            borderRadius={3}
+            reduceMotion={reduceMotion}
+            delay={index * 80 + 350}
+          />
+          <Shimmer
+            width="40%"
+            height={13}
+            borderRadius={4}
+            reduceMotion={reduceMotion}
+            delay={index * 80 + 400}
+          />
+        </View>
       </View>
+    </Animated.View>
+  );
+};
+
+/**
+ * Animated loading dots for visual feedback
+ */
+const LoadingDots: React.FC<{ reduceMotion: boolean }> = ({ reduceMotion }) => {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const animateDot = (dotAnim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dotAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(dotAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.delay(600),
+        ])
+      );
+    };
+
+    const anim1 = animateDot(dot1, 0);
+    const anim2 = animateDot(dot2, 200);
+    const anim3 = animateDot(dot3, 400);
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+    };
+  }, [dot1, dot2, dot3, reduceMotion]);
+
+  const dotStyle = (anim: Animated.Value) => ({
+    opacity: anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 1],
+    }),
+    transform: [
+      {
+        scale: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.8, 1.2],
+        }),
+      },
+    ],
+  });
+
+  return (
+    <View style={styles.loadingDotsContainer}>
+      <Animated.View style={[styles.loadingDot, dotStyle(dot1)]} />
+      <Animated.View style={[styles.loadingDot, dotStyle(dot2)]} />
+      <Animated.View style={[styles.loadingDot, dotStyle(dot3)]} />
     </View>
   );
 };
+
+/**
+ * Senior-friendly loading messages that rotate
+ */
+const LOADING_MESSAGES = [
+  { title: 'Finding your matches...', subtitle: 'Good things take a moment' },
+  { title: 'Preparing profiles...', subtitle: 'Someone special is waiting' },
+  { title: 'Almost there...', subtitle: 'Love is just around the corner' },
+];
 
 export const MatchesLoadingState: React.FC<LoadingStateProps> = ({
   fontSizes,
@@ -226,63 +405,101 @@ export const MatchesLoadingState: React.FC<LoadingStateProps> = ({
 }) => {
   const iconSize = isTablet ? 56 : 48;
   const containerSize = isTablet ? 110 : 95;
+  const [messageIndex, setMessageIndex] = React.useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Calculate skeleton cards to show
-  const numSkeletons = cardDimensions.numColumns * 2;
+  // Rotate through loading messages
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      setTimeout(() => {
+        setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+      }, 200);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [fadeAnim, reduceMotion]);
+
+  // Calculate skeleton cards to show - use FULL dimensions
+  const numSkeletons = Math.min(cardDimensions.numColumns * 2, 6);
+  const currentMessage = LOADING_MESSAGES[messageIndex];
 
   return (
     <View style={styles.loadingContainer}>
-      {/* Animated Heart */}
-      <AnimatedHeart
-        size={iconSize}
-        containerSize={containerSize}
-        reduceMotion={reduceMotion}
-      />
+      {/* Header with Heart and Message */}
+      <View style={styles.loadingHeader}>
+        {/* Animated Heart */}
+        <AnimatedHeart
+          size={iconSize}
+          containerSize={containerSize}
+          reduceMotion={reduceMotion}
+        />
 
-      {/* Loading Text */}
-      <Text
-        style={[
-          styles.loadingTitle,
-          {
-            fontSize: Math.max(fontSizes.body, 20),
-            marginTop: spacing.l,
-          },
-        ]}
-        accessible
-        accessibilityRole="progressbar"
-        accessibilityLabel="Loading your matches"
-      >
-        Finding your matches...
-      </Text>
-      <Text
-        style={[
-          styles.loadingSubtext,
-          {
-            fontSize: Math.max(fontSizes.caption, 16),
-            marginTop: spacing.xs,
-          },
-        ]}
-      >
-        Love is just around the corner
-      </Text>
+        {/* Loading Text with fade animation */}
+        <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
+          <Text
+            style={[
+              styles.loadingTitle,
+              {
+                fontSize: Math.max(fontSizes.body, 20),
+                marginTop: spacing.m,
+              },
+            ]}
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Loading your matches"
+          >
+            {currentMessage.title}
+          </Text>
+          <Text
+            style={[
+              styles.loadingSubtext,
+              {
+                fontSize: Math.max(fontSizes.caption, 16),
+                marginTop: spacing.xs,
+              },
+            ]}
+          >
+            {currentMessage.subtitle}
+          </Text>
+        </Animated.View>
 
-      {/* Skeleton Cards Grid */}
+        {/* Loading dots */}
+        <LoadingDots reduceMotion={reduceMotion} />
+      </View>
+
+      {/* Full-Size Skeleton Cards Grid */}
       <View
         style={[
           styles.skeletonGrid,
           {
-            marginTop: spacing.xl,
+            marginTop: spacing.l,
             gap: cardDimensions.cardGap,
             paddingHorizontal: spacing.l,
           },
         ]}
       >
-        {Array.from({ length: Math.min(numSkeletons, 4) }).map((_, index) => (
+        {Array.from({ length: numSkeletons }).map((_, index) => (
           <SkeletonCard
             key={index}
-            width={cardDimensions.cardWidth * 0.85}
-            height={cardDimensions.cardHeight * 0.8}
+            width={cardDimensions.cardWidth}
+            height={cardDimensions.cardHeight}
             reduceMotion={reduceMotion}
+            index={index}
           />
         ))}
       </View>
@@ -314,6 +531,29 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
   isTablet = false,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Subtle pulse animation for the icon
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -342,16 +582,36 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
   const containerSize = isLandscape && !isTablet ? 90 : isTablet ? 125 : 110;
   const minButtonHeight = Math.max(buttonHeight, 60);
 
+  // Senior-friendly error content
+  const errorContent = isOffline
+    ? {
+        icon: 'wifi-off' as const,
+        title: "You're Currently Offline",
+        message: "No worries! Check your internet connection and try again. Your matches will be here waiting for you.",
+        tip: "Tip: Try turning Wi-Fi off and on again",
+        buttonText: 'Try Again',
+        buttonIcon: 'refresh-cw' as const,
+      }
+    : {
+        icon: 'cloud-off' as const,
+        title: "Having Trouble Loading",
+        message: "We're having a little trouble right now, but don't worry - all your matches and conversations are safe!",
+        tip: "This usually fixes itself in a moment",
+        buttonText: 'Refresh',
+        buttonIcon: 'refresh-cw' as const,
+      };
+
   return (
     <View style={styles.errorContainer}>
-      {/* Error Icon */}
-      <View
+      {/* Error Icon with subtle pulse */}
+      <Animated.View
         style={[
           styles.errorIconContainer,
           {
             width: containerSize,
             height: containerSize,
             borderRadius: containerSize / 2,
+            transform: [{ scale: pulseAnim }],
           },
         ]}
       >
@@ -360,11 +620,11 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
           style={[StyleSheet.absoluteFill, { borderRadius: containerSize / 2 }]}
         />
         <Feather
-          name={isOffline ? 'wifi-off' : 'alert-circle'}
+          name={errorContent.icon}
           size={iconSize}
           color={isOffline ? colors.gray[500] : colors.orange[500]}
         />
-      </View>
+      </Animated.View>
 
       {/* Error Title */}
       <Text
@@ -378,7 +638,7 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
         accessible
         accessibilityRole="header"
       >
-        {isOffline ? "You're Offline" : 'Oops! Something Went Wrong'}
+        {errorContent.title}
       </Text>
 
       {/* Error Message */}
@@ -393,10 +653,14 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
           },
         ]}
       >
-        {isOffline
-          ? "Please check your connection. We'll show your matches once you're back online."
-          : "We couldn't load your matches. Don't worry, your connections are safe!"}
+        {errorContent.message}
       </Text>
+
+      {/* Helpful Tip */}
+      <View style={[styles.errorTipBadge, { marginTop: spacing.m }]}>
+        <Feather name="info" size={14} color={colors.teal[600]} />
+        <Text style={styles.errorTipText}>{errorContent.tip}</Text>
+      </View>
 
       {/* Retry Button */}
       <Animated.View style={{ transform: [{ scale: scaleAnim }], marginTop: spacing.xl }}>
@@ -414,7 +678,7 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           accessible
-          accessibilityLabel="Try again"
+          accessibilityLabel={errorContent.buttonText}
           accessibilityRole="button"
           accessibilityHint="Double tap to retry loading matches"
         >
@@ -424,9 +688,9 @@ export const MatchesErrorState: React.FC<ErrorStateProps> = ({
             end={{ x: 1, y: 0 }}
             style={[StyleSheet.absoluteFill, { borderRadius: minButtonHeight / 2 }]}
           />
-          <Feather name="refresh-cw" size={Math.max(fontSizes.body, 18)} color={colors.white} />
+          <Feather name={errorContent.buttonIcon} size={Math.max(fontSizes.body, 18)} color={colors.white} />
           <Text style={[styles.retryButtonText, { fontSize: Math.max(fontSizes.body, 18) }]}>
-            Try Again
+            {errorContent.buttonText}
           </Text>
         </TouchableOpacity>
       </Animated.View>
@@ -451,11 +715,12 @@ interface EmptyStateProps {
   reduceMotion?: boolean;
 }
 
-// Empty state content configuration - Orange/Teal Theme
+// Empty state content configuration - Senior-friendly, warm messaging
 const EMPTY_STATE_CONTENT: Record<FilterType, {
   icon: keyof typeof Feather.glyphMap;
   title: string;
   message: string;
+  encouragement: string;
   buttonText: string;
   buttonIcon: keyof typeof Feather.glyphMap;
   gradientColors: readonly [string, string];
@@ -463,26 +728,29 @@ const EMPTY_STATE_CONTENT: Record<FilterType, {
   all: {
     icon: 'heart',
     title: 'Your Love Story Starts Here',
-    message: "You haven't matched with anyone yet, but that's about to change! Start swiping to find your perfect match.",
+    message: "You haven't matched with anyone yet, but that's perfectly okay! Every beautiful relationship begins with a first step.",
+    encouragement: "Take your time - the right person is worth waiting for",
     buttonText: 'Start Discovering',
-    buttonIcon: 'search',
-    gradientColors: colors.gradient.ctaButton as unknown as [string, string], // Orange to Teal
+    buttonIcon: 'compass',
+    gradientColors: colors.gradient.ctaButton as unknown as [string, string],
   },
   new: {
     icon: 'star',
     title: 'No New Matches Yet',
-    message: "Keep your heart open! New connections are waiting to be made. Check back soon for exciting new matches.",
+    message: "New matches take time to bloom. Keep your profile shining and someone special will notice you soon!",
+    encouragement: "Good things come to those who wait",
     buttonText: 'View All Matches',
     buttonIcon: 'heart',
-    gradientColors: colors.gradient.primaryButton as unknown as [string, string], // Orange gradient
+    gradientColors: colors.gradient.primaryButton as unknown as [string, string],
   },
   online: {
-    icon: 'users',
-    title: 'No One Online Right Now',
-    message: "Your matches are currently away, but they'll be back! In the meantime, why not view all your connections?",
+    icon: 'coffee',
+    title: 'Your Matches Are Away',
+    message: "Everyone's taking a break right now. Why not browse your connections or update your profile while you wait?",
+    encouragement: "They'll be back soon - grab a coffee!",
     buttonText: 'View All Matches',
     buttonIcon: 'heart',
-    gradientColors: [colors.teal[500], colors.teal[600]] as [string, string], // Teal gradient
+    gradientColors: [colors.teal[500], colors.teal[600]] as [string, string],
   },
 };
 
@@ -600,7 +868,7 @@ export const MatchesEmptyState = React.memo<EmptyStateProps>(
           ]}
         >
           <LinearGradient
-            colors={content.gradientColors}
+            colors={[...content.gradientColors]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[StyleSheet.absoluteFill, { borderRadius: iconContainerSize / 2 }]}
@@ -631,13 +899,23 @@ export const MatchesEmptyState = React.memo<EmptyStateProps>(
               fontSize: Math.max(fontSizes.emptyBody, 17),
               lineHeight: Math.max(fontSizes.emptyBody, 17) * 1.55,
               marginTop: spacing.s,
-              marginBottom: isLandscape && !isTablet ? spacing.m : spacing.l,
               maxWidth: isTablet ? 480 : 340,
             },
           ]}
         >
           {content.message}
         </Text>
+
+        {/* Encouragement - Senior-friendly warm message */}
+        <View
+          style={[
+            styles.encouragementBadge,
+            { marginTop: spacing.m, marginBottom: isLandscape && !isTablet ? spacing.m : spacing.l },
+          ]}
+        >
+          <Feather name="sun" size={14} color={colors.orange[500]} />
+          <Text style={styles.encouragementText}>{content.encouragement}</Text>
+        </View>
 
         {/* Action Button */}
         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -659,7 +937,7 @@ export const MatchesEmptyState = React.memo<EmptyStateProps>(
             accessibilityRole="button"
           >
             <LinearGradient
-              colors={content.gradientColors}
+              colors={[...content.gradientColors]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[StyleSheet.absoluteFill, { borderRadius: minButtonHeight / 2 }]}
@@ -701,10 +979,12 @@ const styles = StyleSheet.create({
   // Loading State
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  loadingHeader: {
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingBottom: 60,
+    paddingVertical: 16,
   },
   heartContainer: {
     justifyContent: 'center',
@@ -733,15 +1013,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.orange[400],
+  },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    opacity: 0.6,
   },
   skeletonCard: {
     overflow: 'hidden',
     backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -749,12 +1043,48 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   skeletonImage: {
-    backgroundColor: colors.gray[100],
+    backgroundColor: colors.gray[50],
     overflow: 'hidden',
+    position: 'relative',
+  },
+  skeletonOnlineDot: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.gray[200],
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   skeletonInfo: {
     backgroundColor: colors.white,
-    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 6,
+  },
+  skeletonPrimaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  skeletonNameContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  skeletonLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 48, // 38 (avatar) + 10 (gap)
+  },
+  skeletonMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingLeft: 48,
   },
 
   // Error State
@@ -798,6 +1128,22 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontWeight: '700',
     color: colors.white,
+  },
+  errorTipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.teal[50],
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.teal[100],
+  },
+  errorTipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.teal[700],
   },
 
   // Empty State
@@ -853,6 +1199,23 @@ const styles = StyleSheet.create({
   emptyHint: {
     color: colors.gray[400],
     textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  encouragementBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.orange[50],
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.orange[100],
+  },
+  encouragementText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.orange[700],
     fontStyle: 'italic',
   },
 });

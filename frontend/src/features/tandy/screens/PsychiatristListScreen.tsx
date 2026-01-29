@@ -41,6 +41,7 @@ import {
   Alert,
   Platform,
   Animated,
+  Easing,
   Image,
   StatusBar,
   Modal,
@@ -50,6 +51,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -57,6 +59,12 @@ import * as Haptics from 'expo-haptics';
 import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
 import { colors } from '@shared/styles/colors';
 import type { TandyStackParamList } from '@navigation/types';
+import {
+  PREMIUM_COLORS,
+  AnimatedSpringButton,
+  FloatingOrb,
+  GlassCard,
+} from '../components/PremiumComponents';
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -79,7 +87,7 @@ interface Psychiatrist {
   availableSlots?: string[];
   consultationFee: string;
   phone: string;
-  image: string;
+  image: number; // Local require() image
   bio: string;
   isVerified: boolean;
   isFeatured: boolean;
@@ -95,6 +103,19 @@ type FilterCategory = 'all' | 'available' | 'featured' | 'video';
 type SortOption = 'rating' | 'availability' | 'experience' | 'fee';
 
 type NavigationProp = NativeStackNavigationProp<TandyStackParamList, 'PsychiatristList'>;
+
+// =============================================================================
+// LOCAL PSYCHIATRIST IMAGES
+// =============================================================================
+
+const PSYCHIATRIST_IMAGES = {
+  'dr-santos-cruz': require('../../../../assets/images/psychiatrists/dr-santos-cruz.png'),
+  'dr-reyes': require('../../../../assets/images/psychiatrists/dr-reyes.png'),
+  'dr-garcia': require('../../../../assets/images/psychiatrists/dr-garcia.png'),
+  'dr-lim-tan': require('../../../../assets/images/psychiatrists/dr-lim-tan.png'),
+  'dr-dela-rosa': require('../../../../assets/images/psychiatrists/dr-dela-rosa.png'),
+  'dr-aquino': require('../../../../assets/images/psychiatrists/dr-aquino.png'),
+} as const;
 
 // =============================================================================
 // TANDER BRAND THEME - Orange & Teal
@@ -182,7 +203,7 @@ const THEME = {
 };
 
 // =============================================================================
-// RESPONSIVE TYPOGRAPHY & SPACING SCALES
+// RESPONSIVE TYPOGRAPHY & SPACING SCALES - Premium iPad-Like Design
 // =============================================================================
 
 const getResponsiveStyles = (width: number, isTablet: boolean, isLandscape: boolean) => {
@@ -193,40 +214,46 @@ const getResponsiveStyles = (width: number, isTablet: boolean, isLandscape: bool
   const isTabletPortrait = isTablet && !isLandscape;
   const isTabletLandscape = isTablet && isLandscape;
 
-  // Typography scale
+  // Premium Typography scale - larger for tablets
   const typography = {
-    title: isSmallPhone ? 24 : isMediumPhone ? 26 : isLargePhone ? 28 : isTablet ? 32 : 26,
+    title: isSmallPhone ? 24 : isMediumPhone ? 26 : isLargePhone ? 28 : isTabletLandscape ? 28 : isTablet ? 32 : 26,
     subtitle: isSmallPhone ? 14 : isMediumPhone ? 15 : isLargePhone ? 16 : isTablet ? 18 : 15,
-    cardName: isSmallPhone ? 18 : isMediumPhone ? 19 : isLargePhone ? 20 : isTablet ? 22 : 19,
+    cardName: isSmallPhone ? 18 : isMediumPhone ? 19 : isLargePhone ? 20 : isTabletLandscape ? 20 : isTablet ? 22 : 19,
     body: isSmallPhone ? 14 : isMediumPhone ? 15 : isLargePhone ? 16 : isTablet ? 17 : 15,
     bodyLarge: isSmallPhone ? 16 : isMediumPhone ? 17 : isLargePhone ? 18 : isTablet ? 20 : 17,
     badge: isSmallPhone ? 11 : isMediumPhone ? 12 : isLargePhone ? 13 : isTablet ? 14 : 12,
     small: isSmallPhone ? 12 : isMediumPhone ? 13 : isLargePhone ? 14 : isTablet ? 15 : 13,
   };
 
-  // Spacing scale
+  // Premium Spacing scale - balanced for tablet landscape
   const spacing = {
-    screenMargin: isSmallPhone ? 12 : isMediumPhone ? 16 : isLargePhone ? 20 : isTablet ? 32 : 16,
-    cardGap: isSmallPhone ? 12 : isMediumPhone ? 14 : isLargePhone ? 16 : isTablet ? 20 : 14,
-    cardPadding: isSmallPhone ? 14 : isMediumPhone ? 16 : isLargePhone ? 18 : isTablet ? 22 : 16,
-    sectionGap: isSmallPhone ? 16 : isMediumPhone ? 20 : isLargePhone ? 24 : isTablet ? 32 : 20,
+    // Screen margins - reasonable for tablet landscape
+    screenMargin: isSmallPhone ? 12 : isMediumPhone ? 16 : isLargePhone ? 20 : isTabletLandscape ? 48 : isTablet ? 40 : 16,
+    // Card gap - good breathing room between cards
+    cardGap: isSmallPhone ? 12 : isMediumPhone ? 14 : isLargePhone ? 16 : isTabletLandscape ? 20 : isTablet ? 18 : 14,
+    // Card padding - comfortable internal content
+    cardPadding: isSmallPhone ? 14 : isMediumPhone ? 16 : isLargePhone ? 18 : isTabletLandscape ? 22 : isTablet ? 20 : 16,
+    // Section gap - reasonable gaps between content sections
+    sectionGap: isSmallPhone ? 16 : isMediumPhone ? 20 : isLargePhone ? 24 : isTabletLandscape ? 32 : isTablet ? 28 : 20,
   };
 
-  // Grid columns
+  // Grid columns - SINGLE COLUMN for tablets = premium, spacious, easy vertical scrolling
+  // Multi-column layouts on mobile are cramped and hard to navigate for seniors
   const getGridColumns = () => {
-    if (isTabletLandscape) return 3;
-    if (isTabletPortrait) return 2;
-    if (isLandscape && !isTablet) return 2; // Phone landscape
+    // ALL tablet modes: single column for easy vertical scrolling & premium spacious feel
+    if (isTabletLandscape) return 1; // Full-width cards, easy to read & navigate
+    if (isTabletPortrait) return 1; // Full-width cards
+    if (isLandscape && !isTablet) return 1; // Phone landscape - single column for readability
     return 1; // Phone portrait
   };
 
-  // Touch targets (senior-friendly)
+  // Touch targets (senior-friendly - extra large for tablets)
   const touchTargets = {
-    button: isTablet ? 56 : 48,
-    buttonLarge: isTablet ? 64 : 56,
-    chip: isTablet ? 44 : 40,
-    icon: isTablet ? 48 : 44,
-    fab: isTablet ? 64 : 56,
+    button: isTabletLandscape ? 60 : isTablet ? 56 : 48,
+    buttonLarge: isTabletLandscape ? 68 : isTablet ? 64 : 56,
+    chip: isTabletLandscape ? 52 : isTablet ? 48 : 40,
+    icon: isTabletLandscape ? 52 : isTablet ? 48 : 44,
+    fab: isTabletLandscape ? 68 : isTablet ? 64 : 56,
   };
 
   return {
@@ -264,7 +291,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     availableSlots: ['2:00 PM', '3:30 PM', '5:00 PM'],
     consultationFee: '2,500 - 3,500',
     phone: '+639171234567',
-    image: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-santos-cruz'],
     bio: 'Specializing in mental health care for seniors with over 28 years of compassionate service. Fellow of the Philippine Psychiatric Association.',
     isVerified: true,
     isFeatured: true,
@@ -292,7 +319,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     availableSlots: ['4:30 PM', '6:00 PM'],
     consultationFee: '2,000 - 3,000',
     phone: '+639182345678',
-    image: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-reyes'],
     bio: 'Expert in treating anxiety and depression in older adults. Uses evidence-based therapy combined with medication management.',
     isVerified: true,
     isFeatured: false,
@@ -315,7 +342,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     nextAvailable: 'Tomorrow 9:00 AM',
     consultationFee: '2,800 - 4,000',
     phone: '+639193456789',
-    image: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-garcia'],
     bio: 'Board-certified in both Philippine and American psychiatric associations. Specializes in sleep disorders and mood regulation for seniors.',
     isVerified: true,
     isFeatured: true,
@@ -343,7 +370,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     availableSlots: ['3:00 PM'],
     consultationFee: '2,200 - 3,200',
     phone: '+639204567890',
-    image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-lim-tan'],
     bio: 'Leading expert in cognitive health and memory disorders. Three decades of experience helping seniors maintain mental sharpness.',
     isVerified: true,
     isFeatured: false,
@@ -366,7 +393,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     nextAvailable: 'Tomorrow 10:30 AM',
     consultationFee: '1,800 - 2,800',
     phone: '+639215678901',
-    image: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-dela-rosa'],
     bio: 'Compassionate care for those experiencing loss, retirement adjustment, and major life changes. Holistic approach to mental wellness.',
     isVerified: true,
     isFeatured: false,
@@ -390,7 +417,7 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     availableSlots: ['5:00 PM', '6:30 PM'],
     consultationFee: '2,500 - 3,500',
     phone: '+639226789012',
-    image: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&h=200&fit=crop&crop=face',
+    image: PSYCHIATRIST_IMAGES['dr-aquino'],
     bio: 'PhD in Psychology with focus on stress management. Integrates mindfulness and traditional psychiatry for comprehensive senior care.',
     isVerified: true,
     isFeatured: false,
@@ -398,6 +425,174 @@ const PSYCHIATRISTS: Psychiatrist[] = [
     acceptsInsurance: true,
   },
 ];
+
+// =============================================================================
+// PREMIUM AMBIENT ORBS - Soft, ethereal floating orbs for visual depth
+// =============================================================================
+
+interface AmbientOrbProps {
+  delay: number;
+  size: number;
+  startX: number;
+  startY: number;
+  color: string;
+  floatDistance: number;
+  duration: number;
+}
+
+const AmbientOrb: React.FC<AmbientOrbProps> = ({
+  delay,
+  size,
+  startX,
+  startY,
+  color,
+  floatDistance,
+  duration,
+}) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    // Gentle fade in
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 2500,
+      delay,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+
+    // Slow scale up
+    Animated.timing(scale, {
+      toValue: 1,
+      duration: 3000,
+      delay,
+      easing: Easing.out(Easing.back(1.05)),
+      useNativeDriver: true,
+    }).start();
+
+    // Ultra-smooth vertical floating
+    const floatY = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: -floatDistance,
+          duration: duration,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: floatDistance * 0.3,
+          duration: duration * 0.75,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: duration * 0.5,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Gentle horizontal drift
+    const floatX = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateX, {
+          toValue: floatDistance * 0.35,
+          duration: duration * 1.1,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: -floatDistance * 0.25,
+          duration: duration * 1.3,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: duration * 0.7,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const floatTimer = setTimeout(() => {
+      floatY.start();
+      floatX.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(floatTimer);
+      floatY.stop();
+      floatX.stop();
+    };
+  }, [delay, duration, floatDistance, opacity, scale, translateX, translateY]);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${startX}%`,
+        top: `${startY}%`,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        opacity,
+        transform: [{ translateY }, { translateX }, { scale }],
+      }}
+      pointerEvents="none"
+    />
+  );
+};
+
+// Premium orb colors - Very soft, ethereal (teal-focused for wellness)
+const AMBIENT_ORB_COLORS = {
+  tealLight: 'rgba(94, 234, 212, 0.05)',
+  tealMid: 'rgba(20, 184, 166, 0.04)',
+  tealDark: 'rgba(13, 148, 136, 0.03)',
+  orangeLight: 'rgba(251, 146, 60, 0.04)',
+  orangeMid: 'rgba(249, 115, 22, 0.03)',
+  peach: 'rgba(253, 186, 116, 0.03)',
+  aqua: 'rgba(45, 212, 191, 0.04)',
+};
+
+interface AmbientOrbsBackgroundProps {
+  reduceMotion: boolean;
+}
+
+const AmbientOrbsBackground: React.FC<AmbientOrbsBackgroundProps> = ({ reduceMotion }) => {
+  if (reduceMotion) return null;
+
+  // Premium ambient orbs configuration - fewer for professional look
+  const orbs = useMemo(() => [
+    // Large background orbs
+    { delay: 0, duration: 16000, size: 200, startX: -5, startY: 15, color: AMBIENT_ORB_COLORS.tealLight, floatDistance: 20 },
+    { delay: 2000, duration: 18000, size: 220, startX: 80, startY: 10, color: AMBIENT_ORB_COLORS.aqua, floatDistance: 16 },
+    { delay: 3500, duration: 17000, size: 180, startX: 75, startY: 70, color: AMBIENT_ORB_COLORS.tealMid, floatDistance: 18 },
+    { delay: 1500, duration: 15000, size: 160, startX: -10, startY: 55, color: AMBIENT_ORB_COLORS.orangeLight, floatDistance: 22 },
+    // Medium accent orbs
+    { delay: 500, duration: 13000, size: 120, startX: 30, startY: 35, color: AMBIENT_ORB_COLORS.tealDark, floatDistance: 24 },
+    { delay: 2500, duration: 14000, size: 100, startX: 60, startY: 50, color: AMBIENT_ORB_COLORS.peach, floatDistance: 26 },
+    { delay: 1000, duration: 12000, size: 130, startX: 45, startY: 85, color: AMBIENT_ORB_COLORS.tealLight, floatDistance: 20 },
+    // Small subtle orbs
+    { delay: 800, duration: 10000, size: 70, startX: 20, startY: 65, color: AMBIENT_ORB_COLORS.aqua, floatDistance: 28 },
+    { delay: 1800, duration: 9500, size: 60, startX: 85, startY: 40, color: AMBIENT_ORB_COLORS.orangeMid, floatDistance: 26 },
+  ], []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {orbs.map((orb, index) => (
+        <AmbientOrb key={index} {...orb} />
+      ))}
+    </View>
+  );
+};
 
 // =============================================================================
 // ANIMATED PRESSABLE COMPONENT
@@ -965,7 +1160,7 @@ const PsychiatristCard: React.FC<PsychiatristCardProps> = ({
               ]}
             >
               <Image
-                source={{ uri: psychiatrist.image }}
+                source={psychiatrist.image}
                 style={styles.profilePhoto}
                 accessibilityLabel={`Photo of ${psychiatrist.name}`}
               />
@@ -1282,7 +1477,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                 ]}
               >
                 <Image
-                  source={{ uri: psychiatrist.image }}
+                  source={psychiatrist.image}
                   style={styles.modalPhoto}
                 />
               </View>
@@ -1761,21 +1956,27 @@ export const PsychiatristListScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Responsive horizontal padding
+  // Responsive horizontal padding - reasonable padding for landscape
   const horizontalPadding = useMemo(() => {
     if (isPhoneLandscape) return Math.max(insets.left + 16, 24);
+    // Good padding for tablet landscape - spacious but not cramped
+    if (responsive.isTabletLandscape) return Math.max(insets.left + 32, 48);
+    if (responsive.isTabletPortrait) return Math.max(responsive.spacing.screenMargin, 40);
     return responsive.spacing.screenMargin;
-  }, [isPhoneLandscape, insets.left, responsive.spacing.screenMargin]);
+  }, [isPhoneLandscape, insets.left, responsive.spacing.screenMargin, responsive.isTabletLandscape, responsive.isTabletPortrait]);
 
-  // Calculate card width based on columns
+  // Calculate card width - ALWAYS single column for premium spacious design
+  // Cards are capped at max width for tablet landscape to prevent them being too wide
   const cardWidth = useMemo(() => {
-    const columns = responsive.columns;
-    if (columns === 1) return '100%';
-    const gap = responsive.spacing.cardGap;
-    const totalGaps = (columns - 1) * gap;
-    const availableWidth = width - (horizontalPadding * 2) - totalGaps - Math.max(insets.left, 0) - Math.max(insets.right, 0);
-    return availableWidth / columns;
-  }, [responsive.columns, responsive.spacing.cardGap, width, horizontalPadding, insets]);
+    // For tablet landscape, cap the card width for optimal readability
+    // This creates a centered, premium look similar to iOS Settings app
+    if (responsive.isTabletLandscape) {
+      // Max width of 700px for comfortable reading, centered via container
+      return '100%';
+    }
+    // All other modes: full width cards
+    return '100%';
+  }, [responsive.isTabletLandscape]);
 
   // Filter and sort psychiatrists
   const filteredPsychiatrists = useMemo(() => {
@@ -1909,6 +2110,260 @@ export const PsychiatristListScreen: React.FC = () => {
     setSelectedPsychiatrist(null);
   }, []);
 
+  // Sidebar content for landscape tablet mode
+  const renderSidebar = () => (
+    <View style={[
+      styles.sidebar,
+      { paddingTop: insets.top + 16, paddingLeft: Math.max(insets.left + 16, 24) },
+    ]}>
+      {/* Sidebar Header with Back Button */}
+      <View style={styles.sidebarHeader}>
+        <AnimatedPressable
+          onPress={handleBack}
+          style={styles.sidebarBackButton}
+          accessibilityLabel="Go back"
+          accessibilityHint="Returns to previous screen"
+        >
+          <View style={styles.sidebarBackButtonInner}>
+            <Feather name="arrow-left" size={20} color={colors.teal[600]} />
+          </View>
+        </AnimatedPressable>
+        <View style={styles.sidebarTitleContainer}>
+          <Text style={styles.sidebarTitle}>Psychiatrists</Text>
+          <Text style={styles.sidebarSubtitle}>Mental Health Support</Text>
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.sidebarSearch}>
+        <View style={styles.sidebarSearchInputContainer}>
+          <Feather name="search" size={18} color={colors.teal[500]} />
+          <TextInput
+            style={styles.sidebarSearchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search..."
+            placeholderTextColor={THEME.text.light}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <Feather name="x-circle" size={16} color={THEME.text.light} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Filter Section */}
+      <View style={styles.sidebarSection}>
+        <Text style={styles.sidebarSectionTitle}>FILTERS</Text>
+        <View style={styles.sidebarFilters}>
+          {[
+            { key: 'all', label: 'All', icon: 'grid', count: filterCounts.all },
+            { key: 'available', label: 'Available', icon: 'clock', count: filterCounts.available },
+            { key: 'featured', label: 'Top Rated', icon: 'star', count: filterCounts.featured },
+            { key: 'video', label: 'Video', icon: 'video', count: filterCounts.video },
+          ].map((filter) => (
+            <Pressable
+              key={filter.key}
+              onPress={() => setActiveFilter(filter.key as FilterCategory)}
+              style={[
+                styles.sidebarFilterItem,
+                activeFilter === filter.key && styles.sidebarFilterItemActive,
+              ]}
+            >
+              <View style={styles.sidebarFilterLeft}>
+                <Feather
+                  name={filter.icon as any}
+                  size={18}
+                  color={activeFilter === filter.key ? colors.white : colors.teal[600]}
+                />
+                <Text style={[
+                  styles.sidebarFilterLabel,
+                  activeFilter === filter.key && styles.sidebarFilterLabelActive,
+                ]}>
+                  {filter.label}
+                </Text>
+              </View>
+              <View style={[
+                styles.sidebarFilterCount,
+                activeFilter === filter.key && styles.sidebarFilterCountActive,
+              ]}>
+                <Text style={[
+                  styles.sidebarFilterCountText,
+                  activeFilter === filter.key && styles.sidebarFilterCountTextActive,
+                ]}>
+                  {filter.count}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Sort Section */}
+      <View style={styles.sidebarSection}>
+        <Text style={styles.sidebarSectionTitle}>SORT BY</Text>
+        <View style={styles.sidebarSortOptions}>
+          {[
+            { key: 'availability', label: 'Availability', icon: 'calendar' },
+            { key: 'rating', label: 'Rating', icon: 'star' },
+            { key: 'experience', label: 'Experience', icon: 'briefcase' },
+          ].map((sort) => (
+            <Pressable
+              key={sort.key}
+              onPress={() => setSortBy(sort.key as SortOption)}
+              style={[
+                styles.sidebarSortItem,
+                sortBy === sort.key && styles.sidebarSortItemActive,
+              ]}
+            >
+              <Feather
+                name={sort.icon as any}
+                size={16}
+                color={sortBy === sort.key ? colors.teal[600] : THEME.text.muted}
+              />
+              <Text style={[
+                styles.sidebarSortLabel,
+                sortBy === sort.key && styles.sidebarSortLabelActive,
+              ]}>
+                {sort.label}
+              </Text>
+              {sortBy === sort.key && (
+                <Feather name="check" size={16} color={colors.teal[600]} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Stats Card */}
+      <View style={styles.sidebarStatsCard}>
+        <LinearGradient
+          colors={[colors.teal[500], colors.teal[600]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.sidebarStatsGradient}
+        >
+          <View style={styles.sidebarStatItem}>
+            <Text style={styles.sidebarStatValue}>{PSYCHIATRISTS.length}</Text>
+            <Text style={styles.sidebarStatLabel}>Specialists</Text>
+          </View>
+          <View style={styles.sidebarStatDivider} />
+          <View style={styles.sidebarStatItem}>
+            <Text style={styles.sidebarStatValue}>4.8</Text>
+            <Text style={styles.sidebarStatLabel}>Avg Rating</Text>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* Crisis Hotline in Sidebar */}
+      <Pressable onPress={handleCrisisHotline} style={styles.sidebarCrisisButton}>
+        <View style={styles.sidebarCrisisIcon}>
+          <Feather name="phone-call" size={18} color="#DC2626" />
+        </View>
+        <View style={styles.sidebarCrisisContent}>
+          <Text style={styles.sidebarCrisisTitle}>24/7 Crisis Line</Text>
+          <Text style={styles.sidebarCrisisNumber}>0917-899-8727</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  // Main content (psychiatrist cards)
+  const renderMainContent = () => (
+    <ScrollView
+      style={styles.mainContent}
+      contentContainerStyle={[
+        styles.mainContentContainer,
+        {
+          paddingBottom: insets.bottom + 32,
+          paddingRight: Math.max(insets.right + 24, 32),
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Results header */}
+      <View style={styles.mainContentHeader}>
+        <Text style={styles.mainContentResultCount}>
+          {filteredPsychiatrists.length} psychiatrist{filteredPsychiatrists.length !== 1 ? 's' : ''}
+        </Text>
+        <View style={styles.mainContentVerified}>
+          <MaterialCommunityIcons name="shield-check" size={18} color={colors.teal[600]} />
+          <Text style={styles.mainContentVerifiedText}>All Verified</Text>
+        </View>
+      </View>
+
+      {/* Cards Grid - 2 columns for tablet landscape */}
+      {isLoading ? (
+        <View style={styles.landscapeCardsGrid}>
+          {[1, 2, 3, 4].map((i) => (
+            <View key={i} style={styles.landscapeCardWrapper}>
+              <SkeletonCard responsive={responsive} />
+            </View>
+          ))}
+        </View>
+      ) : filteredPsychiatrists.length === 0 ? (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="emoticon-sad-outline" size={64} color={THEME.text.light} />
+          <Text style={styles.emptyStateTitle}>No Results Found</Text>
+          <Text style={styles.emptyStateText}>Try adjusting your filters</Text>
+        </View>
+      ) : (
+        <View style={styles.landscapeCardsGrid}>
+          {filteredPsychiatrists.map((psychiatrist, index) => (
+            <View key={psychiatrist.id} style={styles.landscapeCardWrapper}>
+              <PsychiatristCard
+                psychiatrist={psychiatrist}
+                onCallPress={handleCallPress}
+                onBookPress={handleBookPress}
+                onViewProfile={handleViewProfile}
+                onFavoritePress={handleFavoritePress}
+                isFavorite={favorites.has(psychiatrist.id)}
+                responsive={responsive}
+                index={index}
+                cardWidth="100%"
+              />
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  // LANDSCAPE TABLET LAYOUT - Premium sidebar design
+  if (responsive.isTabletLandscape) {
+    return (
+      <View style={styles.landscapeContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.background.primary} />
+
+        {/* Background */}
+        <LinearGradient
+          colors={[THEME.background.primary, colors.teal[50], THEME.background.primary]}
+          locations={[0, 0.5, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Sidebar + Main Content Layout */}
+        <View style={styles.landscapeLayout}>
+          {renderSidebar()}
+          <View style={styles.landscapeDivider} />
+          {renderMainContent()}
+        </View>
+
+        {/* Profile Modal */}
+        <ProfileModal
+          visible={showProfileModal}
+          psychiatrist={selectedPsychiatrist}
+          onClose={closeProfileModal}
+          onCall={() => selectedPsychiatrist && handleCallPress(selectedPsychiatrist)}
+          onBook={() => selectedPsychiatrist && handleBookPress(selectedPsychiatrist)}
+          responsive={responsive}
+        />
+      </View>
+    );
+  }
+
+  // PORTRAIT / PHONE LAYOUT - Original design
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.teal[700]} />
@@ -1919,6 +2374,9 @@ export const PsychiatristListScreen: React.FC = () => {
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
+
+      {/* Premium Ambient Orbs - Visual depth */}
+      <AmbientOrbsBackground reduceMotion={reduceMotionEnabled} />
 
       {/* Premium Header - Teal gradient */}
       <Header
@@ -1944,23 +2402,31 @@ export const PsychiatristListScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[0]}
       >
-        {/* Sticky Filter Section */}
-        <View style={[styles.stickyHeader, {
-          marginHorizontal: -horizontalPadding,
-          paddingHorizontal: horizontalPadding,
-        }]}>
-          {/* Search Bar */}
+        {/* Sticky Filter Section - Premium Design */}
+        <View style={[
+          styles.stickyHeader,
+          {
+            marginHorizontal: -horizontalPadding,
+            paddingHorizontal: horizontalPadding,
+            paddingTop: responsive.isTabletPortrait ? 20 : 12,
+            paddingBottom: responsive.isTabletPortrait ? 20 : 14,
+          },
+        ]}>
+          {/* Search Bar - Full width for easy access */}
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
             responsive={responsive}
           />
 
-          {/* Filter Chips - Orange active state */}
+          {/* Filter Chips - Always horizontal scroll (no wrapping issues) */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.filterChipsContainer, { gap: responsive.spacing.cardGap - 4 }]}
+            contentContainerStyle={[
+              styles.filterChipsContainer,
+              { gap: 10 },
+            ]}
           >
             <FilterChip
               label="All"
@@ -1995,8 +2461,11 @@ export const PsychiatristListScreen: React.FC = () => {
             />
           </ScrollView>
 
-          {/* Sort Options */}
-          <View style={styles.sortRow}>
+          {/* Sort Options - Full width */}
+          <View style={[
+            styles.sortRow,
+            responsive.isTabletPortrait && { marginTop: 16 },
+          ]}>
             <Text style={[styles.resultCount, { fontSize: responsive.typography.body }]}>
               {filteredPsychiatrists.length} psychiatrist{filteredPsychiatrists.length !== 1 ? 's' : ''} found
             </Text>
@@ -2004,7 +2473,11 @@ export const PsychiatristListScreen: React.FC = () => {
               <Text style={[styles.sortLabel, { fontSize: responsive.typography.small }]}>Sort:</Text>
               <Pressable
                 onPress={() => setSortBy('availability')}
-                style={[styles.sortOption, sortBy === 'availability' && styles.sortOptionActive]}
+                style={[
+                  styles.sortOption,
+                  sortBy === 'availability' && styles.sortOptionActive,
+                  responsive.isTabletPortrait && { paddingHorizontal: 18, paddingVertical: 10 },
+                ]}
               >
                 <Text
                   style={[
@@ -2018,7 +2491,11 @@ export const PsychiatristListScreen: React.FC = () => {
               </Pressable>
               <Pressable
                 onPress={() => setSortBy('rating')}
-                style={[styles.sortOption, sortBy === 'rating' && styles.sortOptionActive]}
+                style={[
+                  styles.sortOption,
+                  sortBy === 'rating' && styles.sortOptionActive,
+                  responsive.isTabletPortrait && { paddingHorizontal: 18, paddingVertical: 10 },
+                ]}
               >
                 <Text
                   style={[
@@ -2071,11 +2548,12 @@ export const PsychiatristListScreen: React.FC = () => {
             </Pressable>
           </View>
         ) : (
-          /* Psychiatrist Cards - Responsive Grid */
+          /* Psychiatrist Cards - Premium Single Column Layout for Easy Navigation */
           <View style={[
             styles.cardsContainer,
             { gap: responsive.spacing.cardGap },
-            responsive.columns > 1 && styles.cardsContainerGrid
+            // Center cards with max-width for tablet landscape (premium iOS-like feel)
+            responsive.isTabletLandscape && styles.cardsContainerCentered,
           ]}>
             {filteredPsychiatrists.map((psychiatrist, index) => (
               <PsychiatristCard
@@ -2094,8 +2572,11 @@ export const PsychiatristListScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Footer Note */}
-        <View style={styles.footerNote}>
+        {/* Footer Note - Centered on tablet landscape */}
+        <View style={[
+          styles.footerNote,
+          responsive.isTabletLandscape && { maxWidth: 720, alignSelf: 'center', width: '100%' },
+        ]}>
           <MaterialCommunityIcons
             name="information-outline"
             size={18}
@@ -2106,8 +2587,10 @@ export const PsychiatristListScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Emergency Hotline Card */}
-        <EmergencyCard onPress={handleCrisisHotline} responsive={responsive} />
+        {/* Emergency Hotline Card - Centered on tablet landscape */}
+        <View style={responsive.isTabletLandscape && styles.cardsContainerCentered}>
+          <EmergencyCard onPress={handleCrisisHotline} responsive={responsive} />
+        </View>
       </ScrollView>
 
       {/* Floating Crisis Button */}
@@ -2243,8 +2726,18 @@ const styles = StyleSheet.create({
   // STICKY HEADER
   // ========================
   stickyHeader: {
-    backgroundColor: THEME.background.primary,
-    paddingBottom: 12,
+    backgroundColor: 'rgba(255, 251, 247, 0.95)',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+    }),
   },
 
   // ========================
@@ -2256,25 +2749,29 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.surface.card,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    paddingHorizontal: 18,
     borderWidth: 2,
-    borderColor: colors.gray[200],
+    borderColor: 'rgba(20, 184, 166, 0.2)',
     ...Platform.select({
       ios: {
-        shadowColor: colors.gray[300],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
+        shadowColor: colors.teal[900],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
       },
     }),
   },
   searchInputContainerFocused: {
     borderColor: colors.teal[400],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[600],
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+    }),
   },
   searchIcon: {
     marginRight: 12,
@@ -2293,23 +2790,45 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 2,
   },
+  filterChipsTabletContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    minHeight: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
+    minHeight: 44,
   },
   filterChipActive: {
     backgroundColor: colors.orange[500],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.orange[600],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
   filterChipInactive: {
-    backgroundColor: THEME.surface.card,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(20, 184, 166, 0.25)',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+      },
+    }),
   },
   filterChipText: {
     fontWeight: '600',
@@ -2371,15 +2890,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.teal[200],
     ...Platform.select({
       ios: {
         shadowColor: colors.teal[300],
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
@@ -2481,13 +2999,23 @@ const styles = StyleSheet.create({
   },
 
   // ========================
-  // CARDS CONTAINER
+  // CARDS CONTAINER - Premium Single Column Layout
   // ========================
-  cardsContainer: {},
+  cardsContainer: {
+    // Default: single column, full width
+  },
+  cardsContainerCentered: {
+    // Tablet landscape: center cards with max width for premium feel
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 720, // Optimal reading width for landscape
+  },
   cardsContainerGrid: {
+    // Legacy grid style - kept for reference but not used
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
 
   // ========================
@@ -2511,19 +3039,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   card: {
-    backgroundColor: THEME.surface.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.gray[100],
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.gray[200],
     ...Platform.select({
       ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 8,
+        shadowColor: colors.teal[900],
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.08,
+        shadowRadius: 24,
       },
     }),
   },
@@ -2566,15 +3091,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray[200],
     ...Platform.select({
       ios: {
         shadowColor: colors.black,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.15,
         shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
       },
     }),
   },
@@ -2849,9 +3373,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 6,
       },
-      android: {
-        elevation: 4,
-      },
     }),
   },
   bookButton: {
@@ -2880,9 +3401,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.2,
         shadowRadius: 6,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
@@ -2957,9 +3475,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 8,
       },
-      android: {
-        elevation: 4,
-      },
     }),
   },
   emergencyGradient: {
@@ -3021,9 +3536,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
       },
     }),
   },
@@ -3175,6 +3687,311 @@ const styles = StyleSheet.create({
   modalActionText: {
     fontWeight: '600',
     color: THEME.text.inverse,
+  },
+
+  // ========================
+  // LANDSCAPE TABLET - PREMIUM SIDEBAR LAYOUT
+  // ========================
+  landscapeContainer: {
+    flex: 1,
+    backgroundColor: THEME.background.primary,
+  },
+  landscapeLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  landscapeDivider: {
+    width: 1,
+    backgroundColor: colors.gray[200],
+  },
+
+  // Sidebar Styles
+  sidebar: {
+    width: 320,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    paddingRight: 20,
+    paddingBottom: 32,
+    borderRightWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.gray[400],
+        shadowOffset: { width: 2, height: 0 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 12,
+  },
+  sidebarBackButton: {},
+  sidebarBackButtonInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.teal[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.teal[200],
+  },
+  sidebarTitleContainer: {
+    flex: 1,
+  },
+  sidebarTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: THEME.text.primary,
+    letterSpacing: -0.3,
+  },
+  sidebarSubtitle: {
+    fontSize: 13,
+    color: THEME.text.muted,
+    marginTop: 2,
+  },
+
+  // Sidebar Search
+  sidebarSearch: {
+    marginBottom: 24,
+  },
+  sidebarSearchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[50],
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  sidebarSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: THEME.text.primary,
+    padding: 0,
+  },
+
+  // Sidebar Sections
+  sidebarSection: {
+    marginBottom: 24,
+  },
+  sidebarSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.text.muted,
+    letterSpacing: 1,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+
+  // Sidebar Filters
+  sidebarFilters: {
+    gap: 6,
+  },
+  sidebarFilterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  sidebarFilterItemActive: {
+    backgroundColor: colors.teal[500],
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[600],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  sidebarFilterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sidebarFilterLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: THEME.text.secondary,
+  },
+  sidebarFilterLabelActive: {
+    color: colors.white,
+  },
+  sidebarFilterCount: {
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  sidebarFilterCountActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  sidebarFilterCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.text.muted,
+  },
+  sidebarFilterCountTextActive: {
+    color: colors.white,
+  },
+
+  // Sidebar Sort Options
+  sidebarSortOptions: {
+    gap: 4,
+  },
+  sidebarSortItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 10,
+  },
+  sidebarSortItemActive: {
+    backgroundColor: colors.teal[50],
+  },
+  sidebarSortLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: THEME.text.muted,
+  },
+  sidebarSortLabelActive: {
+    color: colors.teal[700],
+    fontWeight: '600',
+  },
+
+  // Sidebar Stats Card
+  sidebarStatsCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[600],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  sidebarStatsGradient: {
+    flexDirection: 'row',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  sidebarStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  sidebarStatValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  sidebarStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sidebarStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginHorizontal: 12,
+  },
+
+  // Sidebar Crisis Button
+  sidebarCrisisButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  sidebarCrisisIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sidebarCrisisContent: {
+    flex: 1,
+  },
+  sidebarCrisisTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B91C1C',
+  },
+  sidebarCrisisNumber: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginTop: 2,
+  },
+
+  // Main Content Area
+  mainContent: {
+    flex: 1,
+    backgroundColor: THEME.background.primary,
+  },
+  mainContentContainer: {
+    paddingTop: 24,
+    paddingLeft: 32,
+  },
+  mainContentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  mainContentResultCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: THEME.text.primary,
+  },
+  mainContentVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.teal[50],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  mainContentVerifiedText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.teal[700],
+  },
+
+  // Landscape Cards Grid
+  landscapeCardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 20,
+  },
+  landscapeCardWrapper: {
+    width: '48%',
+    minWidth: 340,
+    maxWidth: 500,
   },
 });
 

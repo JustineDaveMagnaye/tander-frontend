@@ -27,6 +27,7 @@ import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { colors } from '@shared/styles/colors';
+import { testIncomingCall, runFullDiagnostics } from '@/services/incomingCall/IncomingCallDiagnostics';
 import { spacing, borderRadius, shadows } from '@shared/styles/spacing';
 import { useResponsive } from '@shared/hooks/useResponsive';
 
@@ -185,7 +186,7 @@ export const CallSettingsScreen: React.FC<CallSettingsScreenProps> = ({ onBack }
           setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
         }
       } catch (error) {
-        console.error('Failed to load call settings:', error);
+        console.warn('Failed to load call settings:', error);
       } finally {
         setIsLoading(false);
       }
@@ -198,7 +199,7 @@ export const CallSettingsScreen: React.FC<CallSettingsScreenProps> = ({ onBack }
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
     } catch (error) {
-      console.error('Failed to save call settings:', error);
+      console.warn('Failed to save call settings:', error);
       Alert.alert('Error', 'Failed to save settings. Please try again.');
     }
   }, []);
@@ -392,6 +393,62 @@ export const CallSettingsScreen: React.FC<CallSettingsScreenProps> = ({ onBack }
         >
           <Text style={styles.resetButtonText}>Reset to Defaults</Text>
         </TouchableOpacity>
+
+        {/* Developer Testing - Only in DEV mode */}
+        {__DEV__ && Platform.OS === 'android' && (
+          <SettingsSection title="Developer Testing">
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                console.log('[DEV] Running full diagnostics...');
+                runFullDiagnostics().then((report) => {
+                  console.log('[DEV] Diagnostic Report:', JSON.stringify(report, null, 2));
+                  Alert.alert(
+                    'Diagnostic Report',
+                    `Status: ${report.overallStatus}\n\nResults:\n${report.results.map(r => `${r.component}: ${r.status}`).join('\n')}\n\nRecommendations:\n${report.recommendations.join('\n') || 'None'}`,
+                    [{ text: 'OK' }]
+                  );
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingItemLeft}>
+                <View style={[styles.settingItemIcon, { backgroundColor: colors.teal[100] }]}>
+                  <Feather name="activity" size={24} color={colors.teal[500]} />
+                </View>
+                <View style={styles.settingItemText}>
+                  <Text style={styles.settingItemTitle}>Run Diagnostics</Text>
+                  <Text style={styles.settingItemSubtitle}>Check incoming call system status</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={20} color={colors.gray[400]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.settingItem, { borderTopWidth: 1, borderTopColor: colors.gray[100] }]}
+              onPress={() => {
+                console.log('[DEV] Triggering test incoming call...');
+                testIncomingCall();
+                Alert.alert(
+                  'Test Call Started',
+                  'A test incoming call has been triggered. You should see the incoming call UI with ringtone and vibration. It will auto-dismiss after 10 seconds.',
+                  [{ text: 'OK' }]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingItemLeft}>
+                <View style={[styles.settingItemIcon, { backgroundColor: colors.orange[100] }]}>
+                  <Feather name="phone-incoming" size={24} color={colors.orange[500]} />
+                </View>
+                <View style={styles.settingItemText}>
+                  <Text style={styles.settingItemTitle}>Test Incoming Call</Text>
+                  <Text style={styles.settingItemSubtitle}>Trigger a fake incoming call to test UI</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={20} color={colors.gray[400]} />
+            </TouchableOpacity>
+          </SettingsSection>
+        )}
       </ScrollView>
     </View>
   );

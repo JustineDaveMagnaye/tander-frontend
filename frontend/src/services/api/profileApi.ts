@@ -147,7 +147,7 @@ export const getProfile = async (): Promise<ProfileData> => {
     const response = await get<ProfileData>(PROFILE_ENDPOINTS.ME);
     return response;
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.warn('Get profile error:', error);
     throw error;
   }
 };
@@ -160,7 +160,7 @@ export const updateProfile = async (data: Partial<ProfileData>): Promise<Profile
     const response = await put<ProfileData>(PROFILE_ENDPOINTS.UPDATE_PROFILE, data);
     return response;
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.warn('Update profile error:', error);
     throw error;
   }
 };
@@ -215,13 +215,13 @@ export const uploadProfilePhoto = async (photo: File | Blob | ImageFileInfo): Pr
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Upload response error:', response.status, errorData);
+      console.warn('Upload response error:', response.status, errorData);
       throw { message: errorData.message || 'Failed to upload photo', statusCode: response.status };
     }
 
     return response.json();
   } catch (error) {
-    console.error('Upload profile photo error:', error);
+    console.warn('Upload profile photo error:', error);
     throw error;
   }
 };
@@ -268,13 +268,13 @@ export const uploadAdditionalPhotos = async (photos: (File | Blob | ImageFileInf
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Upload response error:', response.status, errorData);
+      console.warn('Upload response error:', response.status, errorData);
       throw { message: errorData.message || 'Failed to upload photos', statusCode: response.status };
     }
 
     return response.json();
   } catch (error) {
-    console.error('Upload additional photos error:', error);
+    console.warn('Upload additional photos error:', error);
     throw error;
   }
 };
@@ -289,7 +289,7 @@ export const deletePhoto = async (photoIndex: number): Promise<{ remainingPhotos
     );
     return response;
   } catch (error) {
-    console.error('Delete photo error:', error);
+    console.warn('Delete photo error:', error);
     throw error;
   }
 };
@@ -319,7 +319,7 @@ export const deleteProfilePhoto = async (): Promise<{ status: string; message: s
 
     return response.json();
   } catch (error) {
-    console.error('Delete profile photo error:', error);
+    console.warn('Delete profile photo error:', error);
     throw error;
   }
 };
@@ -339,7 +339,7 @@ export const changePassword = async (currentPassword: string, newPassword: strin
     );
     return response;
   } catch (error) {
-    console.error('Change password error:', error);
+    console.warn('Change password error:', error);
     throw error;
   }
 };
@@ -354,7 +354,7 @@ export const enableBiometric = async (): Promise<{ success: boolean; biometricEn
     );
     return response;
   } catch (error) {
-    console.error('Enable biometric error:', error);
+    console.warn('Enable biometric error:', error);
     throw error;
   }
 };
@@ -369,7 +369,7 @@ export const disableBiometric = async (): Promise<{ success: boolean; biometricE
     );
     return response;
   } catch (error) {
-    console.error('Disable biometric error:', error);
+    console.warn('Disable biometric error:', error);
     throw error;
   }
 };
@@ -384,7 +384,7 @@ export const getBiometricStatus = async (): Promise<{ biometricEnabled: boolean 
     );
     return { biometricEnabled: response.biometricEnabled };
   } catch (error) {
-    console.error('Get biometric status error:', error);
+    console.warn('Get biometric status error:', error);
     throw error;
   }
 };
@@ -405,7 +405,7 @@ export const deleteAccount = async (password?: string): Promise<{ success: boole
     );
     return response;
   } catch (error) {
-    console.error('Delete account error:', error);
+    console.warn('Delete account error:', error);
     throw error;
   }
 };
@@ -425,7 +425,7 @@ export const getNotificationSettings = async (): Promise<NotificationSettings> =
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Get notification settings error:', error);
+    console.warn('Get notification settings error:', error);
     throw error;
   }
 };
@@ -444,7 +444,7 @@ export const updateNotificationSettings = async (settings: Partial<NotificationS
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update notification settings error:', error);
+    console.warn('Update notification settings error:', error);
     throw error;
   }
 };
@@ -466,7 +466,7 @@ export const updateSingleNotificationSetting = async (
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error(`Update ${settingName} error:`, error);
+    console.warn(`Update ${settingName} error:`, error);
     throw error;
   }
 };
@@ -486,7 +486,7 @@ export const getPrivacySettings = async (): Promise<PrivacySettings> => {
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Get privacy settings error:', error);
+    console.warn('Get privacy settings error:', error);
     throw error;
   }
 };
@@ -505,7 +505,7 @@ export const updatePrivacySettings = async (settings: Partial<PrivacySettings>):
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update privacy settings error:', error);
+    console.warn('Update privacy settings error:', error);
     throw error;
   }
 };
@@ -525,7 +525,7 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Get security settings error:', error);
+    console.warn('Get security settings error:', error);
     throw error;
   }
 };
@@ -544,7 +544,7 @@ export const updateTwoFactor = async (enabled: boolean, method?: string, phone?:
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update two-factor error:', error);
+    console.warn('Update two-factor error:', error);
     throw error;
   }
 };
@@ -563,7 +563,7 @@ export const updateLoginNotifications = async (enabled: boolean, method?: string
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update login notifications error:', error);
+    console.warn('Update login notifications error:', error);
     throw error;
   }
 };
@@ -578,7 +578,7 @@ export const setupAuthenticator = async (): Promise<{ secret: string; otpAuthUrl
     );
     return { secret: response.secret, otpAuthUrl: response.otpAuthUrl };
   } catch (error) {
-    console.error('Setup authenticator error:', error);
+    console.warn('Setup authenticator error:', error);
     throw error;
   }
 };
@@ -594,7 +594,7 @@ export const verifyAuthenticatorCode = async (code: string): Promise<{ verified:
     );
     return { verified: response.verified };
   } catch (error) {
-    console.error('Verify authenticator error:', error);
+    console.warn('Verify authenticator error:', error);
     throw error;
   }
 };
@@ -614,7 +614,7 @@ export const getDiscoverySettings = async (): Promise<DiscoverySettings> => {
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Get discovery settings error:', error);
+    console.warn('Get discovery settings error:', error);
     throw error;
   }
 };
@@ -633,7 +633,7 @@ export const updateDiscoverySettings = async (settings: Partial<DiscoverySetting
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update discovery settings error:', error);
+    console.warn('Update discovery settings error:', error);
     throw error;
   }
 };
@@ -652,7 +652,7 @@ export const updateDistancePreference = async (distance: number): Promise<Discov
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update distance error:', error);
+    console.warn('Update distance error:', error);
     throw error;
   }
 };
@@ -671,7 +671,7 @@ export const updateAgeRange = async (minAge: number, maxAge: number): Promise<Di
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update age range error:', error);
+    console.warn('Update age range error:', error);
     throw error;
   }
 };
@@ -690,7 +690,7 @@ export const updateShowMe = async (showMe: 'everyone' | 'men' | 'women'): Promis
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update show me error:', error);
+    console.warn('Update show me error:', error);
     throw error;
   }
 };
@@ -715,7 +715,7 @@ export const updateLocation = async (
     }
     throw new Error('Invalid response format');
   } catch (error) {
-    console.error('Update location error:', error);
+    console.warn('Update location error:', error);
     throw error;
   }
 };
@@ -747,7 +747,7 @@ export const blockUser = async (userId: string): Promise<{ success: boolean; mes
     );
     return response;
   } catch (error) {
-    console.error('Block user error:', error);
+    console.warn('Block user error:', error);
     throw error;
   }
 };
@@ -763,7 +763,7 @@ export const unblockUser = async (userId: string): Promise<{ success: boolean; m
     );
     return response;
   } catch (error) {
-    console.error('Unblock user error:', error);
+    console.warn('Unblock user error:', error);
     throw error;
   }
 };
@@ -779,7 +779,7 @@ export const reportUser = async (report: ReportRequest): Promise<{ success: bool
     );
     return response;
   } catch (error) {
-    console.error('Report user error:', error);
+    console.warn('Report user error:', error);
     throw error;
   }
 };
@@ -798,7 +798,7 @@ export const getBlockedUsers = async (): Promise<BlockedUser[]> => {
     // Fallback for wrapped response format
     return (response as unknown as { blockedUsers: BlockedUser[] }).blockedUsers || [];
   } catch (error) {
-    console.error('Get blocked users error:', error);
+    console.warn('Get blocked users error:', error);
     throw error;
   }
 };
