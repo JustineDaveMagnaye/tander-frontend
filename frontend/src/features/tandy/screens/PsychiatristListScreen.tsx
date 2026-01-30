@@ -47,24 +47,16 @@ import {
   Modal,
   TextInput,
   AccessibilityInfo,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
-import { useResponsive, BREAKPOINTS } from '@shared/hooks/useResponsive';
+import { useResponsive } from '@shared/hooks/useResponsive';
 import { colors } from '@shared/styles/colors';
 import type { TandyStackParamList } from '@navigation/types';
-import {
-  PREMIUM_COLORS,
-  AnimatedSpringButton,
-  FloatingOrb,
-  GlassCard,
-} from '../components/PremiumComponents';
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -128,20 +120,53 @@ const THEME = {
   // Secondary Teal - Trust, Calm, Wellness
   teal: colors.teal,
 
-  // Premium backgrounds
+  // Premium backgrounds - Apple-inspired
   background: {
-    primary: '#FFFBF7',       // Warm white
+    primary: '#FAFBFC',       // Crisp white with subtle cool tint
     secondary: '#F0FDFA',     // Light teal tint
     accent: colors.teal[50],  // Very light teal
     warm: '#FFF7ED',          // Warm orange tint
     card: '#FFFFFF',
+    elevated: '#FFFFFF',      // For elevated surfaces
+    groupedPrimary: '#F2F2F7', // iOS grouped background
+    groupedSecondary: '#FFFFFF',
   },
 
-  // Card surfaces
+  // Premium Card surfaces - iOS-style glassmorphism
   surface: {
-    card: 'rgba(255, 255, 255, 0.98)',
-    cardHover: 'rgba(255, 255, 255, 0.95)',
-    glass: 'rgba(255, 255, 255, 0.92)',
+    card: 'rgba(255, 255, 255, 1)',
+    cardHover: 'rgba(255, 255, 255, 0.98)',
+    glass: 'rgba(255, 255, 255, 0.85)',
+    glassThick: 'rgba(255, 255, 255, 0.92)',
+    glassUltra: 'rgba(255, 255, 255, 0.72)',
+  },
+
+  // Premium shadows - Depth system
+  shadow: {
+    small: {
+      shadowColor: 'rgba(0, 0, 0, 0.08)',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+    },
+    medium: {
+      shadowColor: 'rgba(0, 0, 0, 0.12)',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 16,
+    },
+    large: {
+      shadowColor: 'rgba(0, 0, 0, 0.16)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 32,
+    },
+    colored: (color: string) => ({
+      shadowColor: color,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+    }),
   },
 
   // Text hierarchy
@@ -176,29 +201,37 @@ const THEME = {
     starBg: colors.orange[50],
   },
 
-  // Gradients using TANDER brand colors
+  // Premium Gradients - Apple-inspired
   gradient: {
-    // Header - Teal gradient (calming, trustworthy)
-    header: [colors.teal[500], colors.teal[600], colors.teal[700]] as [string, string, string],
-    headerSubtle: [colors.teal[50], '#FFFFFF', colors.orange[50]] as [string, string, string],
+    // Header - Premium teal gradient with more depth
+    header: ['#0D9488', '#0F766E', '#115E59'] as [string, string, string],
+    headerPremium: ['#14B8A6', '#0D9488', '#0F766E'] as [string, string, string],
+    headerSubtle: ['#F0FDFA', '#FFFFFF', '#FFF7ED'] as [string, string, string],
 
-    // Orange button gradient (Primary CTA)
-    primaryButton: colors.gradient.primaryButton,
+    // Orange button gradient (Primary CTA) - More vibrant
+    primaryButton: ['#F97316', '#EA580C'] as [string, string],
+    primaryButtonPremium: ['#FB923C', '#F97316', '#EA580C'] as [string, string, string],
 
-    // Teal button gradient (Secondary actions)
-    secondaryButton: [colors.teal[500], colors.teal[600]] as [string, string],
+    // Teal button gradient (Secondary actions) - Richer
+    secondaryButton: ['#14B8A6', '#0D9488'] as [string, string],
+    secondaryButtonPremium: ['#2DD4BF', '#14B8A6', '#0D9488'] as [string, string, string],
 
     // CTA gradient - Orange to Teal
     ctaGradient: colors.gradient.ctaButton,
 
-    // Card backgrounds
-    card: ['#FFFFFF', '#FEFEFE'] as [string, string],
+    // Premium card backgrounds with subtle gradient
+    card: ['#FFFFFF', '#FAFBFC'] as [string, string],
+    cardPremium: ['#FFFFFF', '#FDFDFE', '#FAFBFC'] as [string, string, string],
 
-    // Featured card
-    featured: [colors.orange[50], colors.orange[100]] as [string, string],
+    // Featured card - Premium warmth
+    featured: ['#FFF7ED', '#FFEDD5'] as [string, string],
+    featuredPremium: ['#FFFBF7', '#FFF7ED', '#FFEDD5'] as [string, string, string],
 
-    // Calming background
-    calming: [colors.teal[50], '#FFFFFF', colors.orange[50]] as [string, string, string],
+    // Premium calming background
+    calming: ['#F0FDFA', '#FAFBFC', '#FFF7ED'] as [string, string, string],
+
+    // Premium glass overlay
+    glassOverlay: ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)'] as [string, string],
   },
 };
 
@@ -883,6 +916,7 @@ const AvailabilityBadge: React.FC<AvailabilityBadgeProps> = ({
       pulse.start();
       return () => pulse.stop();
     }
+    return undefined;
   }, [availableToday, pulseAnim]);
 
   return (
@@ -959,56 +993,119 @@ const FilterChip: React.FC<FilterChipProps> = ({
   count,
   responsive,
 }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 100,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 3,
+      tension: 100,
+    }).start();
+  };
+
   return (
-    <AnimatedPressable
+    <Pressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       accessibilityLabel={`${label} filter${isActive ? ', selected' : ''}`}
       accessibilityHint="Tap to toggle this filter"
-      style={[
-        styles.filterChip,
-        { minHeight: responsive.touchTargets.chip },
-        isActive ? styles.filterChipActive : styles.filterChipInactive,
-      ]}
     >
-      {icon && (
-        <Feather
-          name={icon as any}
-          size={16}
-          color={isActive ? THEME.text.inverse : THEME.text.secondary}
-        />
-      )}
-      <Text
-        style={[
-          styles.filterChipText,
-          {
-            color: isActive ? THEME.text.inverse : THEME.text.secondary,
-            fontSize: responsive.typography.body,
-          },
-        ]}
-      >
-        {label}
-      </Text>
-      {count !== undefined && (
-        <View
-          style={[
-            styles.filterChipCount,
-            { backgroundColor: isActive ? 'rgba(255,255,255,0.3)' : colors.gray[200] },
-          ]}
-        >
-          <Text
-            style={[
-              styles.filterChipCountText,
-              {
-                color: isActive ? THEME.text.inverse : THEME.text.muted,
-                fontSize: responsive.typography.badge,
-              },
-            ]}
+      <Animated.View style={[
+        styles.filterChip,
+        { minHeight: responsive.touchTargets.chip, transform: [{ scale: scaleAnim }] },
+        isActive ? styles.filterChipActive : styles.filterChipInactive,
+      ]}>
+        {isActive ? (
+          <LinearGradient
+            colors={THEME.gradient.primaryButton as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.filterChipGradient}
           >
-            {count}
-          </Text>
-        </View>
-      )}
-    </AnimatedPressable>
+            {icon && (
+              <Feather
+                name={icon as any}
+                size={15}
+                color={THEME.text.inverse}
+              />
+            )}
+            <Text
+              style={[
+                styles.filterChipText,
+                {
+                  color: THEME.text.inverse,
+                  fontSize: responsive.typography.body,
+                },
+              ]}
+            >
+              {label}
+            </Text>
+            {count !== undefined && (
+              <View style={styles.filterChipCountActive}>
+                <Text
+                  style={[
+                    styles.filterChipCountText,
+                    {
+                      color: THEME.text.inverse,
+                      fontSize: responsive.typography.badge - 1,
+                    },
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
+            )}
+          </LinearGradient>
+        ) : (
+          <View style={styles.filterChipInner}>
+            {icon && (
+              <Feather
+                name={icon as any}
+                size={15}
+                color={colors.gray[500]}
+              />
+            )}
+            <Text
+              style={[
+                styles.filterChipText,
+                {
+                  color: colors.gray[600],
+                  fontSize: responsive.typography.body,
+                },
+              ]}
+            >
+              {label}
+            </Text>
+            {count !== undefined && (
+              <View style={styles.filterChipCountInactive}>
+                <Text
+                  style={[
+                    styles.filterChipCountText,
+                    {
+                      color: colors.gray[500],
+                      fontSize: responsive.typography.badge - 1,
+                    },
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </Animated.View>
+    </Pressable>
   );
 };
 
@@ -1026,45 +1123,74 @@ interface SearchBarProps {
 const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChangeText,
-  placeholder = 'Search by name, specialty, or hospital...',
+  placeholder = 'Search doctors, specialties...',
   responsive,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    Animated.spring(scaleAnim, {
+      toValue: 1.01,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 100,
+    }).start();
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 100,
+    }).start();
+  };
 
   return (
     <View style={styles.searchContainer}>
-      <View style={[
+      <Animated.View style={[
         styles.searchInputContainer,
         isFocused && styles.searchInputContainerFocused,
-        { height: responsive.touchTargets.button },
+        {
+          height: responsive.touchTargets.button + 4,
+          transform: [{ scale: scaleAnim }],
+        },
       ]}>
-        <Feather
-          name="search"
-          size={20}
-          color={isFocused ? colors.teal[500] : THEME.text.muted}
-          style={styles.searchIcon}
-        />
+        <View style={styles.searchIconContainer}>
+          <Feather
+            name="search"
+            size={18}
+            color={isFocused ? colors.teal[600] : THEME.text.muted}
+          />
+        </View>
         <TextInput
           style={[styles.searchInput, { fontSize: responsive.typography.body }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={THEME.text.light}
+          placeholderTextColor={colors.gray[400]}
           accessibilityLabel="Search psychiatrists"
           accessibilityHint="Type to search by name, specialty, or hospital"
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          returnKeyType="search"
         />
         {value.length > 0 && (
           <Pressable
             onPress={() => onChangeText('')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Clear search"
+            style={styles.searchClearButton}
           >
-            <Feather name="x-circle" size={18} color={THEME.text.light} />
+            <View style={styles.searchClearButtonInner}>
+              <Feather name="x" size={14} color={colors.white} />
+            </View>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 };
@@ -1659,20 +1785,21 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <View style={styles.headerContainer}>
+      {/* Premium gradient with depth */}
       <LinearGradient
-        colors={THEME.gradient.header}
+        colors={THEME.gradient.headerPremium as [string, string, string]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 0.5, y: 1 }}
         style={[
           styles.headerGradient,
           {
-            paddingTop: insets.top + (isPhoneLandscape ? 8 : 16),
-            paddingLeft: Math.max(insets.left + 16, 20),
-            paddingRight: Math.max(insets.right + 16, 20),
+            paddingTop: insets.top + (isPhoneLandscape ? 12 : 20),
+            paddingLeft: Math.max(insets.left + 20, 24),
+            paddingRight: Math.max(insets.right + 20, 24),
           },
         ]}
       >
-        {/* Top Row */}
+        {/* Premium top bar with glassmorphism */}
         <View style={styles.headerTopRow}>
           <AnimatedPressable
             onPress={onBack}
@@ -1684,27 +1811,20 @@ const Header: React.FC<HeaderProps> = ({
               width: responsive.touchTargets.icon,
               height: responsive.touchTargets.icon
             }]}>
-              <Feather name="arrow-left" size={22} color={THEME.text.inverse} />
+              <Feather name="chevron-left" size={24} color={THEME.text.inverse} />
             </View>
           </AnimatedPressable>
 
           <View style={styles.headerTitleContainer}>
-            <View style={styles.headerTitleRow}>
-              <MaterialCommunityIcons
-                name="stethoscope"
-                size={isPhoneLandscape ? 24 : 30}
-                color={THEME.text.inverse}
-              />
-              <Text
-                style={[
-                  styles.headerTitle,
-                  { fontSize: responsive.typography.title },
-                  isPhoneLandscape && styles.headerTitleLandscape,
-                ]}
-              >
-                Our Psychiatrists
-              </Text>
-            </View>
+            <Text
+              style={[
+                styles.headerTitle,
+                { fontSize: responsive.typography.title + 2 },
+                isPhoneLandscape && styles.headerTitleLandscape,
+              ]}
+            >
+              Find Your Psychiatrist
+            </Text>
             <Text
               style={[
                 styles.headerSubtitle,
@@ -1712,50 +1832,55 @@ const Header: React.FC<HeaderProps> = ({
                 isPhoneLandscape && styles.headerSubtitleLandscape,
               ]}
             >
-              Professional mental health support
+              Licensed mental health professionals
             </Text>
           </View>
 
           <View style={[styles.headerPlaceholder, { width: responsive.touchTargets.icon }]} />
         </View>
 
-        {/* Hero Stats */}
+        {/* Premium Hero Stats Card with glass effect */}
         {!isPhoneLandscape && (
-          <View style={styles.heroStats}>
-            <View style={styles.heroStatItem}>
-              <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title }]}>
-                {psychiatristCount}
-              </Text>
-              <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.small }]}>
-                Specialists
-              </Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title }]}>
-                4.8
-              </Text>
-              <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.small }]}>
-                Avg. Rating
-              </Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title }]}>
-                24/7
-              </Text>
-              <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.small }]}>
-                Support
-              </Text>
+          <View style={styles.heroStatsContainer}>
+            <View style={styles.heroStats}>
+              <View style={styles.heroStatItem}>
+                <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title + 4 }]}>
+                  {psychiatristCount}
+                </Text>
+                <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.badge }]}>
+                  Verified Doctors
+                </Text>
+              </View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStatItem}>
+                <View style={styles.heroStatValueRow}>
+                  <MaterialCommunityIcons name="star" size={18} color="#FBBF24" />
+                  <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title + 4 }]}>
+                    4.8
+                  </Text>
+                </View>
+                <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.badge }]}>
+                  Average Rating
+                </Text>
+              </View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStatItem}>
+                <Text style={[styles.heroStatValue, { fontSize: responsive.typography.title + 4 }]}>
+                  24/7
+                </Text>
+                <Text style={[styles.heroStatLabel, { fontSize: responsive.typography.badge }]}>
+                  Crisis Support
+                </Text>
+              </View>
             </View>
           </View>
         )}
       </LinearGradient>
 
-      {/* Curved Bottom */}
+      {/* Premium curved transition */}
       <View style={styles.headerCurve}>
         <LinearGradient
-          colors={[colors.teal[700], THEME.background.primary]}
+          colors={['#0F766E', THEME.background.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.headerCurveGradient}
@@ -1920,7 +2045,7 @@ const EmergencyCard: React.FC<EmergencyCardProps> = ({ onPress, responsive }) =>
 export const PsychiatristListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { width, height, isLandscape, isTablet, getScreenMargin, hp, wp } = useResponsive();
+  const { width, isLandscape, isTablet } = useResponsive();
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -2634,27 +2759,37 @@ const styles = StyleSheet.create({
   },
 
   // ========================
-  // HEADER STYLES - Teal Theme
+  // HEADER STYLES - Premium iOS Theme
   // ========================
   headerContainer: {
     zIndex: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.teal[700],
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+      },
+    }),
   },
   headerGradient: {
-    paddingBottom: 32,
+    paddingBottom: 28,
   },
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   backButton: {
-    marginRight: 12,
+    marginRight: 16,
   },
   backButtonInner: {
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   headerTitleContainer: {
     flex: 1,
@@ -2667,237 +2802,301 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontWeight: '700',
     color: THEME.text.inverse,
-    letterSpacing: 0.3,
+    letterSpacing: -0.5, // iOS-style tight letter spacing
   },
   headerTitleLandscape: {
     fontSize: 22,
   },
   headerSubtitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 4,
-    marginLeft: 40,
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 6,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   headerSubtitleLandscape: {
-    marginLeft: 34,
+    marginLeft: 0,
   },
   headerPlaceholder: {
     width: 44,
+  },
+  heroStatsContainer: {
+    marginTop: 8,
   },
   heroStats: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    marginTop: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   heroStatItem: {
     alignItems: 'center',
     flex: 1,
   },
+  heroStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   heroStatValue: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: THEME.text.inverse,
+    letterSpacing: -0.5,
   },
   heroStatLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 4,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   heroStatDivider: {
     width: 1,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 16,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 12,
   },
   headerCurve: {
-    height: 24,
-    marginTop: -24,
+    height: 28,
+    marginTop: -28,
     overflow: 'hidden',
   },
   headerCurveGradient: {
     flex: 1,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
 
   // ========================
-  // STICKY HEADER
+  // STICKY HEADER - Premium Glass Effect
   // ========================
   stickyHeader: {
-    backgroundColor: 'rgba(255, 251, 247, 0.95)',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
+    backgroundColor: 'rgba(250, 251, 252, 0.92)',
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
     ...Platform.select({
       ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
       },
     }),
   },
 
   // ========================
-  // SEARCH STYLES - Teal Focus
+  // SEARCH STYLES - Premium iOS Style
   // ========================
   searchContainer: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    borderWidth: 2,
-    borderColor: 'rgba(20, 184, 166, 0.2)',
+    backgroundColor: colors.gray[100],
+    borderRadius: 14,
+    paddingHorizontal: 4,
+    borderWidth: 0,
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[900],
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
+        shadowColor: colors.gray[900],
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
       },
     }),
   },
   searchInputContainerFocused: {
+    backgroundColor: colors.white,
+    borderWidth: 2,
     borderColor: colors.teal[400],
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[600],
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
       },
     }),
   },
-  searchIcon: {
-    marginRight: 12,
+  searchIconContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchInput: {
     flex: 1,
     color: THEME.text.primary,
     height: '100%',
+    fontWeight: '400',
+  },
+  searchClearButton: {
+    padding: 8,
+  },
+  searchClearButtonInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gray[400],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // ========================
-  // FILTER STYLES - Orange Active
+  // FILTER STYLES - Premium Pill Design
   // ========================
   filterChipsContainer: {
     flexDirection: 'row',
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+    gap: 10,
   },
   filterChipsTabletContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     paddingVertical: 4,
+    gap: 10,
   },
   filterChip: {
+    borderRadius: 50,
+    overflow: 'hidden',
+    minHeight: 44,
+  },
+  filterChipGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     gap: 8,
-    minHeight: 44,
+  },
+  filterChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    gap: 8,
   },
   filterChipActive: {
-    backgroundColor: colors.orange[500],
     ...Platform.select({
       ios: {
-        shadowColor: colors.orange[600],
+        shadowColor: colors.orange[500],
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
       },
     }),
   },
   filterChipInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(20, 184, 166, 0.25)',
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.gray[400],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-      },
-    }),
+    backgroundColor: colors.gray[100],
+    borderWidth: 0,
   },
   filterChipText: {
     fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  filterChipCountActive: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    marginLeft: 2,
+  },
+  filterChipCountInactive: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: colors.gray[200],
+    marginLeft: 2,
   },
   filterChipCount: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 4,
+    borderRadius: 10,
+    marginLeft: 2,
   },
   filterChipCountText: {
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   // ========================
-  // SORT STYLES
+  // SORT STYLES - Premium Segmented Control
   // ========================
   sortRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 14,
     paddingVertical: 8,
   },
   resultCount: {
     fontWeight: '600',
     color: THEME.text.primary,
+    letterSpacing: -0.2,
   },
   sortOptions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    backgroundColor: colors.gray[100],
+    borderRadius: 10,
+    padding: 3,
   },
   sortLabel: {
     color: THEME.text.muted,
+    marginRight: 8,
+    fontWeight: '500',
   },
   sortOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   sortOptionActive: {
-    backgroundColor: colors.teal[100],
+    backgroundColor: colors.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(0, 0, 0, 0.08)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+      },
+    }),
   },
   sortOptionText: {
     color: THEME.text.muted,
     fontWeight: '500',
+    fontSize: 13,
   },
   sortOptionTextActive: {
-    color: colors.teal[700],
+    color: THEME.text.primary,
     fontWeight: '600',
   },
 
   // ========================
-  // INFO BANNER STYLES
+  // INFO BANNER STYLES - Premium Card
   // ========================
   infoBanner: {
-    marginTop: 16,
-    marginBottom: 20,
-    borderRadius: 16,
+    marginTop: 18,
+    marginBottom: 22,
+    borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.teal[200],
+    borderWidth: 0,
+    backgroundColor: colors.white,
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[300],
+        shadowColor: 'rgba(0, 0, 0, 0.06)',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
+        shadowOpacity: 1,
+        shadowRadius: 12,
       },
     }),
   },
@@ -2906,12 +3105,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 18,
     gap: 14,
+    backgroundColor: colors.white,
   },
   infoBannerIcon: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 14,
+    backgroundColor: colors.teal[50],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2920,8 +3120,9 @@ const styles = StyleSheet.create({
   },
   infoBannerTitle: {
     fontWeight: '700',
-    color: colors.teal[700],
+    color: THEME.text.primary,
     marginBottom: 4,
+    letterSpacing: -0.3,
   },
   infoBannerText: {
     color: THEME.text.secondary,
@@ -3019,36 +3220,42 @@ const styles = StyleSheet.create({
   },
 
   // ========================
-  // CARD STYLES
+  // CARD STYLES - Premium Floating Design
   // ========================
   cardWrapper: {
-    marginBottom: 8,
+    marginBottom: 16,
   },
   featuredBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    gap: 8,
+    paddingVertical: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.orange[50],
   },
   featuredBannerText: {
     fontWeight: '700',
     color: colors.orange[600],
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    fontSize: 11,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: colors.gray[200],
+    borderWidth: 0,
+    borderColor: 'transparent',
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[900],
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.08,
+        shadowColor: 'rgba(0, 0, 0, 0.08)',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 1,
         shadowRadius: 24,
+      },
+      android: {
+        elevation: 8,
       },
     }),
   },
@@ -3056,61 +3263,74 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderTopWidth: 0,
+    borderWidth: 1.5,
+    borderColor: colors.orange[200],
+    borderTopColor: 'transparent',
   },
   cardHeader: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   photoContainer: {
     position: 'relative',
   },
   photoRing: {
     padding: 3,
-    borderRadius: 42,
+    borderRadius: 44,
     borderWidth: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(0, 0, 0, 0.08)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+      },
+    }),
   },
   photoRingAvailable: {
-    borderColor: colors.teal[500],
+    borderColor: colors.teal[400],
+    backgroundColor: colors.teal[50],
   },
   photoRingBusy: {
-    borderColor: colors.gray[300],
+    borderColor: colors.gray[200],
+    backgroundColor: colors.gray[50],
   },
   profilePhoto: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: colors.gray[100],
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 4,
     right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.gray[200],
+    borderWidth: 2,
+    borderColor: colors.white,
     ...Platform.select({
       ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.15,
-        shadowRadius: 2,
+        shadowColor: 'rgba(0, 0, 0, 0.12)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
       },
     }),
   },
   onlineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: colors.teal[500],
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 16,
     justifyContent: 'center',
   },
   nameRow: {
@@ -3121,152 +3341,171 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.text.primary,
     flex: 1,
+    letterSpacing: -0.3,
   },
   doctorTitle: {
     color: THEME.text.muted,
-    marginTop: 2,
-    marginBottom: 6,
+    marginTop: 3,
+    marginBottom: 8,
+    fontWeight: '500',
   },
   badgesRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 10,
     flexWrap: 'wrap',
   },
   favoriteButton: {
     justifyContent: 'center',
     alignItems: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gray[50],
   },
 
   // ========================
-  // BADGE STYLES
+  // BADGE STYLES - Premium Pills
   // ========================
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    borderRadius: 12,
-    borderWidth: 1,
+    gap: 5,
+    borderRadius: 8,
+    borderWidth: 0,
   },
   badgeText: {
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
 
   // ========================
-  // SPECIALTY STYLES - Teal
+  // SPECIALTY STYLES - Premium Pill
   // ========================
   specialtyContainer: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   specialtyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignSelf: 'flex-start',
+    backgroundColor: colors.teal[50],
   },
   specialtyBadgeText: {
     fontWeight: '600',
     color: colors.teal[700],
+    letterSpacing: -0.2,
   },
 
   // ========================
-  // CARD DETAILS
+  // CARD DETAILS - Premium Design
   // ========================
   cardDetails: {
-    marginBottom: 14,
-    gap: 8,
+    marginBottom: 16,
+    gap: 10,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   detailText: {
     color: THEME.text.secondary,
+    fontWeight: '400',
   },
   detailDivider: {
-    width: 4,
-    height: 4,
+    width: 3,
+    height: 3,
     borderRadius: 2,
     backgroundColor: colors.gray[300],
-    marginHorizontal: 4,
+    marginHorizontal: 6,
   },
 
   // ========================
-  // STATS ROW - Teal accent
+  // STATS ROW - Premium Design
   // ========================
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.teal[50],
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    marginBottom: 14,
+    backgroundColor: colors.gray[50],
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
   statValue: {
-    fontWeight: '700',
-    color: colors.teal[700],
+    fontWeight: '800',
+    color: THEME.text.primary,
+    letterSpacing: -0.5,
   },
   statLabel: {
     color: THEME.text.muted,
-    marginTop: 2,
+    marginTop: 3,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statDivider: {
     width: 1,
-    height: 28,
-    backgroundColor: colors.teal[200],
+    height: 32,
+    backgroundColor: colors.gray[200],
   },
 
   // ========================
-  // LANGUAGES ROW
+  // LANGUAGES ROW - Premium Design
   // ========================
   languagesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-    paddingTop: 12,
+    gap: 10,
+    marginBottom: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
     borderTopWidth: 1,
     borderTopColor: colors.gray[100],
   },
   languagesText: {
-    color: colors.teal[700],
+    color: THEME.text.secondary,
     fontWeight: '500',
+    flex: 1,
   },
 
   // ========================
-  // AVAILABILITY & FEE
+  // AVAILABILITY & FEE - Premium Design
   // ========================
   availabilityFeeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    paddingTop: 4,
   },
   availabilityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   availableToday: {
     backgroundColor: colors.teal[50],
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.teal[200],
   },
   availableLater: {
     backgroundColor: colors.orange[50],
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.orange[200],
   },
   availabilityDotContainer: {
@@ -3297,81 +3536,100 @@ const styles = StyleSheet.create({
   },
   feeContainer: {
     alignItems: 'flex-end',
+    backgroundColor: colors.orange[50],
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   feeLabel: {
-    color: THEME.text.muted,
+    color: colors.orange[600],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: '600',
   },
   feeAmount: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.orange[600],
     marginTop: 2,
+    letterSpacing: -0.5,
   },
 
   // ========================
-  // TESTIMONIAL - Teal accent
+  // TESTIMONIAL - Premium Quote Card
   // ========================
   testimonialContainer: {
-    backgroundColor: colors.teal[50],
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderLeftWidth: 3,
+    backgroundColor: colors.gray[50],
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
     borderLeftColor: colors.teal[400],
+    borderWidth: 1,
+    borderColor: colors.gray[100],
   },
   testimonialText: {
     color: THEME.text.secondary,
     fontStyle: 'italic',
-    lineHeight: 20,
-    marginTop: 6,
-    marginLeft: 22,
+    lineHeight: 22,
+    marginTop: 8,
+    marginLeft: 24,
   },
   testimonialAuthor: {
-    color: colors.teal[600],
+    color: colors.teal[700],
     fontWeight: '600',
-    marginTop: 8,
-    marginLeft: 22,
+    marginTop: 10,
+    marginLeft: 24,
+    letterSpacing: -0.2,
   },
 
   // ========================
-  // CARD ACTIONS - Orange & Teal
+  // CARD ACTIONS - Premium Button Design
   // ========================
   cardActions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
+    gap: 10,
+    marginTop: 8,
   },
   viewProfileButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.teal[300],
-    backgroundColor: colors.teal[50],
-    minHeight: 48,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.gray[200],
+    backgroundColor: colors.white,
+    minHeight: 52,
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(0, 0, 0, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+      },
+    }),
   },
   viewProfileText: {
     fontWeight: '600',
-    color: colors.teal[700],
+    color: colors.gray[700],
     fontSize: 14,
+    letterSpacing: -0.2,
   },
   bookButtonContainer: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
-    minHeight: 48,
+    minHeight: 52,
     ...Platform.select({
       ios: {
-        shadowColor: colors.teal[600],
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
+        shadowColor: colors.teal[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
     }),
   },
@@ -3380,27 +3638,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    minHeight: 48,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
   },
   bookButtonText: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: THEME.text.inverse,
     fontSize: 14,
+    letterSpacing: -0.2,
   },
   callButtonContainer: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
-    minHeight: 48,
+    minHeight: 52,
     ...Platform.select({
       ios: {
-        shadowColor: colors.orange[600],
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
+        shadowColor: colors.orange[500],
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
     }),
   },
@@ -3409,83 +3668,107 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    minHeight: 48,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
   },
   callButtonText: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: THEME.text.inverse,
     fontSize: 14,
+    letterSpacing: -0.2,
   },
 
   // ========================
-  // RATING STYLES
+  // RATING STYLES - Premium Design
   // ========================
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    backgroundColor: colors.orange[50],
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   starsRow: {
     flexDirection: 'row',
-    gap: 1,
+    gap: 2,
   },
   ratingText: {
-    fontWeight: '600',
-    color: THEME.text.primary,
-    marginLeft: 4,
+    fontWeight: '700',
+    color: colors.orange[700],
+    marginLeft: 2,
+    letterSpacing: -0.3,
   },
   reviewCountText: {
-    color: THEME.text.muted,
+    color: colors.orange[500],
+    fontWeight: '500',
   },
 
   // ========================
-  // FOOTER NOTE
+  // FOOTER NOTE - Premium Info Card
   // ========================
   footerNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginTop: 24,
-    marginBottom: 20,
+    gap: 12,
+    marginTop: 28,
+    marginBottom: 24,
     paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: colors.gray[50],
-    borderRadius: 14,
+    paddingVertical: 16,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(0, 0, 0, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+      },
+    }),
   },
   footerNoteText: {
     flex: 1,
-    color: THEME.text.muted,
-    lineHeight: 20,
+    color: THEME.text.secondary,
+    lineHeight: 22,
   },
 
   // ========================
-  // EMERGENCY HOTLINE
+  // EMERGENCY HOTLINE - Premium Card
   // ========================
   emergencyContainer: {
-    marginBottom: 16,
-    borderRadius: 18,
+    marginBottom: 20,
+    borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
     ...Platform.select({
       ios: {
         shadowColor: '#DC2626',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
       },
     }),
   },
   emergencyGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
+    padding: 20,
     gap: 16,
+    backgroundColor: 'transparent',
   },
   emergencyIcon: {
-    borderRadius: 28,
-    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3496,26 +3779,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#B91C1C',
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   emergencyNumber: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#991B1B',
+    letterSpacing: -0.5,
   },
   emergencySubtext: {
     color: '#DC2626',
-    marginTop: 4,
+    marginTop: 6,
+    fontWeight: '500',
   },
   emergencyArrow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   // ========================
-  // CRISIS BUTTON (FLOATING)
+  // CRISIS BUTTON (FLOATING) - Premium Pill
   // ========================
   crisisButton: {
     position: 'absolute',
@@ -3524,55 +3810,64 @@ const styles = StyleSheet.create({
   crisisButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 50,
+    borderWidth: 0,
+    backgroundColor: '#FEF2F2',
     ...Platform.select({
       ios: {
         shadowColor: '#DC2626',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
       },
     }),
   },
   crisisButtonText: {
     fontWeight: '700',
     color: '#DC2626',
+    letterSpacing: -0.2,
   },
 
   // ========================
-  // MODAL STYLES
+  // MODAL STYLES - Premium iOS Sheet
   // ========================
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
   modalContent: {
     width: '100%',
-    backgroundColor: THEME.background.primary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(0, 0, 0, 0.15)',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 1,
+        shadowRadius: 24,
+      },
+    }),
   },
   modalHandle: {
-    width: 40,
-    height: 4,
+    width: 36,
+    height: 5,
     backgroundColor: colors.gray[300],
-    borderRadius: 2,
+    borderRadius: 3,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   modalCloseButton: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    borderRadius: 22,
+    top: 18,
+    right: 18,
+    borderRadius: 24,
     backgroundColor: colors.gray[100],
     justifyContent: 'center',
     alignItems: 'center',

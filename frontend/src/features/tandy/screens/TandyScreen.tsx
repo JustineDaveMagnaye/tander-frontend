@@ -1506,9 +1506,9 @@ export const TandyScreen: React.FC = () => {
     loadConversation();
   }, []);
 
-  const loadConversation = async () => {
+  const loadConversation = async (retryCount = 0) => {
     setIsLoading(true);
-    setError(null);
+    if (retryCount === 0) setError(null);
 
     try {
       const conversation: TandyConversationDTO = await getConversation();
@@ -1524,10 +1524,17 @@ export const TandyScreen: React.FC = () => {
           status: 'delivered',
         }]);
       }
-    } catch (err) {
-      console.warn('Failed to load conversation:', err);
-      setError('Unable to connect. Using offline mode.');
+      setError(null);
+    } catch (err: any) {
+      // Retry up to 2 times with delay
+      if (retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return loadConversation(retryCount + 1);
+      }
+
+      // After retries failed, just show the greeting and work offline
       setMessages([FALLBACK_GREETING]);
+      // Don't show error - just work in offline mode silently
     } finally {
       setIsLoading(false);
     }

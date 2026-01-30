@@ -30,6 +30,7 @@ import * as Haptics from 'expo-haptics';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@navigation/types';
 import { useResponsive } from '@shared/hooks/useResponsive';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 const TanderLogo = require('../../../../assets/icons/tander-logo.png');
 
