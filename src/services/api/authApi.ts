@@ -176,8 +176,8 @@ export interface AuthApiService {
   loginWithEmailCheck: (data: LoginRequest) => Promise<LoginResponse>;
   // ID Verification (authenticated)
   getIdVerificationStatus: () => Promise<IdVerificationStatusResponse>;
-  submitIdVerification: (idFront: File | Blob, selfie: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
-  resubmitIdVerification: (idFront: File | Blob, selfie: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
+  submitIdVerification: (idFront: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
+  resubmitIdVerification: (idFront: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
 }
 
 // ============================================================================
@@ -789,20 +789,18 @@ const getIdVerificationStatus = async (): Promise<IdVerificationStatusResponse> 
 /**
  * Submit ID verification documents
  * @param idFront - Front photo of ID
- * @param selfie - Selfie photo
  * @param idBack - Optional back photo of ID
  * @returns Promise resolving to submission response
+ * Note: Selfie/liveness check is done on frontend only - not sent to backend
  */
 const submitIdVerification = async (
   idFront: File | Blob,
-  selfie: File | Blob,
   idBack?: File | Blob
 ): Promise<IdVerificationSubmitResponse> => {
   try {
     const token = await getToken();
     const formData = new FormData();
     formData.append('idFront', idFront as any);
-    formData.append('selfie', selfie as any);
     if (idBack) {
       formData.append('idBack', idBack as any);
     }
@@ -836,20 +834,18 @@ const submitIdVerification = async (
 /**
  * Resubmit ID verification documents after rejection
  * @param idFront - Front photo of ID
- * @param selfie - Selfie photo
  * @param idBack - Optional back photo of ID
  * @returns Promise resolving to submission response
+ * Note: Selfie/liveness check is done on frontend only - not sent to backend
  */
 const resubmitIdVerification = async (
   idFront: File | Blob,
-  selfie: File | Blob,
   idBack?: File | Blob
 ): Promise<IdVerificationSubmitResponse> => {
   try {
     const token = await getToken();
     const formData = new FormData();
     formData.append('idFront', idFront as any);
-    formData.append('selfie', selfie as any);
     if (idBack) {
       formData.append('idBack', idBack as any);
     }
