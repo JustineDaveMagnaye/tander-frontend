@@ -1,16 +1,13 @@
 /**
- * TANDER ID Scanner Screen - Super Premium iOS Design
+ * TANDER ID Scanner Screen - Premium iOS Light Design
  *
- * Design Principles:
- * - Clean, minimal iOS aesthetic matching OTPVerificationScreen
- * - Large, bold SF-style typography
- * - Generous white space
- * - Subtle depth with refined shadows
- * - Smooth micro-interactions
- * - WCAG AA accessible
- * - Senior-friendly (56px+ touch targets, 18px+ fonts)
- *
- * This screen gates registration - users must scan their ID before SignUp.
+ * Design matching OTPVerificationScreen:
+ * - Warm gradient background (coral to teal)
+ * - White cards with shadows
+ * - Orange primary actions, Teal secondary
+ * - Senior-friendly: 56px+ touch targets, 18px+ fonts
+ * - Inline feedback (no alerts)
+ * - Clean iOS aesthetic
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -18,30 +15,53 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   Pressable,
   ActivityIndicator,
   AccessibilityInfo,
+  Image,
+  Dimensions,
   Animated,
   Easing,
-  Image,
-  Alert,
-  Platform,
 } from 'react-native';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+} from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
-import { useResponsive } from '@shared/hooks/useResponsive';
+import {
+  Camera,
+  useCameraDevice,
+  useCameraPermission,
+  PhotoFile,
+  useFrameProcessor,
+} from 'react-native-vision-camera';
+import {
+  useFaceDetector,
+  FaceDetectionOptions,
+} from 'react-native-vision-camera-face-detector';
+import { Worklets } from 'react-native-worklets-core';
+
+// OCR and age verification
+import { extractDOBFromID, OCRResult, toFrontendOcrData } from '@/services/ocr/idOcrService';
+import { AgeRejectionModal, AgeRejectionData } from '../components/AgeRejectionModal';
+import { FraudRejectionModal, FraudRejectionData } from '../components/FraudRejectionModal';
+import { verifyIdPreRegister, PreRegisterIdVerificationResponse } from '@/services/api/authApi';
+
 import { AuthStackParamList } from '@navigation/types';
-import { FONT_SCALING } from '@shared/styles/fontScaling';
+import { RouteProp } from '@react-navigation/native';
 import { useAuthStore } from '@store/authStore';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 // ============================================================================
-// PREMIUM iOS DESIGN SYSTEM (matching OTPVerificationScreen)
+// iOS DESIGN SYSTEM (matching OTPVerificationScreen)
 // ============================================================================
 const iOS = {
   colors: {
@@ -58,12 +78,15 @@ const iOS = {
     // System colors
     teal: '#30D5C8',
     tealDark: '#20B2AA',
-    tealLight: 'rgba(48, 213, 200, 0.1)',
+    tealLight: 'rgba(48, 213, 200, 0.12)',
     orange: '#F97316',
     orangeDark: '#EA580C',
-    orangeLight: 'rgba(249, 115, 22, 0.1)',
+    orangeLight: 'rgba(249, 115, 22, 0.12)',
     red: '#FF3B30',
+    redLight: 'rgba(255, 59, 48, 0.1)',
     green: '#34C759',
+    greenLight: 'rgba(52, 199, 89, 0.1)',
+    blue: '#007AFF',
 
     // Separators & borders
     separator: 'rgba(60, 60, 67, 0.12)',
@@ -106,798 +129,934 @@ const iOS = {
     footnote: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.1 },
     caption1: { fontSize: 12, fontWeight: '400' as const, letterSpacing: 0 },
   },
+
+  shadow: {
+    card: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    small: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    button: {
+      shadowColor: '#F97316',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+  },
 } as const;
+
+// Face detection types
+type FaceDirection = 'left-skewed' | 'right-skewed' | 'frontal' | 'unknown';
+type FaceDetectionStatus = 'success' | 'standby' | 'no_face' | 'error';
+
+// Face detection configuration
+const faceDetectionOptions: FaceDetectionOptions = {
+  performanceMode: 'fast',
+  landmarkMode: 'none',
+  contourMode: 'none',
+  classificationMode: 'none',
+  minFaceSize: 0.15,
+  trackingEnabled: true,
+};
+
+// Helper to convert yaw angle to face direction
+const getDirectionFromYaw = (yaw: number): FaceDirection => {
+  'worklet';
+  if (yaw < -25) return 'left-skewed';
+  if (yaw > 25) return 'right-skewed';
+  return 'frontal';
+};
+
+// Frame dimensions
+const FRAME_SIZE = Math.min(SCREEN_WIDTH * 0.65, 260);
+const RING_STROKE = 4;
+const RING_RADIUS = (FRAME_SIZE - RING_STROKE * 2) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+// Timing
+const FACE_HOLD_TIME = 2000;
 
 // ============================================================================
 // TYPES
 // ============================================================================
 type IDScannerScreenNavProp = NativeStackNavigationProp<AuthStackParamList, 'IDScanner'>;
+type IDScannerScreenRouteProp = RouteProp<AuthStackParamList, 'IDScanner'>;
 
 interface Props {
   navigation: IDScannerScreenNavProp;
+  route: IDScannerScreenRouteProp;
 }
 
-type ScanStep = 'front' | 'back' | 'selfie' | 'preview';
+type ScanStep = 'selfie' | 'front' | 'preview';
+type FaceState = 'idle' | 'searching' | 'detected' | 'verifying' | 'verified';
+type LivenessStage = 'center' | 'hold';
 
 // ============================================================================
-// ID FRAME OVERLAY COMPONENT
+// FEEDBACK BADGE COMPONENT (replaces alerts)
 // ============================================================================
-interface IDFrameOverlayProps {
-  isCapturing: boolean;
+interface FeedbackBadgeProps {
+  type: 'error' | 'success' | 'info' | 'warning';
+  message: string;
 }
 
-const IDFrameOverlay: React.FC<IDFrameOverlayProps> = ({ isCapturing }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (isCapturing) return;
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.02,
-          duration: 1500,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [isCapturing, pulseAnim]);
+const FeedbackBadge: React.FC<FeedbackBadgeProps> = ({ type, message }) => {
+  const config = {
+    error: { bg: iOS.colors.redLight, color: iOS.colors.red, icon: 'alert-circle' },
+    success: { bg: iOS.colors.greenLight, color: iOS.colors.green, icon: 'check-circle' },
+    info: { bg: iOS.colors.tealLight, color: iOS.colors.teal, icon: 'info' },
+    warning: { bg: iOS.colors.orangeLight, color: iOS.colors.orange, icon: 'alert-triangle' },
+  }[type];
 
   return (
-    <Animated.View
-      style={[
-        styles.idFrameOverlay,
-        { transform: [{ scale: pulseAnim }] },
-      ]}
-      pointerEvents="none"
-    >
-      {/* Corner brackets */}
-      <View style={[styles.cornerBracket, styles.cornerTopLeft]} />
-      <View style={[styles.cornerBracket, styles.cornerTopRight]} />
-      <View style={[styles.cornerBracket, styles.cornerBottomLeft]} />
-      <View style={[styles.cornerBracket, styles.cornerBottomRight]} />
-
-      {/* Center guide text */}
-      <View style={styles.frameGuideTextContainer}>
-        <Text style={styles.frameGuideText}>
-          Position ID here
-        </Text>
-      </View>
+    <Animated.View style={[styles.feedbackBadge, { backgroundColor: config.bg }]}>
+      <Feather name={config.icon as any} size={16} color={config.color} />
+      <Text style={[styles.feedbackText, { color: config.color }]} numberOfLines={2}>
+        {message}
+      </Text>
     </Animated.View>
   );
 };
 
 // ============================================================================
-// CAPTURE BUTTON COMPONENT
+// STEP INDICATOR COMPONENT
 // ============================================================================
-interface CaptureButtonProps {
-  onPress: () => void;
-  isCapturing: boolean;
-  disabled: boolean;
-}
+const StepIndicator: React.FC<{ currentStep: ScanStep }> = ({ currentStep }) => {
+  const steps = [
+    { key: 'selfie', label: 'Selfie', icon: 'user' },
+    { key: 'front', label: 'ID Card', icon: 'credit-card' },
+  ];
 
-const CaptureButton: React.FC<CaptureButtonProps> = ({ onPress, isCapturing, disabled }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    if (disabled) return;
-    Animated.spring(scaleAnim, {
-      toValue: 0.92,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 10,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 10,
-    }).start();
-  };
+  const currentIndex = currentStep === 'selfie' ? 0 : currentStep === 'front' ? 1 : 2;
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        disabled={disabled}
-        style={[
-          styles.captureButton,
-          disabled && styles.captureButtonDisabled,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Capture ID photo"
-      >
-        {isCapturing ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
-        ) : (
-          <View style={styles.captureButtonInner} />
+    <View style={styles.stepIndicator}>
+      {steps.map((step, index) => {
+        const isComplete = index < currentIndex;
+        const isActive = index === currentIndex;
+
+        return (
+          <React.Fragment key={step.key}>
+            <View style={styles.stepItem}>
+              <View style={[
+                styles.stepCircle,
+                isComplete && styles.stepCircleComplete,
+                isActive && styles.stepCircleActive,
+              ]}>
+                {isComplete ? (
+                  <Feather name="check" size={14} color="#FFF" />
+                ) : (
+                  <Feather
+                    name={step.icon as any}
+                    size={14}
+                    color={isActive ? '#FFF' : iOS.colors.tertiaryLabel}
+                  />
+                )}
+              </View>
+              <Text style={[
+                styles.stepLabel,
+                (isActive || isComplete) && styles.stepLabelActive,
+              ]}>
+                {step.label}
+              </Text>
+            </View>
+            {index < steps.length - 1 && (
+              <View style={[
+                styles.stepLine,
+                isComplete && styles.stepLineComplete,
+              ]} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+};
+
+// ============================================================================
+// FACE FRAME COMPONENT
+// ============================================================================
+const FaceFrame: React.FC<{
+  faceState: FaceState;
+  progress: number;
+}> = ({ faceState, progress }) => {
+  const rotationAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const getStateColor = () => {
+    switch (faceState) {
+      case 'searching': return iOS.colors.teal;
+      case 'detected': return iOS.colors.orange;
+      case 'verifying': return iOS.colors.orange;
+      case 'verified': return iOS.colors.green;
+      default: return iOS.colors.tertiaryLabel;
+    }
+  };
+
+  const stateColor = getStateColor();
+  const progressOffset = RING_CIRCUMFERENCE * (1 - progress / 100);
+
+  useEffect(() => {
+    if (faceState === 'searching') {
+      const rotation = Animated.loop(
+        Animated.timing(rotationAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      rotation.start();
+      return () => rotation.stop();
+    } else {
+      rotationAnim.setValue(0);
+    }
+  }, [faceState]);
+
+  useEffect(() => {
+    if (faceState === 'detected') {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.05, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [faceState]);
+
+  const rotateInterpolate = rotationAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={styles.faceFrameContainer}>
+      <Animated.View style={[styles.faceFrameInner, { transform: [{ scale: pulseAnim }] }]}>
+        <Svg width={FRAME_SIZE} height={FRAME_SIZE} style={styles.frameSvg}>
+          <Circle
+            cx={FRAME_SIZE / 2}
+            cy={FRAME_SIZE / 2}
+            r={RING_RADIUS}
+            stroke="rgba(255, 255, 255, 0.4)"
+            strokeWidth={2}
+            fill="none"
+          />
+        </Svg>
+
+        {faceState === 'searching' && (
+          <Animated.View style={[styles.absoluteFrame, { transform: [{ rotate: rotateInterpolate }] }]}>
+            <Svg width={FRAME_SIZE} height={FRAME_SIZE}>
+              <Defs>
+                <SvgLinearGradient id="searchGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <Stop offset="0%" stopColor={stateColor} stopOpacity="0" />
+                  <Stop offset="50%" stopColor={stateColor} stopOpacity="1" />
+                  <Stop offset="100%" stopColor={stateColor} stopOpacity="0" />
+                </SvgLinearGradient>
+              </Defs>
+              <Circle
+                cx={FRAME_SIZE / 2}
+                cy={FRAME_SIZE / 2}
+                r={RING_RADIUS}
+                stroke="url(#searchGrad)"
+                strokeWidth={RING_STROKE}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+          </Animated.View>
         )}
-      </Pressable>
-    </Animated.View>
+
+        {(faceState === 'detected' || faceState === 'verifying') && (
+          <Svg width={FRAME_SIZE} height={FRAME_SIZE} style={styles.frameSvg}>
+            <Circle
+              cx={FRAME_SIZE / 2}
+              cy={FRAME_SIZE / 2}
+              r={RING_RADIUS}
+              stroke={stateColor}
+              strokeWidth={RING_STROKE}
+              strokeOpacity={0.3}
+              fill="none"
+            />
+          </Svg>
+        )}
+
+        {faceState === 'verifying' && progress > 0 && (
+          <View style={[styles.absoluteFrame, { transform: [{ rotate: '-90deg' }] }]}>
+            <Svg width={FRAME_SIZE} height={FRAME_SIZE}>
+              <Circle
+                cx={FRAME_SIZE / 2}
+                cy={FRAME_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={stateColor}
+                strokeWidth={RING_STROKE + 2}
+                strokeLinecap="round"
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={progressOffset}
+                fill="none"
+              />
+            </Svg>
+          </View>
+        )}
+
+        {faceState === 'verified' && (
+          <Svg width={FRAME_SIZE} height={FRAME_SIZE} style={styles.frameSvg}>
+            <Circle
+              cx={FRAME_SIZE / 2}
+              cy={FRAME_SIZE / 2}
+              r={RING_RADIUS}
+              stroke={iOS.colors.green}
+              strokeWidth={RING_STROKE + 2}
+              fill="none"
+            />
+          </Svg>
+        )}
+
+        <View style={styles.frameCenter}>
+          {faceState === 'verified' ? (
+            <View style={[styles.successBadge, { backgroundColor: iOS.colors.green }]}>
+              <Feather name="check" size={40} color="#FFF" />
+            </View>
+          ) : (
+            <Feather
+              name="user"
+              size={50}
+              color={faceState === 'searching' ? 'rgba(255,255,255,0.5)' : stateColor}
+            />
+          )}
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
+// ============================================================================
+// ID FRAME COMPONENT
+// ============================================================================
+const IDFrame: React.FC = () => {
+  const scanAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scanAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, []);
+
+  const frameWidth = SCREEN_WIDTH * 0.85;
+  const frameHeight = frameWidth * 0.63;
+
+  const scanTranslate = scanAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, frameHeight - 4],
+  });
+
+  const scanOpacity = scanAnim.interpolate({
+    inputRange: [0, 0.1, 0.9, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+
+  return (
+    <View style={[styles.idFrame, { width: frameWidth, height: frameHeight }]}>
+      <View style={[styles.corner, styles.cornerTL]} />
+      <View style={[styles.corner, styles.cornerTR]} />
+      <View style={[styles.corner, styles.cornerBL]} />
+      <View style={[styles.corner, styles.cornerBR]} />
+
+      <Animated.View style={[
+        styles.scanLine,
+        { transform: [{ translateY: scanTranslate }], opacity: scanOpacity }
+      ]}>
+        <LinearGradient
+          colors={['transparent', iOS.colors.orange, 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+
+      <View style={styles.idFrameCenter}>
+        <Feather name="credit-card" size={32} color="rgba(255,255,255,0.5)" />
+        <Text style={styles.idFrameHint}>Position ID here</Text>
+      </View>
+    </View>
   );
 };
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const IDScannerScreen: React.FC<Props> = ({ navigation }) => {
+export const IDScannerScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { isTablet, wp } = useResponsive();
+  const minimumAge = route.params?.minimumAge ?? 60;
 
-  // Camera permissions
-  const [permission, requestPermission] = useCameraPermissions();
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const frontDevice = useCameraDevice('front');
+  const backDevice = useCameraDevice('back');
+  const cameraRef = useRef<Camera>(null);
+  const { detectFaces } = useFaceDetector(faceDetectionOptions);
 
-  // State
-  const [step, setStep] = useState<ScanStep>('front');
-  const [frontPhoto, setFrontPhoto] = useState<CameraCapturedPicture | null>(null);
-  const [backPhoto, setBackPhoto] = useState<CameraCapturedPicture | null>(null);
+  const [step, setStep] = useState<ScanStep>('selfie');
+  const [frontPhoto, setFrontPhoto] = useState<PhotoFile | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('back');
 
-  // Liveness challenge state
-  const [livenessCountdown, setLivenessCountdown] = useState<number | null>(null);
-  const [livenessChallenge, setLivenessChallenge] = useState<string>('');
+  const [faceState, setFaceState] = useState<FaceState>('searching');
+  const [faceProgress, setFaceProgress] = useState(0);
   const [livenessPassed, setLivenessPassed] = useState(false);
+  const [livenessStage, setLivenessStage] = useState<LivenessStage>('center');
 
-  // Auth store
+  const [feedbackType, setFeedbackType] = useState<'error' | 'success' | 'info' | 'warning' | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [showAgeRejectionModal, setShowAgeRejectionModal] = useState(false);
+  const [ageRejectionData, setAgeRejectionData] = useState<AgeRejectionData | null>(null);
+  const [showFraudModal, setShowFraudModal] = useState(false);
+  const [fraudRejectionData, setFraudRejectionData] = useState<FraudRejectionData | null>(null);
+  const [isBackendVerifying, setIsBackendVerifying] = useState(false);
+
+  const faceStableStartTime = useRef<number | null>(null);
+  const lastHapticTime = useRef<number>(0);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const setScannedId = useAuthStore((state) => state.setScannedId);
 
-  // Refs
-  const cameraRef = useRef<CameraView>(null);
-
-  // Animations
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(40)).current;
+  const slideUp = useRef(new Animated.Value(30)).current;
 
-  // Sizing
-  const cameraHeight = isTablet ? 320 : 280;
-  const cardMaxWidth = isTablet ? 480 : wp(100) - 48;
-
-  // Check reduce motion
   useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub?.remove();
+    Animated.parallel([
+      Animated.timing(fadeIn, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(slideUp, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
   }, []);
 
-  // Entrance animation
-  useEffect(() => {
-    if (reduceMotion) {
-      fadeIn.setValue(1);
-      slideUp.setValue(0);
-      return;
+  const showFeedback = useCallback((type: 'error' | 'success' | 'info' | 'warning', message: string, duration = 4000) => {
+    setFeedbackType(type);
+    setFeedbackMessage(message);
+    if (duration > 0) {
+      setTimeout(() => {
+        setFeedbackType(null);
+        setFeedbackMessage('');
+      }, duration);
     }
-    Animated.parallel([
-      Animated.timing(fadeIn, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUp, {
-        toValue: 0,
-        duration: 500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [reduceMotion, fadeIn, slideUp]);
+  }, []);
 
-  // Handle back
-  const handleBack = useCallback(() => {
-    if (step === 'back') {
-      setStep('front');
-      setBackPhoto(null);
-    } else if (step === 'selfie') {
-      // Go back to front (skip back since it's optional)
-      setStep('front');
-      setBackPhoto(null);
-      setCameraFacing('back');
-    } else if (step === 'preview') {
-      // Start over
-      setStep('front');
-      setFrontPhoto(null);
-      setBackPhoto(null);
-      setLivenessPassed(false);
-      setCameraFacing('back');
-    } else if (navigation.canGoBack()) {
-      navigation.goBack();
+  const clearFeedback = useCallback(() => {
+    setFeedbackType(null);
+    setFeedbackMessage('');
+  }, []);
+
+  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'success' | 'error') => {
+    const now = Date.now();
+    if (now - lastHapticTime.current < 100) return;
+    lastHapticTime.current = now;
+    switch (type) {
+      case 'light': Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); break;
+      case 'medium': Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); break;
+      case 'success': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
+      case 'error': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); break;
     }
-  }, [navigation, step]);
+  }, []);
 
-  // Request permission
-  const handleRequestPermission = useCallback(async () => {
-    const result = await requestPermission();
-    if (!result.granted) {
-      Alert.alert(
-        'Camera Permission Required',
-        'Please enable camera access in your device settings to scan your ID.',
-        [{ text: 'OK' }]
-      );
+  const handleFraudDetected = useCallback((data: any) => {
+    setFraudRejectionData({
+      auditId: data?.auditId ?? null,
+      riskLevel: data?.fraudAnalysis?.riskLevel ?? null,
+      recommendation: data?.fraudAnalysis?.recommendation ?? null,
+    });
+    setShowFraudModal(true);
+  }, []);
+
+  const resetLiveness = useCallback(() => {
+    setFaceState('searching');
+    setFaceProgress(0);
+    setLivenessStage('center');
+    faceStableStartTime.current = null;
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
     }
-  }, [requestPermission]);
+  }, []);
 
-  // Capture photo
-  const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || isCapturing || !isCameraReady) return;
-
+  const handleLivenessComplete = useCallback(async () => {
+    if (!cameraRef.current || !isCameraReady || isCapturing) return;
     setIsCapturing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setFaceState('verified');
+    triggerHaptic('success');
+    AccessibilityInfo.announceForAccessibility('Face verified!');
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        skipProcessing: Platform.OS === 'android',
-      });
-
+      const photo = await cameraRef.current.takePhoto({ flash: 'off' });
       if (photo) {
-        if (step === 'front') {
-          setFrontPhoto(photo);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          AccessibilityInfo.announceForAccessibility('Front of ID captured successfully');
-
-          // Ask if they want to scan the back
-          Alert.alert(
-            'Front Captured!',
-            'Would you like to also scan the back of your ID? (Optional)',
-            [
-              {
-                text: 'Skip',
-                style: 'cancel',
-                onPress: () => {
-                  // Go to selfie step (required)
-                  setIsCameraReady(false);
-                  setCameraFacing('front');
-                  setStep('selfie');
-                },
-              },
-              {
-                text: 'Scan Back',
-                onPress: () => {
-                  setStep('back');
-                },
-              },
-            ]
-          );
-        } else if (step === 'back') {
-          setBackPhoto(photo);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          AccessibilityInfo.announceForAccessibility('Back of ID captured successfully');
-          // Go to selfie step (required)
+        setLivenessPassed(true);
+        showFeedback('success', 'Face verified! Now scan your ID');
+        setTimeout(() => {
           setIsCameraReady(false);
-          setCameraFacing('front');
-          setStep('selfie');
-        // Note: selfie step uses handleLivenessCapture via startLivenessChallenge, not handleCapture
+          setStep('front');
+          setFaceState('idle');
+          setFaceProgress(0);
+          clearFeedback();
+        }, 1200);
+      }
+    } catch (error) {
+      console.error('Capture error:', error);
+      showFeedback('error', 'Capture failed. Please try again');
+      triggerHaptic('error');
+      resetLiveness();
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [isCameraReady, isCapturing, triggerHaptic, showFeedback, clearFeedback, resetLiveness]);
+
+  const handleFaceDetectionResult = Worklets.createRunOnJS(
+    (status: FaceDetectionStatus, faceDirection?: FaceDirection) => {
+      if (step !== 'selfie' || isCapturing || livenessPassed) return;
+      const hasFace = status === 'standby' || status === 'success';
+      if (!hasFace || faceDirection === 'unknown' || !faceDirection) {
+        setFaceState('searching');
+        setFaceProgress(0);
+        faceStableStartTime.current = null;
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        return;
+      }
+      const isFrontal = faceDirection === 'frontal';
+      if (livenessStage === 'center' || livenessStage === 'hold') {
+        if (!isFrontal) {
+          setFaceState('detected');
+          setFaceProgress(0);
+          faceStableStartTime.current = null;
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
+          return;
+        }
+        if (!faceStableStartTime.current) {
+          faceStableStartTime.current = Date.now();
+          setLivenessStage('hold');
+          setFaceState('verifying');
+          triggerHaptic('medium');
+          progressIntervalRef.current = setInterval(() => {
+            if (faceStableStartTime.current) {
+              const elapsed = Date.now() - faceStableStartTime.current;
+              const progress = Math.min((elapsed / FACE_HOLD_TIME) * 100, 100);
+              setFaceProgress(progress);
+              if (progress >= 25 && progress < 28) triggerHaptic('light');
+              if (progress >= 50 && progress < 53) triggerHaptic('light');
+              if (progress >= 75 && progress < 78) triggerHaptic('light');
+              if (progress >= 100) {
+                if (progressIntervalRef.current) {
+                  clearInterval(progressIntervalRef.current);
+                  progressIntervalRef.current = null;
+                }
+                handleLivenessComplete();
+              }
+            }
+          }, 50);
+        }
+      }
+    }
+  );
+
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    const faces = detectFaces(frame);
+    if (faces.length > 0) {
+      const face = faces[0];
+      const yaw = face.yawAngle ?? 0;
+      const direction = getDirectionFromYaw(yaw);
+      handleFaceDetectionResult('success', direction);
+    } else {
+      handleFaceDetectionResult('no_face', undefined);
+    }
+  }, [detectFaces, handleFaceDetectionResult]);
+
+  const handleCapture = useCallback(async () => {
+    if (!cameraRef.current || isCapturing || !isCameraReady || step !== 'front') return;
+    setIsCapturing(true);
+    triggerHaptic('medium');
+    clearFeedback();
+
+    try {
+      const photo = await cameraRef.current.takePhoto({ flash: 'off' });
+      if (photo) {
+        setFrontPhoto(photo);
+        setIsOcrProcessing(true);
+        const ocrRes = await extractDOBFromID(`file://${photo.path}`, minimumAge);
+        setIsOcrProcessing(false);
+        setOcrResult(ocrRes);
+
+        if (!ocrRes.success) {
+          showFeedback('error', ocrRes.errorMessage || 'Could not read ID. Ensure good lighting and try again');
+          setFrontPhoto(null);
+          triggerHaptic('error');
+          return;
+        }
+
+        if (!ocrRes.meetsAgeRequirement) {
+          setAgeRejectionData({
+            frontendAge: ocrRes.age,
+            backendAge: null,
+            discrepancyNote: null,
+            auditId: null,
+            confidenceLevel: null,
+          });
+          setShowAgeRejectionModal(true);
+          triggerHaptic('error');
+          return;
+        }
+
+        setIsBackendVerifying(true);
+        try {
+          const photoFile = { uri: `file://${photo.path}`, type: 'image/jpeg', name: 'id_front.jpg' } as any;
+          const frontendOcrData = toFrontendOcrData(ocrRes);
+          const backendRes = await verifyIdPreRegister(photoFile, frontendOcrData);
+          setIsBackendVerifying(false);
+
+          if (backendRes.data?.recommendation === 'RETAKE_PHOTO') {
+            showFeedback('warning', backendRes.data.retakeGuidance || 'For better results, take a clearer photo', 0);
+          }
+
+          if (backendRes.code === 'FRAUD_DETECTED') {
+            handleFraudDetected(backendRes.data);
+            triggerHaptic('error');
+            return;
+          }
+
+          if (backendRes.data?.fraudAnalysis?.recommendation === 'REVIEW') {
+            showFeedback('info', 'Your ID will undergo additional review. You may continue', 0);
+          }
+
+          if (!backendRes.verified) {
+            setAgeRejectionData({
+              frontendAge: ocrRes.age,
+              backendAge: backendRes.data?.extractedAge ?? null,
+              discrepancyNote: backendRes.data?.comparison?.discrepancyNote ?? null,
+              auditId: backendRes.data?.auditId ?? null,
+              confidenceLevel: backendRes.data?.confidenceLevel ?? null,
+            });
+            setShowAgeRejectionModal(true);
+            triggerHaptic('error');
+            return;
+          }
+
+          triggerHaptic('success');
+          AccessibilityInfo.announceForAccessibility('ID verified successfully');
+          showFeedback('success', 'ID verified successfully!');
+          setStep('preview');
+        } catch (backendError: any) {
+          setIsBackendVerifying(false);
+          console.error('Backend verification error:', backendError);
+
+          if (backendError?.code === 'FRAUD_DETECTED') {
+            handleFraudDetected(backendError?.data);
+            triggerHaptic('error');
+            return;
+          }
+
+          if (backendError?.code === 'AGE_REQUIREMENT_NOT_MET' || backendError?.data?.meetsAgeRequirement === false) {
+            setAgeRejectionData({
+              frontendAge: ocrRes.age,
+              backendAge: backendError?.data?.extractedAge ?? null,
+              discrepancyNote: backendError?.data?.comparison?.discrepancyNote ?? null,
+              auditId: backendError?.data?.auditId ?? null,
+              confidenceLevel: backendError?.data?.confidenceLevel ?? null,
+            });
+            setShowAgeRejectionModal(true);
+            triggerHaptic('error');
+            return;
+          }
+
+          showFeedback('error', backendError?.message || 'Verification failed. Please try again');
+          triggerHaptic('error');
         }
       }
     } catch (error) {
-      console.error('Error capturing photo:', error);
-      Alert.alert('Capture Failed', 'Please try again.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      console.error('Capture error:', error);
+      showFeedback('error', 'Capture failed. Please try again');
+      triggerHaptic('error');
+      setIsOcrProcessing(false);
+      setIsBackendVerifying(false);
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, isCameraReady, step]);
+  }, [isCapturing, isCameraReady, step, triggerHaptic, minimumAge, handleFraudDetected, showFeedback, clearFeedback]);
 
-  // Retake photo
   const handleRetake = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic('light');
     setFrontPhoto(null);
-    setBackPhoto(null);
     setLivenessPassed(false);
-    setCameraFacing('back');
-    setStep('front');
+    setLivenessStage('center');
+    setOcrResult(null);
+    resetLiveness();
+    clearFeedback();
+    setStep('selfie');
+  }, [triggerHaptic, resetLiveness, clearFeedback]);
+
+  const handleAgeRejectionRetake = useCallback(() => {
+    setShowAgeRejectionModal(false);
+    setFrontPhoto(null);
+    setOcrResult(null);
+    setAgeRejectionData(null);
   }, []);
 
-  // Continue to SignUp
+  const handleAgeRejectionClose = useCallback(() => {
+    setShowAgeRejectionModal(false);
+    setAgeRejectionData(null);
+    navigation.goBack();
+  }, [navigation]);
+
+  const handleFraudRetake = useCallback(() => {
+    setShowFraudModal(false);
+    setFrontPhoto(null);
+    setOcrResult(null);
+    setFraudRejectionData(null);
+  }, []);
+
+  const handleFraudClose = useCallback(() => {
+    setShowFraudModal(false);
+    setFraudRejectionData(null);
+    navigation.goBack();
+  }, [navigation]);
+
   const handleContinue = useCallback(() => {
     if (!frontPhoto || !livenessPassed) return;
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // Store scanned ID in auth store (selfie NOT stored - only used for local liveness check)
-    setScannedId(frontPhoto.uri, backPhoto?.uri || null);
-
-    // Navigate to SignUp
+    triggerHaptic('success');
+    setScannedId(`file://${frontPhoto.path}`);
     navigation.navigate('SignUp');
-  }, [frontPhoto, backPhoto, livenessPassed, setScannedId, navigation]);
+  }, [frontPhoto, livenessPassed, setScannedId, navigation, triggerHaptic]);
 
-  // Camera ready handler
-  const handleCameraReady = useCallback(() => {
-    setIsCameraReady(true);
-  }, []);
-
-  // Liveness challenges - random selection
-  const livenessInstructions = [
-    'Look at the camera and blink twice',
-    'Smile for the camera',
-    'Nod your head slowly',
-    'Turn your head slightly left, then right',
-  ];
-
-  // Start liveness challenge
-  const startLivenessChallenge = useCallback(() => {
-    // Pick random challenge
-    const randomChallenge = livenessInstructions[Math.floor(Math.random() * livenessInstructions.length)];
-    setLivenessChallenge(randomChallenge);
-    setLivenessCountdown(3);
-
-    // Countdown timer
-    let count = 3;
-    const interval = setInterval(() => {
-      count -= 1;
-      if (count <= 0) {
-        clearInterval(interval);
-        setLivenessCountdown(null);
-        // Auto-capture after countdown
-        handleLivenessCapture();
-      } else {
-        setLivenessCountdown(count);
-      }
-    }, 1000);
-  }, []);
-
-  // Capture during liveness check (selfie not stored - only used for local verification)
-  const handleLivenessCapture = useCallback(async () => {
-    if (!cameraRef.current || !isCameraReady) return;
-
-    setIsCapturing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-      // Take photo to verify liveness (photo is not stored or sent to backend)
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5, // Lower quality since we don't keep it
-        skipProcessing: Platform.OS === 'android',
-      });
-
-      if (photo) {
-        // Liveness passed - photo verified user is real, but not stored
-        setLivenessPassed(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        AccessibilityInfo.announceForAccessibility('Liveness check passed! You are verified.');
-        setStep('preview');
-      }
-    } catch (error) {
-      console.error('Error during liveness check:', error);
-      Alert.alert('Verification Failed', 'Please try again.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setLivenessChallenge('');
-    } finally {
-      setIsCapturing(false);
+  const handleBack = useCallback(() => {
+    triggerHaptic('light');
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
     }
-  }, [isCameraReady]);
+    if (step === 'front') {
+      setStep('selfie');
+      setFrontPhoto(null);
+      resetLiveness();
+      clearFeedback();
+    } else if (step === 'preview') {
+      setStep('front');
+      setFrontPhoto(null);
+      clearFeedback();
+    } else {
+      navigation.goBack();
+    }
+  }, [navigation, step, triggerHaptic, resetLiveness, clearFeedback]);
 
-  // ============================================================================
-  // RENDER - PERMISSION REQUEST
-  // ============================================================================
-  if (!permission) {
+  const handleRequestPermission = useCallback(async () => {
+    const result = await requestPermission();
+    if (!result) {
+      showFeedback('error', 'Camera access is required. Please enable it in Settings');
+    }
+  }, [requestPermission, showFeedback]);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
+
+  const currentDevice = step === 'selfie' ? frontDevice : backDevice;
+
+  const getStatusText = () => {
+    if (faceState === 'verified') return 'Verified!';
+    if (faceState === 'verifying') return `Hold still... ${Math.round(faceProgress)}%`;
+    if (faceState === 'detected') return 'Face forward';
+    if (faceState === 'searching') return 'Looking for your face...';
+    return 'Position your face in the circle';
+  };
+
+  // PERMISSION SCREEN
+  if (!hasPermission) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <LinearGradient
-          colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
-          locations={[0, 0.35, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+        <LinearGradient colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+        <Animated.View style={[styles.permissionContent, { paddingTop: insets.top + 20, opacity: fadeIn }]}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Feather name="chevron-left" size={28} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.permissionIcon}>
+            <Feather name="camera" size={40} color={iOS.colors.orange} />
+          </View>
+          <Text style={styles.permissionTitle}>Camera Access</Text>
+          <Text style={styles.permissionSubtitle}>We need camera permission to verify your identity with face detection</Text>
+          <View style={styles.permissionCard}>
+            {[
+              { icon: 'cpu', text: 'On-device processing' },
+              { icon: 'shield', text: 'Your data stays private' },
+              { icon: 'zap', text: 'Fast verification' },
+            ].map((item, i) => (
+              <View key={i} style={styles.permissionFeature}>
+                <View style={styles.permissionFeatureIcon}>
+                  <Feather name={item.icon as any} size={18} color={iOS.colors.teal} />
+                </View>
+                <Text style={styles.permissionFeatureText}>{item.text}</Text>
+              </View>
+            ))}
+          </View>
+          <Pressable onPress={handleRequestPermission} style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}>
+            <Feather name="camera" size={20} color="#FFF" />
+            <Text style={styles.primaryButtonText}>Enable Camera</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // NO DEVICE
+  if (!currentDevice) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <LinearGradient colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+        <View style={styles.centerContent}>
+          <Feather name="camera-off" size={48} color="#FFF" />
+          <Text style={styles.errorTextWhite}>Camera unavailable</Text>
         </View>
       </View>
     );
   }
 
-  if (!permission.granted) {
+  // PREVIEW SCREEN
+  if (step === 'preview' && frontPhoto) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <LinearGradient
-          colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
-          locations={[0, 0.35, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Back Button */}
-          <Animated.View style={[styles.backRow, { opacity: fadeIn }]}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Feather name="chevron-left" size={28} color="#FFFFFF" />
+        <LinearGradient colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+        <Animated.View style={[styles.previewContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32, opacity: fadeIn }]}>
+          <Pressable onPress={handleBack} style={styles.backButton}>
+            <Feather name="chevron-left" size={28} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.previewHeader}>
+            <View style={styles.successIcon}>
+              <Feather name="check" size={36} color="#FFF" />
+            </View>
+            <Text style={styles.previewTitle}>Identity Verified</Text>
+            <Text style={styles.previewSubtitle}>Liveness check successful</Text>
+          </View>
+          <View style={styles.previewCard}>
+            <Image source={{ uri: `file://${frontPhoto.path}` }} style={styles.previewImage} resizeMode="cover" />
+            <View style={styles.previewBadge}>
+              <Feather name="shield" size={12} color={iOS.colors.green} />
+              <Text style={styles.previewBadgeText}>Verified</Text>
+            </View>
+          </View>
+          <View style={styles.verificationInfo}>
+            <View style={styles.verificationItem}>
+              <View style={[styles.verificationIcon, { backgroundColor: iOS.colors.greenLight }]}>
+                <Feather name="user-check" size={18} color={iOS.colors.green} />
+              </View>
+              <View style={styles.verificationText}>
+                <Text style={styles.verificationTitle}>Liveness Confirmed</Text>
+                <Text style={styles.verificationSubtitle}>Real person detected</Text>
+              </View>
+            </View>
+            <View style={styles.verificationItem}>
+              <View style={[styles.verificationIcon, { backgroundColor: iOS.colors.greenLight }]}>
+                <Feather name="lock" size={18} color={iOS.colors.green} />
+              </View>
+              <View style={styles.verificationText}>
+                <Text style={styles.verificationTitle}>Secure Capture</Text>
+                <Text style={styles.verificationSubtitle}>Data stays on device</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.previewActions}>
+            <Pressable onPress={handleRetake} style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}>
+              <Feather name="refresh-cw" size={18} color={iOS.colors.label} />
+              <Text style={styles.secondaryButtonText}>Retake</Text>
             </Pressable>
-          </Animated.View>
-
-          {/* Header */}
-          <Animated.View
-            style={[
-              styles.header,
-              { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-            ]}
-          >
-            <View style={styles.iconCircle}>
-              <Feather name="camera" size={32} color={iOS.colors.orange} />
-            </View>
-
-            <Text style={styles.title} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
-              Camera Access Needed
-            </Text>
-
-            <Text style={styles.subtitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>
-              We need camera access to scan your ID
-            </Text>
-          </Animated.View>
-
-          {/* Permission Card */}
-          <Animated.View
-            style={[
-              styles.card,
-              { maxWidth: cardMaxWidth, opacity: fadeIn, transform: [{ translateY: slideUp }] },
-            ]}
-          >
-            <View style={styles.permissionInfo}>
-              <Feather name="shield" size={24} color={iOS.colors.teal} />
-              <Text style={styles.permissionText}>
-                Your camera is only used to verify your identity. We never access your photos or store camera footage.
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={handleRequestPermission}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
-            >
-              <Text style={styles.primaryButtonText}>
-                Enable Camera
-              </Text>
-              <Feather name="camera" size={20} color="#FFFFFF" />
+            <Pressable onPress={handleContinue} style={({ pressed }) => [styles.primaryButton, styles.primaryButtonFlex, pressed && styles.primaryButtonPressed]}>
+              <Text style={styles.primaryButtonText}>Continue</Text>
+              <Feather name="arrow-right" size={18} color="#FFF" />
             </Pressable>
-
-            {/* Trust Badge */}
-            <View style={styles.trustBadge}>
-              <Feather name="lock" size={14} color={iOS.colors.tertiaryLabel} />
-              <Text style={styles.trustText}>Your privacy is protected</Text>
-            </View>
-          </Animated.View>
-        </ScrollView>
+          </View>
+        </Animated.View>
       </View>
     );
   }
 
-  // ============================================================================
-  // RENDER - PREVIEW MODE
-  // ============================================================================
-  if (step === 'preview' && frontPhoto && livenessPassed) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <LinearGradient
-          colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
-          locations={[0, 0.35, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Back Button */}
-          <Animated.View style={[styles.backRow, { opacity: fadeIn }]}>
-            <Pressable
-              onPress={handleBack}
-              style={styles.backButton}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Feather name="chevron-left" size={28} color="#FFFFFF" />
-            </Pressable>
-          </Animated.View>
-
-          {/* Header */}
-          <Animated.View
-            style={[
-              styles.header,
-              { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-            ]}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: iOS.colors.green }]}>
-              <Feather name="check" size={32} color="#FFFFFF" />
-            </View>
-
-            <Text style={styles.title} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
-              Looking Great!
-            </Text>
-
-            <Text style={styles.subtitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>
-              Review your ID scan before continuing
-            </Text>
-          </Animated.View>
-
-          {/* Preview Card */}
-          <Animated.View
-            style={[
-              styles.card,
-              { maxWidth: cardMaxWidth, opacity: fadeIn, transform: [{ translateY: slideUp }] },
-            ]}
-          >
-            {/* Front Photo Preview */}
-            <View style={styles.previewSection}>
-              <Text style={styles.previewLabel}>Front of ID</Text>
-              <View style={styles.previewImageContainer}>
-                <Image
-                  source={{ uri: frontPhoto.uri }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.previewBadge}>
-                  <Feather name="check-circle" size={16} color={iOS.colors.green} />
-                  <Text style={styles.previewBadgeText}>Captured</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Back Photo Preview (if exists) */}
-            {backPhoto && (
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Back of ID</Text>
-                <View style={styles.previewImageContainer}>
-                  <Image
-                    source={{ uri: backPhoto.uri }}
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.previewBadge}>
-                    <Feather name="check-circle" size={16} color={iOS.colors.green} />
-                    <Text style={styles.previewBadgeText}>Captured</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Liveness Check Passed Badge */}
-            {livenessPassed && (
-              <View style={styles.livenessPassedBadge}>
-                <Feather name="check-circle" size={24} color={iOS.colors.green} />
-                <View style={styles.livenessPassedTextContainer}>
-                  <Text style={styles.livenessPassedTitle}>Identity Verified</Text>
-                  <Text style={styles.livenessPassedSubtitle}>Liveness check passed</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Action Buttons */}
-            <View style={styles.previewActions}>
-              <Pressable
-                onPress={handleRetake}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}
-              >
-                <Feather name="refresh-cw" size={20} color={iOS.colors.orange} />
-                <Text style={styles.secondaryButtonText}>Retake</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleContinue}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  { flex: 1.5 },
-                  pressed && styles.primaryButtonPressed,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>Continue</Text>
-                <Feather name="arrow-right" size={20} color="#FFFFFF" />
-              </Pressable>
-            </View>
-
-            {/* Trust Badge */}
-            <View style={styles.trustBadge}>
-              <Feather name="lock" size={14} color={iOS.colors.tertiaryLabel} />
-              <Text style={styles.trustText}>Your ID is encrypted & secure</Text>
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // ============================================================================
-  // RENDER - CAMERA MODE
-  // ============================================================================
+  // CAMERA SCREEN
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <LinearGradient
-        colors={['#FF8A6B', '#FF7B5C', '#5BBFB3']}
-        locations={[0, 0.35, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Back Button */}
-        <Animated.View style={[styles.backRow, { opacity: fadeIn }]}>
-          <Pressable
-            onPress={handleBack}
-            style={styles.backButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Feather name="chevron-left" size={28} color="#FFFFFF" />
-          </Pressable>
-        </Animated.View>
-
-        {/* Header */}
-        <Animated.View
-          style={[
-            styles.header,
-            { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-          ]}
-        >
-          <View style={styles.iconCircle}>
-            <Feather name={step === 'selfie' ? 'user' : 'credit-card'} size={32} color={iOS.colors.orange} />
+      <Camera ref={cameraRef} style={StyleSheet.absoluteFill} device={currentDevice} isActive={true} photo={true} onInitialized={() => setIsCameraReady(true)} frameProcessor={step === 'selfie' ? frameProcessor : undefined} />
+      <LinearGradient colors={['rgba(255, 138, 107, 0.85)', 'transparent', 'transparent', 'rgba(91, 191, 179, 0.85)']} locations={[0, 0.25, 0.75, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Animated.View style={[styles.header, { paddingTop: insets.top + 12, opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
+          <Feather name="chevron-left" size={28} color="#FFFFFF" />
+        </Pressable>
+        <StepIndicator currentStep={step} />
+        <View style={{ width: 44 }} />
+      </Animated.View>
+      <Animated.View style={[styles.main, { opacity: fadeIn }]}>
+        <View style={styles.titleCard}>
+          <Text style={styles.titleCardTitle}>{step === 'selfie' ? 'Face Verification' : 'Scan Your ID'}</Text>
+          <Text style={styles.titleCardSubtitle}>{step === 'selfie' ? getStatusText() : 'Position your ID within the frame'}</Text>
+        </View>
+        {step === 'selfie' ? <FaceFrame faceState={faceState} progress={faceProgress} /> : <IDFrame />}
+        {feedbackType && feedbackMessage && (
+          <View style={styles.feedbackContainer}>
+            <FeedbackBadge type={feedbackType} message={feedbackMessage} />
           </View>
-
-          <Text style={styles.title} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
-            {step === 'selfie' ? 'Take a Selfie' : 'Scan Your ID'}
-          </Text>
-
-          <Text style={styles.subtitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>
-            {step === 'front'
-              ? 'Position the FRONT of your government ID'
-              : step === 'back'
-              ? 'Now scan the BACK of your ID'
-              : 'Take a selfie to verify your identity'}
-          </Text>
-        </Animated.View>
-
-        {/* Camera Card */}
-        <Animated.View
-          style={[
-            styles.card,
-            { maxWidth: cardMaxWidth, opacity: fadeIn, transform: [{ translateY: slideUp }] },
-          ]}
-        >
-          {/* Step Indicator */}
-          <View style={styles.stepIndicator}>
-            <View style={[styles.stepDot, step === 'front' && styles.stepDotActive]} />
-            <View style={styles.stepLine} />
-            <View style={[styles.stepDot, step === 'back' && styles.stepDotActive]} />
-            <View style={styles.stepLine} />
-            <View style={[styles.stepDot, step === 'selfie' && styles.stepDotActive]} />
-          </View>
-          <Text style={styles.stepText}>
-            {step === 'front'
-              ? 'Step 1: Front of ID'
-              : step === 'back'
-              ? 'Step 2: Back of ID (Optional)'
-              : 'Step 3: Take a Selfie'}
-          </Text>
-
-          {/* Camera View */}
-          <View style={[styles.cameraContainer, { height: cameraHeight }]}>
-            <CameraView
-              ref={cameraRef}
-              style={styles.camera}
-              facing={cameraFacing}
-              onCameraReady={handleCameraReady}
-            />
-            {step !== 'selfie' && <IDFrameOverlay isCapturing={isCapturing} />}
-            {step === 'selfie' && (
-              <View style={styles.selfieOverlay} pointerEvents="none">
-                <View style={styles.selfieCircle} />
-                {/* Liveness countdown display */}
-                {livenessCountdown !== null ? (
-                  <View style={styles.livenessCountdownContainer}>
-                    <Text style={styles.livenessCountdownText}>{livenessCountdown}</Text>
-                    <Text style={styles.livenessChallengeText}>{livenessChallenge}</Text>
-                  </View>
-                ) : livenessChallenge && !livenessPassed ? (
-                  <View style={styles.livenessChallengeContainer}>
-                    <Text style={styles.livenessChallengeText}>{livenessChallenge}</Text>
-                    <Text style={styles.selfieGuideText}>Hold steady...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.selfieGuideText}>Position your face in the circle</Text>
-                )}
-              </View>
-            )}
-
-            {!isCameraReady && (
-              <View style={styles.cameraLoading}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.cameraLoadingText}>Starting camera...</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Instruction */}
-          <View style={styles.instructionBadge}>
-            <Feather name="info" size={16} color={iOS.colors.teal} />
-            <Text style={styles.instructionText}>
-              {step === 'selfie'
-                ? 'Press the button, then follow the on-screen instruction'
-                : 'Hold steady and ensure good lighting'}
-            </Text>
-          </View>
-
-          {/* Capture Button */}
-          <View style={styles.captureButtonContainer}>
-            {step === 'selfie' ? (
-              // For selfie step, use liveness challenge
-              livenessCountdown !== null || isCapturing ? (
-                <View style={styles.captureButton}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                </View>
-              ) : (
-                <CaptureButton
-                  onPress={startLivenessChallenge}
-                  isCapturing={isCapturing}
-                  disabled={!isCameraReady || isCapturing || livenessCountdown !== null}
-                />
-              )
-            ) : (
-              // For front/back ID, use direct capture
-              <CaptureButton
-                onPress={handleCapture}
-                isCapturing={isCapturing}
-                disabled={!isCameraReady || isCapturing}
-              />
-            )}
-          </View>
-
-          {/* Skip Back Option (only on back step) */}
-          {step === 'back' && (
-            <Pressable
-              onPress={() => setStep('preview')}
-              style={styles.skipButton}
-            >
-              <Text style={styles.skipButtonText}>Skip this step</Text>
+        )}
+      </Animated.View>
+      <Animated.View style={[styles.bottom, { paddingBottom: insets.bottom + 24, opacity: fadeIn }]}>
+        {step === 'front' && (
+          <View style={styles.captureSection}>
+            <Pressable onPress={handleCapture} disabled={!isCameraReady || isCapturing} style={({ pressed }) => [styles.captureButton, pressed && styles.captureButtonPressed, (!isCameraReady || isCapturing) && styles.captureButtonDisabled]}>
+              {isCapturing ? <ActivityIndicator color={iOS.colors.orange} size="small" /> : <View style={styles.captureButtonInner} />}
             </Pressable>
-          )}
-
-          {/* Trust Badge */}
-          <View style={styles.trustBadge}>
-            <Feather name="shield" size={14} color={iOS.colors.tertiaryLabel} />
-            <Text style={styles.trustText}>We verify you're 60+ for community safety</Text>
+            <Text style={styles.captureHint}>Tap to capture</Text>
           </View>
-        </Animated.View>
-      </ScrollView>
+        )}
+        {step === 'selfie' && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardIcon}>
+              <Feather name="shield" size={20} color={iOS.colors.teal} />
+            </View>
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardTitle}>Why we verify</Text>
+              <Text style={styles.infoCardText}>Face verification helps keep our community safe by ensuring every member is a real person</Text>
+            </View>
+          </View>
+        )}
+      </Animated.View>
+      {(!isCameraReady || isOcrProcessing || isBackendVerifying) && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={iOS.colors.orange} />
+            <Text style={styles.loadingText}>{isBackendVerifying ? 'Verifying with server...' : isOcrProcessing ? 'Scanning your ID...' : 'Initializing camera...'}</Text>
+          </View>
+        </View>
+      )}
+      <AgeRejectionModal visible={showAgeRejectionModal} data={ageRejectionData} onClose={handleAgeRejectionClose} onRetake={handleAgeRejectionRetake} />
+      <FraudRejectionModal visible={showFraudModal} data={fraudRejectionData} onClose={handleFraudClose} onRetake={handleFraudRetake} />
     </View>
   );
 };
@@ -906,450 +1065,88 @@ export const IDScannerScreen: React.FC<Props> = ({ navigation }) => {
 // STYLES
 // ============================================================================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Back button
-  backRow: {
-    width: '100%',
-    alignItems: 'flex-start',
-    marginBottom: iOS.spacing.lg,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Header
-  header: {
-    alignItems: 'center',
-    marginBottom: iOS.spacing.xxl,
-  },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: iOS.spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  title: {
-    ...iOS.typography.title1,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: iOS.spacing.sm,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  subtitle: {
-    ...iOS.typography.body,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    paddingHorizontal: iOS.spacing.lg,
-  },
-
-  // Card
-  card: {
-    width: '100%',
-    backgroundColor: iOS.colors.card,
-    borderRadius: iOS.radius.xxl,
-    padding: iOS.spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-
-  // Step Indicator
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: iOS.spacing.sm,
-  },
-  stepDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: iOS.colors.separator,
-  },
-  stepDotActive: {
-    backgroundColor: iOS.colors.orange,
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: iOS.colors.separator,
-    marginHorizontal: iOS.spacing.sm,
-  },
-  stepText: {
-    ...iOS.typography.subhead,
-    color: iOS.colors.secondaryLabel,
-    textAlign: 'center',
-    marginBottom: iOS.spacing.lg,
-  },
-
-  // Camera
-  cameraContainer: {
-    width: '100%',
-    borderRadius: iOS.radius.lg,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    marginBottom: iOS.spacing.lg,
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraLoading: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cameraLoadingText: {
-    ...iOS.typography.subhead,
-    color: '#FFFFFF',
-    marginTop: iOS.spacing.sm,
-  },
-
-  // ID Frame Overlay
-  idFrameOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: iOS.spacing.xl,
-  },
-  cornerBracket: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderColor: '#FFFFFF',
-    borderWidth: 3,
-  },
-  cornerTopLeft: {
-    top: 24,
-    left: 24,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
-  },
-  cornerTopRight: {
-    top: 24,
-    right: 24,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 8,
-  },
-  cornerBottomLeft: {
-    bottom: 24,
-    left: 24,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-  },
-  cornerBottomRight: {
-    bottom: 24,
-    right: 24,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 8,
-  },
-  frameGuideTextContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingVertical: iOS.spacing.sm,
-    paddingHorizontal: iOS.spacing.lg,
-    borderRadius: iOS.radius.pill,
-  },
-  frameGuideText: {
-    ...iOS.typography.subhead,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-
-  // Instruction Badge
-  instructionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: iOS.spacing.sm,
-    backgroundColor: iOS.colors.tealLight,
-    paddingVertical: iOS.spacing.sm,
-    paddingHorizontal: iOS.spacing.lg,
-    borderRadius: iOS.radius.pill,
-    marginBottom: iOS.spacing.xl,
-  },
-  instructionText: {
-    ...iOS.typography.subhead,
-    color: iOS.colors.tealDark,
-    fontWeight: '500',
-  },
-
-  // Capture Button
-  captureButtonContainer: {
-    alignItems: 'center',
-    marginBottom: iOS.spacing.lg,
-  },
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: iOS.colors.orange,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: iOS.colors.orange,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  captureButtonDisabled: {
-    backgroundColor: iOS.colors.systemFill,
-    shadowOpacity: 0,
-  },
-  captureButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 4,
-    borderColor: iOS.colors.orange,
-  },
-
-  // Skip Button
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: iOS.spacing.md,
-    marginBottom: iOS.spacing.md,
-  },
-  skipButtonText: {
-    ...iOS.typography.subhead,
-    color: iOS.colors.teal,
-    fontWeight: '600',
-  },
-
-  // Primary Button - Orange
-  primaryButton: {
-    flexDirection: 'row',
-    height: 56,
-    borderRadius: iOS.radius.pill,
-    backgroundColor: iOS.colors.orange,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: iOS.spacing.sm,
-    shadowColor: iOS.colors.orange,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  primaryButtonPressed: {
-    backgroundColor: iOS.colors.orangeDark,
-    transform: [{ scale: 0.98 }],
-  },
-  primaryButtonText: {
-    ...iOS.typography.headline,
-    color: '#FFFFFF',
-  },
-
-  // Secondary Button
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 56,
-    borderRadius: iOS.radius.pill,
-    backgroundColor: iOS.colors.orangeLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: iOS.spacing.sm,
-    borderWidth: 2,
-    borderColor: iOS.colors.orange,
-  },
-  secondaryButtonPressed: {
-    backgroundColor: 'rgba(249, 115, 22, 0.2)',
-  },
-  secondaryButtonText: {
-    ...iOS.typography.headline,
-    color: iOS.colors.orange,
-  },
-
-  // Preview
-  previewSection: {
-    marginBottom: iOS.spacing.lg,
-  },
-  previewLabel: {
-    ...iOS.typography.headline,
-    color: iOS.colors.label,
-    marginBottom: iOS.spacing.sm,
-  },
-  previewImageContainer: {
-    position: 'relative',
-    borderRadius: iOS.radius.lg,
-    overflow: 'hidden',
-  },
-  previewImage: {
-    width: '100%',
-    height: 180,
-    backgroundColor: iOS.colors.systemFill,
-  },
-  previewBadge: {
-    position: 'absolute',
-    bottom: iOS.spacing.sm,
-    right: iOS.spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: iOS.spacing.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingVertical: iOS.spacing.xs,
-    paddingHorizontal: iOS.spacing.sm,
-    borderRadius: iOS.radius.pill,
-  },
-  previewBadgeText: {
-    ...iOS.typography.caption1,
-    color: iOS.colors.green,
-    fontWeight: '600',
-  },
-  previewActions: {
-    flexDirection: 'row',
-    gap: iOS.spacing.md,
-    marginBottom: iOS.spacing.lg,
-  },
-
-  // Permission Info
-  permissionInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: iOS.spacing.md,
-    backgroundColor: iOS.colors.tealLight,
-    padding: iOS.spacing.lg,
-    borderRadius: iOS.radius.lg,
-    marginBottom: iOS.spacing.xl,
-  },
-  permissionText: {
-    ...iOS.typography.subhead,
-    color: iOS.colors.secondaryLabel,
-    flex: 1,
-    lineHeight: 22,
-  },
-
-  // Trust Badge
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: iOS.spacing.sm,
-  },
-  trustText: {
-    ...iOS.typography.caption1,
-    color: iOS.colors.tertiaryLabel,
-  },
-
-  // Selfie Overlay
-  selfieOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: iOS.spacing.xl,
-  },
-  selfieCircle: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    borderStyle: 'dashed',
-  },
-  selfieGuideText: {
-    ...iOS.typography.subhead,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    marginTop: iOS.spacing.lg,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingVertical: iOS.spacing.sm,
-    paddingHorizontal: iOS.spacing.lg,
-    borderRadius: iOS.radius.pill,
-    overflow: 'hidden',
-  },
-  selfiePreviewImage: {
-    height: 220,
-  },
-
-  // Liveness Challenge Styles
-  livenessCountdownContainer: {
-    alignItems: 'center',
-    marginTop: iOS.spacing.lg,
-  },
-  livenessCountdownText: {
-    fontSize: 72,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  livenessChallengeContainer: {
-    alignItems: 'center',
-    marginTop: iOS.spacing.lg,
-  },
-  livenessChallengeText: {
-    ...iOS.typography.headline,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingVertical: iOS.spacing.sm,
-    paddingHorizontal: iOS.spacing.lg,
-    borderRadius: iOS.radius.pill,
-    overflow: 'hidden',
-    marginTop: iOS.spacing.sm,
-  },
-
-  // Liveness Passed Badge
-  livenessPassedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: iOS.spacing.md,
-    backgroundColor: 'rgba(52, 199, 89, 0.1)',
-    borderWidth: 1,
-    borderColor: iOS.colors.green,
-    padding: iOS.spacing.lg,
-    borderRadius: iOS.radius.lg,
-    marginBottom: iOS.spacing.lg,
-  },
-  livenessPassedTextContainer: {
-    flex: 1,
-  },
-  livenessPassedTitle: {
-    ...iOS.typography.headline,
-    color: iOS.colors.green,
-    marginBottom: 2,
-  },
-  livenessPassedSubtitle: {
-    ...iOS.typography.subhead,
-    color: iOS.colors.secondaryLabel,
-  },
+  container: { flex: 1, backgroundColor: iOS.colors.background },
+  header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: iOS.spacing.lg, zIndex: 10 },
+  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
+  stepIndicator: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: iOS.radius.pill, paddingVertical: iOS.spacing.sm, paddingHorizontal: iOS.spacing.md, ...iOS.shadow.small },
+  stepItem: { alignItems: 'center' },
+  stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: iOS.colors.tertiaryFill, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  stepCircleActive: { backgroundColor: iOS.colors.orange },
+  stepCircleComplete: { backgroundColor: iOS.colors.green },
+  stepLabel: { ...iOS.typography.caption1, color: iOS.colors.tertiaryLabel },
+  stepLabelActive: { color: iOS.colors.label, fontWeight: '600' },
+  stepLine: { width: 32, height: 2, backgroundColor: iOS.colors.separator, marginHorizontal: iOS.spacing.sm, marginBottom: 16 },
+  stepLineComplete: { backgroundColor: iOS.colors.green },
+  main: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: iOS.spacing.lg },
+  titleCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: iOS.radius.xl, paddingVertical: iOS.spacing.md, paddingHorizontal: iOS.spacing.xl, marginBottom: iOS.spacing.xxl, alignItems: 'center', ...iOS.shadow.small },
+  titleCardTitle: { ...iOS.typography.title2, color: iOS.colors.label, textAlign: 'center', marginBottom: iOS.spacing.xs },
+  titleCardSubtitle: { ...iOS.typography.subhead, color: iOS.colors.secondaryLabel, textAlign: 'center' },
+  faceFrameContainer: { width: FRAME_SIZE, height: FRAME_SIZE, justifyContent: 'center', alignItems: 'center' },
+  faceFrameInner: { width: FRAME_SIZE, height: FRAME_SIZE, justifyContent: 'center', alignItems: 'center' },
+  frameSvg: { position: 'absolute' },
+  absoluteFrame: { position: 'absolute' },
+  frameCenter: { justifyContent: 'center', alignItems: 'center' },
+  successBadge: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center' },
+  idFrame: { borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.5)', borderRadius: iOS.radius.xl, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  corner: { position: 'absolute', width: 28, height: 28, borderColor: iOS.colors.orange },
+  cornerTL: { top: -1, left: -1, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: iOS.radius.xl },
+  cornerTR: { top: -1, right: -1, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: iOS.radius.xl },
+  cornerBL: { bottom: -1, left: -1, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: iOS.radius.xl },
+  cornerBR: { bottom: -1, right: -1, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: iOS.radius.xl },
+  scanLine: { position: 'absolute', left: 12, right: 12, height: 3, borderRadius: 2 },
+  idFrameCenter: { alignItems: 'center' },
+  idFrameHint: { ...iOS.typography.subhead, color: 'rgba(255, 255, 255, 0.7)', marginTop: iOS.spacing.sm },
+  feedbackContainer: { marginTop: iOS.spacing.xl, paddingHorizontal: iOS.spacing.md },
+  feedbackBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, borderRadius: iOS.radius.pill, maxWidth: SCREEN_WIDTH - 48 },
+  feedbackText: { ...iOS.typography.subhead, fontWeight: '500', flex: 1 },
+  bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingHorizontal: iOS.spacing.xl },
+  captureSection: { alignItems: 'center' },
+  captureButton: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: 'rgba(255, 255, 255, 0.6)', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)', marginBottom: iOS.spacing.md },
+  captureButtonPressed: { transform: [{ scale: 0.95 }] },
+  captureButtonDisabled: { opacity: 0.5 },
+  captureButtonInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFFFFF' },
+  captureHint: { ...iOS.typography.subhead, color: 'rgba(255, 255, 255, 0.8)' },
+  infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: iOS.radius.xl, padding: iOS.spacing.lg, maxWidth: 360, ...iOS.shadow.small },
+  infoCardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: iOS.colors.tealLight, justifyContent: 'center', alignItems: 'center', marginRight: iOS.spacing.md },
+  infoCardContent: { flex: 1 },
+  infoCardTitle: { ...iOS.typography.headline, color: iOS.colors.label, marginBottom: iOS.spacing.xs },
+  infoCardText: { ...iOS.typography.subhead, color: iOS.colors.secondaryLabel, lineHeight: 20 },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  loadingCard: { backgroundColor: iOS.colors.card, borderRadius: iOS.radius.xxl, padding: iOS.spacing.xxl, alignItems: 'center', ...iOS.shadow.card },
+  loadingText: { ...iOS.typography.body, color: iOS.colors.secondaryLabel, marginTop: iOS.spacing.lg },
+  permissionContent: { flex: 1, alignItems: 'center', paddingHorizontal: iOS.spacing.xl },
+  permissionIcon: { width: 88, height: 88, borderRadius: 44, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginTop: iOS.spacing.xxxl, marginBottom: iOS.spacing.xl, ...iOS.shadow.card },
+  permissionTitle: { ...iOS.typography.title1, color: '#FFFFFF', textAlign: 'center', marginBottom: iOS.spacing.sm, textShadowColor: 'rgba(0, 0, 0, 0.1)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  permissionSubtitle: { ...iOS.typography.body, color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center', marginBottom: iOS.spacing.xxl, lineHeight: 24, paddingHorizontal: iOS.spacing.lg },
+  permissionCard: { width: '100%', backgroundColor: iOS.colors.card, borderRadius: iOS.radius.xxl, padding: iOS.spacing.lg, marginBottom: iOS.spacing.xxl, ...iOS.shadow.card },
+  permissionFeature: { flexDirection: 'row', alignItems: 'center', paddingVertical: iOS.spacing.md },
+  permissionFeatureIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: iOS.colors.tealLight, justifyContent: 'center', alignItems: 'center', marginRight: iOS.spacing.md },
+  permissionFeatureText: { ...iOS.typography.body, color: iOS.colors.label, flex: 1 },
+  primaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: iOS.spacing.sm, height: 56, borderRadius: iOS.radius.pill, backgroundColor: iOS.colors.orange, paddingHorizontal: iOS.spacing.xxl, ...iOS.shadow.button },
+  primaryButtonFlex: { flex: 1 },
+  primaryButtonPressed: { backgroundColor: iOS.colors.orangeDark, transform: [{ scale: 0.98 }] },
+  primaryButtonText: { ...iOS.typography.headline, color: '#FFFFFF' },
+  secondaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: iOS.spacing.sm, height: 56, borderRadius: iOS.radius.pill, backgroundColor: iOS.colors.card, paddingHorizontal: iOS.spacing.xl, borderWidth: 1, borderColor: iOS.colors.separator },
+  secondaryButtonPressed: { backgroundColor: iOS.colors.tertiaryFill, transform: [{ scale: 0.98 }] },
+  secondaryButtonText: { ...iOS.typography.headline, color: iOS.colors.label },
+  previewContent: { flex: 1, paddingHorizontal: iOS.spacing.xl },
+  previewHeader: { alignItems: 'center', marginTop: iOS.spacing.xxl, marginBottom: iOS.spacing.xl },
+  successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: iOS.colors.green, justifyContent: 'center', alignItems: 'center', marginBottom: iOS.spacing.lg, ...iOS.shadow.small },
+  previewTitle: { ...iOS.typography.title1, color: '#FFFFFF', textAlign: 'center', marginBottom: iOS.spacing.xs, textShadowColor: 'rgba(0, 0, 0, 0.1)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  previewSubtitle: { ...iOS.typography.body, color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center' },
+  previewCard: { backgroundColor: iOS.colors.card, borderRadius: iOS.radius.xxl, overflow: 'hidden', marginBottom: iOS.spacing.lg, ...iOS.shadow.card },
+  previewImage: { width: '100%', height: 200, backgroundColor: iOS.colors.tertiaryFill },
+  previewBadge: { position: 'absolute', bottom: iOS.spacing.md, right: iOS.spacing.md, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255, 255, 255, 0.95)', paddingVertical: iOS.spacing.xs, paddingHorizontal: iOS.spacing.md, borderRadius: iOS.radius.pill },
+  previewBadgeText: { ...iOS.typography.caption1, color: iOS.colors.green, fontWeight: '600' },
+  verificationInfo: { backgroundColor: iOS.colors.card, borderRadius: iOS.radius.xl, padding: iOS.spacing.lg, marginBottom: iOS.spacing.xxl, ...iOS.shadow.card },
+  verificationItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: iOS.spacing.sm },
+  verificationIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: iOS.spacing.md },
+  verificationText: { flex: 1 },
+  verificationTitle: { ...iOS.typography.headline, color: iOS.colors.label },
+  verificationSubtitle: { ...iOS.typography.subhead, color: iOS.colors.secondaryLabel },
+  previewActions: { flexDirection: 'row', gap: iOS.spacing.md },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorTextWhite: { ...iOS.typography.body, color: 'rgba(255, 255, 255, 0.8)', marginTop: iOS.spacing.lg },
 });
 
 export default IDScannerScreen;

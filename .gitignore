@@ -31,7 +31,21 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# Firebase credentials
+google-services.json
+GoogleService-Info.plist
+
+# Build outputs
+android-release/
+dist-test/
+
+# IDE/Editor
+.claude/
+.idea/
+.vscode/
 
 # typescript
 *.tsbuildinfo

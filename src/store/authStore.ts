@@ -23,7 +23,6 @@ interface AuthState {
   currentEmail: string | null; // For email verification flow
   maskedEmail: string | null; // For display during email verification
   scannedIdFront: string | null; // URI of scanned ID front photo
-  scannedIdBack: string | null; // URI of scanned ID back photo (optional)
   error: string | null;
 
   // Actions
@@ -40,7 +39,7 @@ interface AuthState {
   checkAuthStatus: () => Promise<void>;
   setRegistrationPhase: (phase: RegistrationPhase) => void;
   setCurrentEmail: (email: string, maskedEmail?: string) => void;
-  setScannedId: (front: string, back: string | null) => void;
+  setScannedId: (front: string) => void;
   clearScannedId: () => void;
   clearError: () => void;
 }
@@ -57,7 +56,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   currentEmail: null,
   maskedEmail: null,
   scannedIdFront: null,
-  scannedIdBack: null,
   error: null,
 
   // Login action
@@ -80,6 +78,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Clear any leftover registration data
         await storage.removeItem(STORAGE_KEYS.REGISTRATION_PHASE);
         await storage.removeItem(STORAGE_KEYS.CURRENT_USERNAME);
+        await storage.removeItem(STORAGE_KEYS.SCANNED_ID_FRONT);
         await storage.removeItem('CURRENT_EMAIL');
 
         set({
@@ -235,14 +234,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     storage.setItem('CURRENT_EMAIL', email);
   },
 
-  // Set scanned ID photos (from IDScannerScreen)
-  setScannedId: (front: string, back: string | null) => {
-    set({ scannedIdFront: front, scannedIdBack: back });
+  // Set scanned ID photo (from IDScannerScreen)
+  // Persisted to storage so it survives navigation between screens
+  setScannedId: (front: string) => {
+    set({ scannedIdFront: front });
+    storage.setItem(STORAGE_KEYS.SCANNED_ID_FRONT, front);
   },
 
-  // Clear scanned ID photos
+  // Clear scanned ID photo
   clearScannedId: () => {
-    set({ scannedIdFront: null, scannedIdBack: null });
+    set({ scannedIdFront: null });
+    storage.removeItem(STORAGE_KEYS.SCANNED_ID_FRONT);
   },
 
   // Send OTP action (Phase 1.5)
@@ -379,6 +381,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await storage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
       await storage.removeItem(STORAGE_KEYS.REGISTRATION_PHASE);
       await storage.removeItem(STORAGE_KEYS.CURRENT_USERNAME);
+      await storage.removeItem(STORAGE_KEYS.SCANNED_ID_FRONT);
       await storage.removeItem('CURRENT_EMAIL');
 
       set({
@@ -444,13 +447,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const needsToken = phasesRequiringToken.includes(registrationPhaseStr || '');
 
       if (registrationPhaseStr && currentUsername && (!needsToken || token)) {
-        // Also restore email for email verification flow
+        // Also restore email and scanned ID for registration flow
         const currentEmail = await storage.getItem('CURRENT_EMAIL');
+        const scannedIdFront = await storage.getItem(STORAGE_KEYS.SCANNED_ID_FRONT);
         set({
           isAuthenticated: false,
           registrationPhase: registrationPhaseStr as RegistrationPhase,
           currentUsername,
           currentEmail: currentEmail || null,
+          scannedIdFront: scannedIdFront || null,
           token: token || null,
           isLoading: false,
           isInitialized: true,

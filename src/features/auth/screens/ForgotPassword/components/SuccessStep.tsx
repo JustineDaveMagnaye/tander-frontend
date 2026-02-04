@@ -8,6 +8,7 @@ import { View, Text, Pressable, StyleSheet, AccessibilityInfo, Animated } from '
 import { Feather } from '@expo/vector-icons';
 import { ResponsiveSizes } from '../types';
 import { iOS, A11Y_LABELS, SUCCESS_MESSAGES } from '../constants';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 interface SuccessStepProps {
   sizes: ResponsiveSizes;
@@ -84,14 +85,14 @@ export const SuccessStep = memo(function SuccessStep({
 
       {/* Title */}
       <Animated.View style={{ opacity: opacityAnim }}>
-        <Text style={styles.title}>
+        <Text style={styles.title} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
           Password Reset!
         </Text>
       </Animated.View>
 
       {/* Message */}
       <Animated.View style={{ opacity: opacityAnim }}>
-        <Text style={styles.message}>
+        <Text style={styles.message} maxFontSizeMultiplier={FONT_SCALING.BODY}>
           {SUCCESS_MESSAGES.password_reset}
           {'\n'}You can now sign in with your new password.
         </Text>
@@ -101,15 +102,15 @@ export const SuccessStep = memo(function SuccessStep({
       <Animated.View style={[styles.decorativeRow, { opacity: opacityAnim }]}>
         <View style={styles.decorativeItem}>
           <Feather name="shield" size={20} color={iOS.colors.teal} />
-          <Text style={styles.decorativeText}>Secure</Text>
+          <Text style={styles.decorativeText} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Secure</Text>
         </View>
         <View style={styles.decorativeItem}>
           <Feather name="lock" size={20} color={iOS.colors.teal} />
-          <Text style={styles.decorativeText}>Protected</Text>
+          <Text style={styles.decorativeText} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Protected</Text>
         </View>
         <View style={styles.decorativeItem}>
           <Feather name="check-circle" size={20} color={iOS.colors.teal} />
-          <Text style={styles.decorativeText}>Updated</Text>
+          <Text style={styles.decorativeText} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Updated</Text>
         </View>
       </Animated.View>
 
@@ -122,7 +123,7 @@ export const SuccessStep = memo(function SuccessStep({
         onPress={onSignIn}
         accessibilityLabel={A11Y_LABELS.buttons.sign_in}
       >
-        <Text style={styles.signInText}>Sign In Now</Text>
+        <Text style={styles.signInText} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>Sign In Now</Text>
         <Feather name="arrow-right" size={22} color={iOS.colors.white} />
       </Pressable>
     </View>

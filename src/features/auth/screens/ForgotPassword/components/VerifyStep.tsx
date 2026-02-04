@@ -14,6 +14,7 @@ import {
   ResponsiveSizes,
 } from '../types';
 import { iOS, A11Y_LABELS, VALIDATION } from '../constants';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 interface VerifyStepProps {
   state: ForgotPasswordState;
@@ -76,7 +77,7 @@ const OTPBox: React.FC<OTPBoxProps> = ({ digit, isFocused, hasError }) => {
   return (
     <Animated.View style={[boxStyle, { transform: [{ scale: scaleAnim }] }]}>
       {digit ? (
-        <Text style={[styles.otpDigit, hasError && styles.otpDigitError]}>
+        <Text style={[styles.otpDigit, hasError && styles.otpDigitError]} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
           {digit}
         </Text>
       ) : isFocused ? (
@@ -186,7 +187,7 @@ export const VerifyStep = memo(function VerifyStep({
       {/* Edit Contact Link */}
       <Pressable onPress={onTryDifferentMethod} style={styles.editLink}>
         <Feather name="edit-2" size={14} color={iOS.colors.teal} />
-        <Text style={styles.editLinkText}>
+        <Text style={styles.editLinkText} maxFontSizeMultiplier={FONT_SCALING.BODY}>
           Change {state.method === 'email' ? 'email' : 'number'}
         </Text>
       </Pressable>
@@ -202,8 +203,8 @@ export const VerifyStep = memo(function VerifyStep({
             />
           </View>
           <View style={styles.infoTextContainer}>
-            <Text style={styles.infoTitle}>Verification Code</Text>
-            <Text style={styles.infoSubtitle}>Sent to {maskedContact}</Text>
+            <Text style={styles.infoTitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>Verification Code</Text>
+            <Text style={styles.infoSubtitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>Sent to {maskedContact}</Text>
           </View>
         </View>
       </View>
@@ -243,15 +244,15 @@ export const VerifyStep = memo(function VerifyStep({
         {state.error ? (
           <View style={styles.errorBadge}>
             <Feather name="alert-circle" size={16} color={iOS.colors.error} />
-            <Text style={styles.errorText}>{state.error}</Text>
+            <Text style={styles.errorText} maxFontSizeMultiplier={FONT_SCALING.BODY}>{state.error}</Text>
           </View>
         ) : info ? (
           <View style={styles.infoBadge}>
             <Feather name="check-circle" size={16} color={iOS.colors.success} />
-            <Text style={styles.infoText}>{info}</Text>
+            <Text style={styles.infoText} maxFontSizeMultiplier={FONT_SCALING.BODY}>{info}</Text>
           </View>
         ) : (
-          <Text style={styles.hintText}>Enter the 6-digit code</Text>
+          <Text style={styles.hintText} maxFontSizeMultiplier={FONT_SCALING.BODY}>Enter the 6-digit code</Text>
         )}
       </View>
 
@@ -272,7 +273,7 @@ export const VerifyStep = memo(function VerifyStep({
           <Text style={[
             styles.verifyButtonText,
             canVerify && styles.verifyButtonTextEnabled,
-          ]}>
+          ]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
             Verify
           </Text>
         )}
@@ -280,7 +281,7 @@ export const VerifyStep = memo(function VerifyStep({
 
       {/* Resend Section */}
       <View style={styles.resendSection}>
-        <Text style={styles.resendLabel}>Didn't receive the code?</Text>
+        <Text style={styles.resendLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>Didn't receive the code?</Text>
         <Pressable
           onPress={handleResend}
           disabled={state.resendTimer > 0 || state.loading}
@@ -290,7 +291,7 @@ export const VerifyStep = memo(function VerifyStep({
           <Text style={[
             styles.resendButtonText,
             (state.resendTimer > 0 || state.loading) && styles.resendButtonTextDisabled,
-          ]}>
+          ]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
             {state.resendTimer > 0
               ? `Resend in ${state.resendTimer}s`
               : state.loading
@@ -303,7 +304,7 @@ export const VerifyStep = memo(function VerifyStep({
       {/* Trust Badge */}
       <View style={styles.trustBadge}>
         <Feather name="lock" size={14} color={iOS.colors.tertiaryLabel} />
-        <Text style={styles.trustText}>End-to-end encrypted</Text>
+        <Text style={styles.trustText} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>End-to-end encrypted</Text>
       </View>
     </View>
   );

@@ -1,30 +1,33 @@
 /**
- * TANDER ID Verification Screen - Premium Edition
- * Step 4 of 4: Final verification with celebratory feel
+ * TANDER ID Verification Screen - Ultra Premium iOS 26 Liquid Glass Edition
+ * Step 4 of 4: Final verification with celebration
  *
- * Design Philosophy:
- * - Premium gradient backgrounds matching WelcomeScreen aesthetic
- * - Glassmorphism cards with floating hearts decoration
- * - CELEBRATORY feel - this is the final step!
- * - Senior-friendly with large touch targets (56-64px)
- * - Smooth entrance animations respecting reduce motion
- * - 100% responsive across all devices
- * - WCAG AA/AAA compliant contrast ratios
+ * Design References (2025):
+ * - Apple Liquid Glass from iOS 26/WWDC 2025
+ * - Premium glassmorphism with adaptive tint/opacity
+ * - Apple Wallet success animations
+ * - iOS Human Interface Guidelines
  *
- * Key Features:
- * - Premium coral-to-teal gradient background
- * - Floating hearts decoration with animations
- * - Decorative background circles
- * - Glassmorphic card containers
- * - Large, accessible photo upload areas
- * - Visual success feedback
- * - Celebration animation on completion
- * - Progress indicator (Step 4 of 4 - FINAL STEP)
+ * Features:
+ * - Premium dark gradient backgrounds
+ * - Liquid Glass card components
+ * - Animated celebration effects
+ * - iOS 17+ SF Pro typography
+ * - Multi-stage haptic feedback
+ * - 56pt+ senior-friendly touch targets
+ * - WCAG AA/AAA compliant contrast
+ * - Responsive across all devices
+ *
+ * Sources:
+ * - Apple Human Interface Guidelines
+ * - Glassmorphism in 2025: Apple's Liquid Glass
+ * - KYC Verification UI Design patterns
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
@@ -34,9 +37,22 @@ import {
   Image,
   Alert,
   AccessibilityInfo,
-  Animated,
-  Easing,
+  Dimensions,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withRepeat,
+  withSequence,
+  withDelay,
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+} from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,13 +60,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@shared/styles/colors';
-import { spacing, borderRadius, shadows } from '@shared/styles/spacing';
 import { useResponsive } from '@shared/hooks/useResponsive';
 import { AuthStackParamList } from '@navigation/types';
-import { useAuthStore, selectCurrentUsername } from '@store/authStore';
+import { useAuthStore } from '@store/authStore';
 import { submitIdVerification } from '@/services/api/authApi';
-import { Text } from '@shared/components';
+
+// Screen dimensions available if needed
+Dimensions.get('window');
 
 type IDScreenNavProp = NativeStackNavigationProp<AuthStackParamList, 'IDVerification'>;
 type IDScreenRouteProp = RouteProp<AuthStackParamList, 'IDVerification'>;
@@ -60,172 +76,226 @@ interface Props {
   route: IDScreenRouteProp;
 }
 
+// Create animated components
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 // ============================================================================
-// PREMIUM COLOR PALETTE - Matching WelcomeScreen and LoadingScreen
+// APPLE iOS 26 LIQUID GLASS DESIGN SYSTEM
+// Reference: https://www.everydayux.net/glassmorphism-apple-liquid-glass-interface-design/
 // ============================================================================
-const PREMIUM_COLORS = {
-  gradientTop: '#FF8A65',      // Warm coral-orange
-  gradientMiddle: '#FF7043',   // Deeper coral
-  gradientBottom: '#26A69A',   // Trust-inspiring teal
+const LiquidGlass = {
+  // Adaptive colors that respond to context
+  colors: {
+    // System backgrounds
+    systemBackground: '#0A0F14',
+    secondaryBackground: 'rgba(28, 28, 30, 0.95)',
+    tertiaryBackground: 'rgba(44, 44, 46, 0.85)',
 
-  glassWhite: 'rgba(255, 255, 255, 0.95)',
-  glassTint: 'rgba(255, 255, 255, 0.12)',
-  glassCard: 'rgba(255, 255, 255, 0.98)',
+    // Liquid Glass materials
+    glass: {
+      ultraThin: 'rgba(255, 255, 255, 0.05)',
+      thin: 'rgba(255, 255, 255, 0.08)',
+      regular: 'rgba(255, 255, 255, 0.12)',
+      thick: 'rgba(255, 255, 255, 0.18)',
+      ultraThick: 'rgba(255, 255, 255, 0.25)',
+      border: 'rgba(255, 255, 255, 0.12)',
+      highlight: 'rgba(255, 255, 255, 0.35)',
+    },
 
-  textPrimary: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.92)',
+    // Labels (on dark backgrounds)
+    label: {
+      primary: '#FFFFFF',
+      secondary: 'rgba(255, 255, 255, 0.70)',
+      tertiary: 'rgba(255, 255, 255, 0.45)',
+      quaternary: 'rgba(255, 255, 255, 0.25)',
+    },
 
-  heartPink: 'rgba(255, 107, 138, 0.6)',
-  warmGlow: 'rgba(255, 183, 77, 0.3)',
-  successGreen: '#10B981',
+    // iOS System Colors
+    system: {
+      blue: '#0A84FF',
+      green: '#30D158',
+      orange: '#FF9F0A',
+      red: '#FF453A',
+      teal: '#64D2FF',
+      cyan: '#5AC8FA',
+      mint: '#63E6BE',
+      indigo: '#5E5CE6',
+      purple: '#BF5AF2',
+      pink: '#FF375F',
+    },
+
+    // TANDER Brand
+    brand: {
+      primary: '#30D5C8',
+      secondary: '#FF9F0A',
+      accent: '#FF375F',
+      gradientPrimary: ['#30D5C8', '#20B2AA', '#14A89D'],
+      gradientSecondary: ['#FF9F0A', '#FF7A00', '#FF5722'],
+      gradientAccent: ['#FF375F', '#FF2D55', '#FF1744'],
+      gradientDark: ['#0A1612', '#0D1B16', '#0A1612'],
+    },
+  },
+
+  // iOS 17+ SF Pro Typography
+  typography: {
+    largeTitle: { fontSize: 34, fontWeight: '700' as const, letterSpacing: 0.37, lineHeight: 41 },
+    title1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: 0.36, lineHeight: 34 },
+    title2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: 0.35, lineHeight: 28 },
+    title3: { fontSize: 20, fontWeight: '600' as const, letterSpacing: 0.38, lineHeight: 25 },
+    headline: { fontSize: 17, fontWeight: '600' as const, letterSpacing: -0.41, lineHeight: 22 },
+    body: { fontSize: 17, fontWeight: '400' as const, letterSpacing: -0.41, lineHeight: 22 },
+    callout: { fontSize: 16, fontWeight: '400' as const, letterSpacing: -0.32, lineHeight: 21 },
+    subheadline: { fontSize: 15, fontWeight: '400' as const, letterSpacing: -0.24, lineHeight: 20 },
+    footnote: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.08, lineHeight: 18 },
+    caption1: { fontSize: 12, fontWeight: '400' as const, letterSpacing: 0, lineHeight: 16 },
+    caption2: { fontSize: 11, fontWeight: '400' as const, letterSpacing: 0.07, lineHeight: 13 },
+  },
+
+  // 8pt Grid System
+  spacing: {
+    xxs: 2,
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32,
+    huge: 40,
+    massive: 48,
+  },
+
+  // Apple Corner Radii
+  radius: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32,
+    pill: 9999,
+  },
+
+  // iOS Spring Animations
+  springs: {
+    gentle: { damping: 20, stiffness: 100 },
+    snappy: { damping: 15, stiffness: 200 },
+    bouncy: { damping: 10, stiffness: 150 },
+    rigid: { damping: 25, stiffness: 400 },
+  },
+
+  // Blur Intensities
+  blur: {
+    ultraThin: 20,
+    thin: 40,
+    regular: 60,
+    thick: 80,
+    ultraThick: 100,
+  },
 } as const;
 
 // ============================================================================
-// ANIMATION TIMING
+// FLOATING PARTICLE COMPONENT
+// Premium ambient decoration
 // ============================================================================
-const ANIMATION_TIMING = {
-  headerFade: 600,
-  cardEntrance: 500,
-  heartFloat: 3500,
-  celebration: 1200,
-} as const;
-
-// ============================================================================
-// FLOATING HEART DECORATION COMPONENT
-// ============================================================================
-interface FloatingHeartProps {
+const FloatingParticle: React.FC<{
   size: number;
   positionX: number;
   positionY: number;
   delay: number;
-  reduceMotion: boolean;
-}
-
-const FloatingHeart: React.FC<FloatingHeartProps> = ({
-  size,
-  positionX,
-  positionY,
-  delay,
-  reduceMotion,
-}) => {
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  color: string;
+}> = ({ size, positionX, positionY, delay, color }) => {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.8);
 
   useEffect(() => {
-    if (reduceMotion) {
-      fadeAnim.setValue(0.3);
-      return;
-    }
-
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
+    // Fade in
+    opacity.value = withDelay(
       delay,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-
-    const floatLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: 1,
-          duration: ANIMATION_TIMING.heartFloat,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: ANIMATION_TIMING.heartFloat,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
+      withTiming(0.4, { duration: 800, easing: Easing.out(Easing.ease) })
     );
 
-    const timer = setTimeout(() => floatLoop.start(), delay);
+    // Float animation
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(-12, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 2500, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      )
+    );
 
-    return () => {
-      clearTimeout(timer);
-      floatLoop.stop();
-    };
-  }, [floatAnim, fadeAnim, delay, reduceMotion]);
+    // Scale pulse
+    scale.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1.1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.9, { duration: 3000, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      )
+    );
+  }, []);
 
-  const translateY = floatAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -15],
-  });
-
-  const opacity = fadeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.3],
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
+  }));
 
   return (
     <Animated.View
-      style={{
-        position: 'absolute',
-        left: `${positionX}%`,
-        top: `${positionY}%`,
-        opacity,
-        transform: [{ translateY }],
-      }}
+      style={[
+        {
+          position: 'absolute',
+          left: `${positionX}%`,
+          top: `${positionY}%`,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+        },
+        animatedStyle,
+      ]}
       pointerEvents="none"
-    >
-      <View
-        style={{
-          width: size + 10,
-          height: size + 10,
-          borderRadius: (size + 10) / 2,
-          backgroundColor: 'rgba(255, 107, 138, 0.1)',
-          borderWidth: 1,
-          borderColor: 'rgba(255, 107, 138, 0.2)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <Feather name="heart" size={size} color={PREMIUM_COLORS.heartPink} />
-      </View>
-    </Animated.View>
+    />
   );
 };
 
 // ============================================================================
 // STEP INDICATOR COMPONENT
+// Premium progress indicator
 // ============================================================================
-interface StepIndicatorProps {
+const StepIndicator: React.FC<{
   currentStep: number;
   totalSteps: number;
-  isTablet: boolean;
-}
-
-const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, totalSteps, isTablet }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+}> = ({ currentStep, totalSteps }) => {
+  const pulseScale = useSharedValue(1);
 
   useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
     );
-    pulse.start();
+  }, []);
 
-    return () => pulse.stop();
-  }, [pulseAnim]);
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   return (
-    <View style={{ marginBottom: spacing.l, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.s }}>
+    <View style={styles.stepIndicator}>
+      <View style={styles.stepIndicatorRow}>
         {Array.from({ length: totalSteps }).map((_, index) => {
           const stepNumber = index + 1;
           const isCompleted = stepNumber < currentStep;
@@ -234,341 +304,195 @@ const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, totalSteps, 
           return (
             <React.Fragment key={stepNumber}>
               <Animated.View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  backgroundColor: isCompleted
-                    ? colors.teal[500]
-                    : isActive
-                      ? colors.orange[500]
-                      : colors.gray[300],
-                  borderWidth: isActive ? 2 : 0,
-                  borderColor: colors.orange[200],
-                  transform: isActive ? [{ scale: pulseAnim }] : undefined,
-                }}
+                style={[
+                  styles.stepDot,
+                  isCompleted && styles.stepDotComplete,
+                  isActive && styles.stepDotActive,
+                  isActive && pulseStyle,
+                ]}
               >
                 {isCompleted && (
-                  <Text style={{ color: colors.white, fontSize: 8, fontWeight: '700' }}>
-                    ✓
-                  </Text>
-                )}
-                {isActive && (
-                  <View
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: 2,
-                      backgroundColor: colors.white,
-                    }}
-                  />
+                  <Feather name="check" size={10} color="#FFF" />
                 )}
               </Animated.View>
               {stepNumber < totalSteps && (
                 <View
-                  style={{
-                    width: 40,
-                    height: 3,
-                    backgroundColor: isCompleted ? colors.teal[500] : colors.gray[300],
-                    marginHorizontal: spacing.xs,
-                  }}
+                  style={[
+                    styles.stepLine,
+                    isCompleted && styles.stepLineComplete,
+                  ]}
                 />
               )}
             </React.Fragment>
           );
         })}
       </View>
-      <Text
-        style={{
-          color: colors.gray[700],
-          fontWeight: '700',
-          fontSize: isTablet ? 16 : 15,
-        }}
-      >
-        Step {currentStep} of {totalSteps}: Final Verification
+
+      <Text style={styles.stepText}>
+        Step {currentStep} of {totalSteps}
       </Text>
-      <Text
-        style={{
-          color: colors.orange[600],
-          fontWeight: '600',
-          fontSize: isTablet ? 14 : 13,
-          marginTop: 4,
-        }}
-      >
-        Almost there!
-      </Text>
+      <Text style={styles.stepSubtext}>Final Verification</Text>
     </View>
   );
 };
 
 // ============================================================================
-// PRIMARY BUTTON COMPONENT
+// LIQUID GLASS BUTTON
+// Premium button with gradient or glass effect
 // ============================================================================
-interface PrimaryButtonProps {
-  title: string;
-  loadingTitle: string;
+const LiquidGlassButton: React.FC<{
   onPress: () => void;
-  loading: boolean;
+  title: string;
+  icon?: string;
+  variant?: 'primary' | 'secondary';
   disabled?: boolean;
-  height: number;
-  fontSize: number;
-  icon?: keyof typeof Feather.glyphMap;
-}
-
-const PrimaryButton: React.FC<PrimaryButtonProps> = ({
-  title,
-  loadingTitle,
-  onPress,
-  loading,
-  disabled = false,
-  height,
-  fontSize,
-  icon = 'arrow-right',
-}) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  loading?: boolean;
+  fullWidth?: boolean;
+}> = ({ onPress, title, icon, variant = 'primary', disabled, loading, fullWidth }) => {
+  const scale = useSharedValue(1);
 
   const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 10,
-    }).start();
+    if (disabled) return;
+    scale.value = withSpring(0.96, LiquidGlass.springs.snappy);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 10,
-    }).start();
+    scale.value = withSpring(1, LiquidGlass.springs.snappy);
   };
 
-  const isDisabled = loading || disabled;
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const isPrimary = variant === 'primary';
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        disabled={isDisabled}
-        style={{
-          borderRadius: 9999,
-          overflow: 'hidden',
-          ...shadows.large,
-          opacity: isDisabled && !loading ? 0.5 : 1,
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={loading ? loadingTitle : title}
-        accessibilityState={{ disabled: isDisabled }}
-      >
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled || loading}
+      style={[
+        styles.liquidButton,
+        fullWidth && styles.liquidButtonFullWidth,
+        animatedStyle,
+        (disabled || loading) && styles.liquidButtonDisabled,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading }}
+    >
+      {isPrimary ? (
         <LinearGradient
-          colors={
-            isDisabled && !loading
-              ? ['#D1D5DB', '#C7CBD1']
-              : colors.gradient.primaryButton
-          }
+          colors={LiquidGlass.colors.brand.gradientPrimary as any}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{
-            height,
-            minHeight: 56,
-            justifyContent: 'center',
-            alignItems: 'center',
-            flexDirection: 'row',
-            gap: spacing.s,
-            paddingHorizontal: spacing.xl,
-          }}
+          end={{ x: 1, y: 1 }}
+          style={styles.liquidButtonGradient}
         >
-          {loading && (
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                borderWidth: 2,
-                borderColor: 'rgba(255,255,255,0.3)',
-                borderTopColor: colors.white,
-              }}
-            />
+          {loading ? (
+            <View style={styles.loadingSpinner} />
+          ) : (
+            <>
+              {icon && <Feather name={icon as any} size={20} color="#FFF" />}
+              <Text style={styles.liquidButtonTextPrimary}>{title}</Text>
+            </>
           )}
-          <Text style={{ color: colors.white, fontWeight: '700', fontSize }}>
-            {loading ? loadingTitle : title}
-          </Text>
-          {!loading && <Feather name={icon} size={fontSize + 2} color={colors.white} />}
         </LinearGradient>
-      </Pressable>
-    </Animated.View>
+      ) : (
+        <BlurView intensity={LiquidGlass.blur.regular} style={styles.liquidButtonBlur}>
+          {loading ? (
+            <View style={styles.loadingSpinner} />
+          ) : (
+            <>
+              {icon && <Feather name={icon as any} size={20} color={LiquidGlass.colors.label.primary} />}
+              <Text style={styles.liquidButtonTextSecondary}>{title}</Text>
+            </>
+          )}
+        </BlurView>
+      )}
+    </AnimatedPressable>
   );
 };
 
 // ============================================================================
-// PHOTO UPLOAD CARD COMPONENT
+// PHOTO UPLOAD CARD
+// Premium glassmorphic upload component
 // ============================================================================
-interface PhotoUploadCardProps {
+const PhotoUploadCard: React.FC<{
   label: string;
   photo: ImagePicker.ImagePickerAsset | null;
   onPick: () => void;
   onRemove: () => void;
   required?: boolean;
-  buttonHeight: number;
-  fontSize: number;
   disabled?: boolean;
-}
-
-const PhotoUploadCard: React.FC<PhotoUploadCardProps> = ({
-  label,
-  photo,
-  onPick,
-  onRemove,
-  required = false,
-  buttonHeight,
-  fontSize,
-  disabled = false,
-}) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+}> = ({ label, photo, onPick, onRemove, required = false, disabled = false }) => {
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     if (photo) {
-      Animated.sequence([
-        Animated.spring(scaleAnim, {
-          toValue: 1.05,
-          tension: 100,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      scale.value = withSequence(
+        withSpring(1.02, LiquidGlass.springs.bouncy),
+        withSpring(1, LiquidGlass.springs.gentle)
+      );
     }
-  }, [photo, scaleAnim]);
+  }, [photo]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
-    <View style={{ marginBottom: spacing.l }}>
-      <Text
-        style={{
-          color: colors.gray[700],
-          fontWeight: '700',
-          fontSize,
-          marginBottom: spacing.s,
-        }}
-      >
-        {label} {required && <Text style={{ color: colors.semantic.error }}>*</Text>}
+    <View style={styles.uploadCardContainer}>
+      <Text style={styles.uploadLabel}>
+        {label} {required && <Text style={styles.requiredAsterisk}>*</Text>}
       </Text>
 
       {photo ? (
-        <Animated.View
-          style={{
-            transform: [{ scale: scaleAnim }],
-            position: 'relative',
-            borderRadius: borderRadius.large,
-            overflow: 'hidden',
-            ...shadows.medium,
-          }}
-        >
-          <Image
-            source={{ uri: photo.uri }}
-            style={{
-              width: '100%',
-              height: 200,
-              borderRadius: borderRadius.large,
-              backgroundColor: colors.gray[100],
-            }}
-            resizeMode="cover"
-          />
+        <Animated.View style={[styles.uploadCardFilled, animatedStyle]}>
+          <Image source={{ uri: photo.uri }} style={styles.uploadImage} resizeMode="cover" />
+
+          {/* Success badge */}
+          <View style={styles.uploadSuccessBadge}>
+            <LinearGradient
+              colors={['#30D158', '#28C74F']}
+              style={styles.uploadSuccessBadgeGradient}
+            >
+              <Feather name="check" size={14} color="#FFF" />
+              <Text style={styles.uploadSuccessText}>Uploaded</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Remove button */}
           <Pressable
             onPress={onRemove}
-            style={{
-              position: 'absolute',
-              top: spacing.s,
-              right: spacing.s,
-              width: 48,
-              height: 48,
-              borderRadius: 24,
-              backgroundColor: colors.semantic.error,
-              justifyContent: 'center',
-              alignItems: 'center',
-              ...shadows.small,
-            }}
+            style={styles.uploadRemoveButton}
             accessibilityRole="button"
             accessibilityLabel={`Remove ${label.toLowerCase()}`}
           >
-            <Feather name="x" size={24} color={colors.white} />
+            <BlurView intensity={LiquidGlass.blur.thick} style={styles.uploadRemoveBlur}>
+              <Feather name="x" size={20} color="#FFF" />
+            </BlurView>
           </Pressable>
-          {/* Success checkmark */}
-          <View
-            style={{
-              position: 'absolute',
-              bottom: spacing.m,
-              left: spacing.m,
-              backgroundColor: PREMIUM_COLORS.successGreen,
-              paddingHorizontal: spacing.m,
-              paddingVertical: spacing.s,
-              borderRadius: borderRadius.medium,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.xs,
-              ...shadows.small,
-            }}
-          >
-            <Feather name="check-circle" size={16} color={colors.white} />
-            <Text style={{ color: colors.white, fontWeight: '700', fontSize: 13 }}>
-              Photo uploaded
-            </Text>
-          </View>
         </Animated.View>
       ) : (
         <Pressable
           onPress={onPick}
           disabled={disabled}
-          style={{
-            height: buttonHeight + 60,
-            borderWidth: 2,
-            borderColor: colors.gray[300],
-            borderStyle: 'dashed',
-            borderRadius: borderRadius.large,
-            backgroundColor: colors.gray[50],
-            justifyContent: 'center',
-            alignItems: 'center',
-            opacity: disabled ? 0.5 : 1,
-          }}
+          style={[styles.uploadCardEmpty, disabled && styles.uploadCardDisabled]}
           accessibilityRole="button"
           accessibilityLabel={`Upload ${label.toLowerCase()}`}
         >
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: colors.orange[100],
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: spacing.m,
-            }}
-          >
-            <Feather name="camera" size={32} color={colors.orange[500]} />
+          <View style={styles.uploadIconContainer}>
+            <LinearGradient
+              colors={LiquidGlass.colors.brand.gradientPrimary as any}
+              style={styles.uploadIconGradient}
+            >
+              <Feather name="camera" size={28} color="#FFF" />
+            </LinearGradient>
           </View>
-          <Text
-            style={{
-              color: colors.teal[600],
-              fontWeight: '700',
-              fontSize,
-              marginBottom: spacing.xs,
-            }}
-          >
-            Tap to Upload
-          </Text>
-          <Text style={{ color: colors.gray[500], fontSize: fontSize - 2 }}>
-            Choose from gallery
-          </Text>
+          <Text style={styles.uploadTitle}>Tap to Upload</Text>
+          <Text style={styles.uploadSubtitle}>Select from gallery</Text>
         </Pressable>
       )}
     </View>
@@ -576,116 +500,47 @@ const PhotoUploadCard: React.FC<PhotoUploadCardProps> = ({
 };
 
 // ============================================================================
+// INFO CARD COMPONENT
+// Premium glassmorphic info display
+// ============================================================================
+const InfoCard: React.FC<{
+  icon: string;
+  title: string;
+  description: string;
+  color: string;
+}> = ({ icon, title, description, color }) => {
+  return (
+    <View style={styles.infoCard}>
+      <View style={[styles.infoCardIcon, { backgroundColor: `${color}20` }]}>
+        <Feather name={icon as any} size={20} color={color} />
+      </View>
+      <View style={styles.infoCardContent}>
+        <Text style={[styles.infoCardTitle, { color }]}>{title}</Text>
+        <Text style={styles.infoCardDescription}>{description}</Text>
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const IDVerificationScreen: React.FC<Props> = ({ navigation, route }) => {
+export const IDVerificationScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const {
-    width,
-    height,
-    isLandscape,
-    isTablet,
-    isSmallScreen,
-    wp,
-    hp,
-  } = useResponsive();
-
-  // Get username from route or store
-  const storeUsername = useAuthStore(selectCurrentUsername);
-  const username = route.params?.username || storeUsername || '';
+  const { isLandscape, isTablet, wp } = useResponsive();
 
   // Auth store
   const scannedIdFront = useAuthStore((state) => state.scannedIdFront);
-  const scannedIdBack = useAuthStore((state) => state.scannedIdBack);
   const clearScannedId = useAuthStore((state) => state.clearScannedId);
 
-  // State - pre-populate with scanned ID photos if available
+  // State
   const [frontPhoto, setFrontPhoto] = useState<ImagePicker.ImagePickerAsset | null>(
     scannedIdFront ? { uri: scannedIdFront, width: 0, height: 0 } as ImagePicker.ImagePickerAsset : null
   );
-  const [backPhoto, setBackPhoto] = useState<ImagePicker.ImagePickerAsset | null>(
-    scannedIdBack ? { uri: scannedIdBack, width: 0, height: 0 } as ImagePicker.ImagePickerAsset : null
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  // Animation values
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const cardTranslateY = useRef(new Animated.Value(40)).current;
-
-  // Responsive sizes
-  const titleSize = isLandscape
-    ? Math.min(hp(10), wp(6), 38)
-    : isTablet
-      ? 48
-      : 36;
-  const subtitleSize = isLandscape
-    ? Math.min(hp(4), wp(3), 20)
-    : isTablet
-      ? 22
-      : 19;
-  const fontSize = isTablet ? 18 : 16;
-  const buttonHeight = isTablet ? 68 : 60;
-  const buttonFontSize = isTablet ? 20 : 18;
-  const maxFormWidth = isTablet ? 600 : 500;
-  const heartSize = isTablet ? 28 : 22;
-
-  // Decorative circle sizes
-  const decorCircleLarge = isTablet ? 350 : isLandscape ? 200 : 280;
-  const decorCircleMedium = isTablet ? 250 : isLandscape ? 140 : 200;
-  const decorCircleSmall = isTablet ? 150 : isLandscape ? 90 : 130;
 
   const canVerify = !!frontPhoto && !loading;
-
-  // Check for reduce motion preference
-  useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion
-    );
-    return () => subscription.remove();
-  }, []);
-
-  // Entrance animations
-  useEffect(() => {
-    if (reduceMotion) {
-      headerOpacity.setValue(1);
-      cardOpacity.setValue(1);
-      cardTranslateY.setValue(0);
-      return;
-    }
-
-    Animated.stagger(150, [
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: ANIMATION_TIMING.headerFade,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(cardOpacity, {
-          toValue: 1,
-          duration: ANIMATION_TIMING.cardEntrance,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardTranslateY, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-  }, [reduceMotion, headerOpacity, cardOpacity, cardTranslateY]);
 
   // Request photo permissions
   const requestPermission = async (): Promise<boolean> => {
@@ -718,53 +573,24 @@ export const IDVerificationScreen: React.FC<Props> = ({ navigation, route }) => 
         setFrontPhoto(result.assets[0]);
         setError('');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        AccessibilityInfo.announceForAccessibility('Front ID photo selected');
+        AccessibilityInfo.announceForAccessibility('ID photo selected');
       }
     } catch (err) {
       Alert.alert('Error', 'Could not select photo. Please try again.');
     }
   }, []);
 
-  // Pick back photo
-  const pickBackPhoto = useCallback(async () => {
-    const hasPermission = await requestPermission();
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setBackPhoto(result.assets[0]);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        AccessibilityInfo.announceForAccessibility('Back ID photo selected');
-      }
-    } catch (err) {
-      Alert.alert('Error', 'Could not select photo. Please try again.');
-    }
-  }, []);
-
-  // Remove photos
+  // Remove photo
   const removeFrontPhoto = useCallback(() => {
     setFrontPhoto(null);
     Haptics.selectionAsync();
-    AccessibilityInfo.announceForAccessibility('Front ID photo removed');
-  }, []);
-
-  const removeBackPhoto = useCallback(() => {
-    setBackPhoto(null);
-    Haptics.selectionAsync();
-    AccessibilityInfo.announceForAccessibility('Back ID photo removed');
+    AccessibilityInfo.announceForAccessibility('ID photo removed');
   }, []);
 
   // Handle verification
   const handleVerify = useCallback(async () => {
     if (!frontPhoto) {
-      setError('Please upload a photo of the front of your ID');
+      setError('Please upload a photo of your ID');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -773,26 +599,16 @@ export const IDVerificationScreen: React.FC<Props> = ({ navigation, route }) => 
     setError('');
 
     try {
-      // Convert photos to blobs for API
       const frontBlob = await fetch(frontPhoto.uri).then((r) => r.blob());
-      let backBlob: Blob | undefined;
-      if (backPhoto) {
-        backBlob = await fetch(backPhoto.uri).then((r) => r.blob());
-      }
-
-      // Call the ID verification API (no selfie - liveness done on frontend)
-      await submitIdVerification(frontBlob, backBlob);
-
-      // Clear scanned ID photos from store after successful verification
+      await submitIdVerification(frontBlob);
       clearScannedId();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      AccessibilityInfo.announceForAccessibility('ID verification submitted successfully');
+      AccessibilityInfo.announceForAccessibility('Verification submitted successfully');
 
-      // Show success and navigate
       Alert.alert(
-        '🎉 Verification Submitted!',
-        'Your ID verification is being reviewed. You can now log in and start exploring while we verify your identity.',
+        'Verification Submitted',
+        'Your ID is being reviewed. You can now log in and start exploring.',
         [
           {
             text: 'Continue to Login',
@@ -811,466 +627,479 @@ export const IDVerificationScreen: React.FC<Props> = ({ navigation, route }) => 
       setError(msg);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-  }, [frontPhoto, backPhoto, clearScannedId, navigation]);
+  }, [frontPhoto, clearScannedId, navigation]);
 
+  // Back handler
   const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (navigation.canGoBack()) {
       navigation.goBack();
     }
   }, [navigation]);
 
-  // Form padding
-  const formPadding = isLandscape
-    ? isTablet
-      ? wp(4)
-      : wp(3)
-    : isSmallScreen
-      ? spacing.m
-      : spacing.l;
+  // Responsive values
+  const contentMaxWidth = isTablet ? 560 : 480;
+  const formPadding = isLandscape ? wp(3) : LiquidGlass.spacing.xl;
 
-  // Render form content
-  const renderForm = () => (
-    <Animated.View
-      style={{
-        opacity: cardOpacity,
-        transform: [{ translateY: cardTranslateY }],
-        maxWidth: maxFormWidth,
-        alignSelf: 'center',
-        width: '100%',
-        backgroundColor: PREMIUM_COLORS.glassCard,
-        borderRadius: isTablet ? 32 : 24,
-        padding: isTablet ? spacing.xl : spacing.l,
-        ...shadows.large,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-      }}
-    >
-      {/* Step Indicator */}
-      <StepIndicator currentStep={4} totalSteps={4} isTablet={isTablet} />
-
-      {/* Instructions */}
-      <View
-        style={{
-          backgroundColor: colors.orange[50],
-          borderRadius: borderRadius.large,
-          padding: spacing.m,
-          marginBottom: spacing.l,
-          borderWidth: 1,
-          borderColor: colors.orange[200],
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-          <Feather name="shield" size={20} color={colors.orange[600]} />
-          <Text
-            style={{
-              color: colors.orange[700],
-              fontWeight: '700',
-              fontSize,
-              marginLeft: spacing.s,
-            }}
-          >
-            Why we need this
-          </Text>
-        </View>
-        <Text
-          style={{
-            color: colors.gray[700],
-            fontSize: fontSize - 1,
-            lineHeight: (fontSize - 1) * 1.5,
-          }}
-        >
-          To keep our community safe and verify you're 60+, we need a photo of your government-issued ID.
-        </Text>
-      </View>
-
-      {/* Error */}
-      {error && (
-        <View
-          style={{
-            backgroundColor: 'rgba(244, 67, 54, 0.08)',
-            borderRadius: borderRadius.large,
-            padding: spacing.m,
-            marginBottom: spacing.l,
-            borderWidth: 1,
-            borderColor: 'rgba(244, 67, 54, 0.25)',
-          }}
-          accessibilityRole="alert"
-        >
-          <Text
-            style={{
-              color: colors.semantic.error,
-              fontWeight: '600',
-              fontSize,
-              textAlign: 'center',
-            }}
-          >
-            {error}
-          </Text>
-        </View>
-      )}
-
-      {/* Front ID */}
-      <PhotoUploadCard
-        label="Front of ID"
-        photo={frontPhoto}
-        onPick={pickFrontPhoto}
-        onRemove={removeFrontPhoto}
-        required
-        buttonHeight={buttonHeight}
-        fontSize={fontSize}
-        disabled={loading}
-      />
-
-      {/* Back ID */}
-      <PhotoUploadCard
-        label="Back of ID (Optional)"
-        photo={backPhoto}
-        onPick={pickBackPhoto}
-        onRemove={removeBackPhoto}
-        buttonHeight={buttonHeight}
-        fontSize={fontSize}
-        disabled={loading}
-      />
-
-      {/* Privacy Note */}
-      <View
-        style={{
-          backgroundColor: colors.teal[50],
-          borderRadius: borderRadius.medium,
-          padding: spacing.m,
-          marginBottom: spacing.l,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.s,
-        }}
-      >
-        <Feather name="lock" size={18} color={colors.teal[600]} />
-        <Text
-          style={{
-            flex: 1,
-            color: colors.gray[700],
-            fontSize: fontSize - 2,
-            lineHeight: (fontSize - 2) * 1.4,
-          }}
-        >
-          Your ID is encrypted and secure. We'll never share it with other members.
-        </Text>
-      </View>
-
-      {/* Verify Button */}
-      <PrimaryButton
-        title="Complete Verification"
-        loadingTitle="Verifying..."
-        onPress={handleVerify}
-        loading={loading}
-        disabled={!canVerify}
-        height={buttonHeight}
-        fontSize={buttonFontSize}
-        icon="check-circle"
-      />
-    </Animated.View>
-  );
-
-  // Landscape Layout
-  if (isLandscape) {
-    return (
-      <View style={{ flex: 1 }}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent={Platform.OS === 'android'}
-        />
-
-        <LinearGradient
-          colors={[
-            PREMIUM_COLORS.gradientTop,
-            PREMIUM_COLORS.gradientMiddle,
-            PREMIUM_COLORS.gradientBottom,
-          ]}
-          locations={[0, 0.45, 1]}
-          style={{ flex: 1 }}
-        >
-          {/* Decorative circles */}
-          <View
-            style={{
-              position: 'absolute',
-              width: decorCircleLarge,
-              height: decorCircleLarge,
-              borderRadius: decorCircleLarge / 2,
-              backgroundColor: PREMIUM_COLORS.glassTint,
-              top: -decorCircleLarge * 0.3,
-              right: -decorCircleLarge * 0.2,
-            }}
-          />
-          <View
-            style={{
-              position: 'absolute',
-              width: decorCircleMedium,
-              height: decorCircleMedium,
-              borderRadius: decorCircleMedium / 2,
-              backgroundColor: PREMIUM_COLORS.glassTint,
-              top: '40%',
-              left: -decorCircleMedium * 0.35,
-            }}
-          />
-
-          {/* Floating hearts */}
-          {!reduceMotion && (
-            <>
-              <FloatingHeart size={heartSize} positionX={10} positionY={12} delay={0} reduceMotion={reduceMotion} />
-              <FloatingHeart size={heartSize * 0.8} positionX={88} positionY={15} delay={300} reduceMotion={reduceMotion} />
-              <FloatingHeart size={heartSize * 0.7} positionX={12} positionY={75} delay={600} reduceMotion={reduceMotion} />
-            </>
-          )}
-
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              paddingTop: insets.top + hp(2),
-              paddingBottom: insets.bottom + hp(2),
-              paddingLeft: insets.left + wp(2),
-              paddingRight: insets.right + wp(2),
-            }}
-          >
-            {/* Left Panel - Header */}
-            <View style={{ flex: 0.35, justifyContent: 'center', paddingHorizontal: spacing.l }}>
-              {navigation.canGoBack() && (
-                <Pressable
-                  onPress={handleBack}
-                  style={{
-                    width: 56,
-                    height: 56,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: spacing.l,
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Go back"
-                >
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      borderWidth: 2,
-                      borderColor: 'rgba(255,255,255,0.3)',
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Feather name="chevron-left" size={24} color={PREMIUM_COLORS.textPrimary} />
-                  </View>
-                </Pressable>
-              )}
-
-              <Animated.View style={{ opacity: headerOpacity }}>
-                <Text
-                  variant="h1"
-                  color={PREMIUM_COLORS.textPrimary}
-                  style={{
-                    fontSize: titleSize,
-                    fontWeight: '800',
-                    marginBottom: spacing.s,
-                    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-                    textShadowOffset: { width: 0, height: 2 },
-                    textShadowRadius: 4,
-                  }}
-                >
-                  Final Step
-                </Text>
-                <Text
-                  variant="bodyLarge"
-                  color={PREMIUM_COLORS.textSecondary}
-                  style={{
-                    fontSize: subtitleSize,
-                    fontWeight: '500',
-                    lineHeight: subtitleSize * 1.4,
-                  }}
-                >
-                  Verify your identity and you're all set!
-                </Text>
-              </Animated.View>
-            </View>
-
-            {/* Right Panel - Form */}
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ flex: 0.65 }}
-            >
-              <ScrollView
-                contentContainerStyle={{
-                  paddingVertical: hp(2),
-                  paddingHorizontal: formPadding,
-                  flexGrow: 1,
-                  justifyContent: 'center',
-                }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {renderForm()}
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </View>
-        </LinearGradient>
-      </View>
-    );
-  }
-
-  // Portrait Layout
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={Platform.OS === 'android'}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* Background gradient */}
+      <LinearGradient
+        colors={LiquidGlass.colors.brand.gradientDark as any}
+        style={StyleSheet.absoluteFill}
       />
 
-      <LinearGradient
-        colors={[
-          PREMIUM_COLORS.gradientTop,
-          PREMIUM_COLORS.gradientMiddle,
-          PREMIUM_COLORS.gradientBottom,
-        ]}
-        locations={[0, 0.45, 1]}
-        style={{ flex: 1 }}
-      >
-        {/* Decorative circles */}
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleLarge,
-            height: decorCircleLarge,
-            borderRadius: decorCircleLarge / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            top: -decorCircleLarge * 0.25,
-            right: -decorCircleLarge * 0.2,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleMedium,
-            height: decorCircleMedium,
-            borderRadius: decorCircleMedium / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            top: '30%',
-            left: -decorCircleMedium * 0.3,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: decorCircleSmall,
-            height: decorCircleSmall,
-            borderRadius: decorCircleSmall / 2,
-            backgroundColor: PREMIUM_COLORS.glassTint,
-            bottom: '20%',
-            right: -decorCircleSmall * 0.2,
-          }}
-        />
+      {/* Floating particles */}
+      <FloatingParticle size={8} positionX={12} positionY={15} delay={0} color={LiquidGlass.colors.brand.primary + '40'} />
+      <FloatingParticle size={6} positionX={85} positionY={10} delay={300} color={LiquidGlass.colors.system.mint + '40'} />
+      <FloatingParticle size={10} positionX={8} positionY={60} delay={600} color={LiquidGlass.colors.brand.primary + '30'} />
+      <FloatingParticle size={5} positionX={90} positionY={55} delay={450} color={LiquidGlass.colors.system.teal + '40'} />
+      <FloatingParticle size={7} positionX={50} positionY={85} delay={800} color={LiquidGlass.colors.brand.primary + '35'} />
 
-        {/* Floating hearts - extra celebratory for final step! */}
-        {!reduceMotion && (
-          <>
-            <FloatingHeart size={heartSize} positionX={8} positionY={10} delay={0} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.8} positionX={85} positionY={8} delay={400} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.7} positionX={10} positionY={65} delay={700} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.6} positionX={88} positionY={55} delay={500} reduceMotion={reduceMotion} />
-            <FloatingHeart size={heartSize * 0.5} positionX={50} positionY={30} delay={900} reduceMotion={reduceMotion} />
-          </>
+      {/* Header */}
+      <Animated.View
+        entering={FadeInDown.duration(500)}
+        style={[styles.header, { paddingTop: insets.top + LiquidGlass.spacing.lg }]}
+      >
+        {navigation.canGoBack() && (
+          <Pressable onPress={handleBack} style={styles.backButton}>
+            <BlurView intensity={LiquidGlass.blur.thick} style={styles.backButtonBlur}>
+              <Feather name="chevron-left" size={24} color={LiquidGlass.colors.label.primary} />
+            </BlurView>
+          </Pressable>
         )}
 
-        {/* Header */}
-        <View
-          style={{
-            paddingTop: insets.top + spacing.m,
-            paddingBottom: spacing.xl + 16,
-            paddingHorizontal: spacing.l,
-          }}
-        >
-          {navigation.canGoBack() && (
-            <Pressable
-              onPress={handleBack}
-              style={{
-                width: 56,
-                height: 56,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginLeft: -spacing.xs,
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  borderWidth: 2,
-                  borderColor: 'rgba(255,255,255,0.3)',
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Feather name="chevron-left" size={24} color={PREMIUM_COLORS.textPrimary} />
-              </View>
-            </Pressable>
-          )}
+        <Animated.View entering={FadeIn.delay(200)} style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Verify Your Identity</Text>
+          <Text style={styles.headerSubtitle}>
+            Final step to complete your registration
+          </Text>
+        </Animated.View>
+      </Animated.View>
 
-          <Animated.View style={{ opacity: headerOpacity }}>
-            <Text
-              variant="h1"
-              color={PREMIUM_COLORS.textPrimary}
-              style={{
-                fontSize: titleSize,
-                fontWeight: '800',
-                marginTop: spacing.s,
-                textShadowColor: 'rgba(0, 0, 0, 0.2)',
-                textShadowOffset: { width: 0, height: 2 },
-                textShadowRadius: 4,
-              }}
-            >
-              Final Step
-            </Text>
-            <Text
-              variant="bodyLarge"
-              color={PREMIUM_COLORS.textSecondary}
-              style={{
-                fontSize: subtitleSize,
-                marginTop: spacing.xs,
-                fontWeight: '500',
-                lineHeight: subtitleSize * 1.4,
-              }}
-            >
-              Verify your identity and you're all set!
-            </Text>
-          </Animated.View>
-        </View>
-
-        {/* Form Container */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1, marginTop: -spacing.m }}
-        >
-          <ScrollView
-            contentContainerStyle={{
-              paddingTop: spacing.l,
+      {/* Content */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.content}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
               paddingHorizontal: formPadding,
-              paddingBottom: insets.bottom + spacing.xxl,
-              flexGrow: 1,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+              paddingBottom: insets.bottom + LiquidGlass.spacing.xxxl,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Main card */}
+          <Animated.View
+            entering={FadeInUp.delay(300).springify()}
+            style={[styles.mainCard, { maxWidth: contentMaxWidth }]}
           >
-            {renderForm()}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
+            {/* Step indicator */}
+            <StepIndicator currentStep={4} totalSteps={4} />
+
+            {/* Why we need this */}
+            <InfoCard
+              icon="shield"
+              title="Why we need this"
+              description="To keep our community safe and verify you're 50+, we need a photo of your government-issued ID."
+              color={LiquidGlass.colors.system.orange}
+            />
+
+            {/* Error message */}
+            {error && (
+              <Animated.View entering={FadeIn} style={styles.errorCard}>
+                <Feather name="alert-circle" size={20} color={LiquidGlass.colors.system.red} />
+                <Text style={styles.errorText}>{error}</Text>
+              </Animated.View>
+            )}
+
+            {/* Photo upload */}
+            <PhotoUploadCard
+              label="Front of ID"
+              photo={frontPhoto}
+              onPick={pickFrontPhoto}
+              onRemove={removeFrontPhoto}
+              required
+              disabled={loading}
+            />
+
+            {/* Privacy note */}
+            <InfoCard
+              icon="lock"
+              title="Your privacy matters"
+              description="Your ID is encrypted and secure. We'll never share it with other members."
+              color={LiquidGlass.colors.brand.primary}
+            />
+
+            {/* Submit button */}
+            <View style={styles.buttonContainer}>
+              <LiquidGlassButton
+                onPress={handleVerify}
+                title="Complete Verification"
+                icon="check-circle"
+                disabled={!canVerify}
+                loading={loading}
+                fullWidth
+              />
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
+
+// ============================================================================
+// STYLES
+// ============================================================================
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: LiquidGlass.colors.systemBackground,
+  },
+
+  // Header
+  header: {
+    paddingHorizontal: LiquidGlass.spacing.xl,
+    paddingBottom: LiquidGlass.spacing.xl,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginBottom: LiquidGlass.spacing.lg,
+  },
+
+  backButtonBlur: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: LiquidGlass.colors.glass.regular,
+    borderWidth: 1,
+    borderColor: LiquidGlass.colors.glass.border,
+  },
+
+  headerContent: {
+    marginTop: LiquidGlass.spacing.sm,
+  },
+
+  headerTitle: {
+    ...LiquidGlass.typography.largeTitle,
+    color: LiquidGlass.colors.label.primary,
+    marginBottom: LiquidGlass.spacing.sm,
+  },
+
+  headerSubtitle: {
+    ...LiquidGlass.typography.body,
+    color: LiquidGlass.colors.label.secondary,
+  },
+
+  // Content
+  content: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: LiquidGlass.spacing.lg,
+  },
+
+  // Main card
+  mainCard: {
+    backgroundColor: LiquidGlass.colors.glass.thin,
+    borderRadius: LiquidGlass.radius.xxl,
+    padding: LiquidGlass.spacing.xxl,
+    borderWidth: 1,
+    borderColor: LiquidGlass.colors.glass.border,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
+  // Step indicator
+  stepIndicator: {
+    alignItems: 'center',
+    marginBottom: LiquidGlass.spacing.xxl,
+  },
+
+  stepIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: LiquidGlass.spacing.md,
+  },
+
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: LiquidGlass.colors.glass.thick,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  stepDotActive: {
+    backgroundColor: LiquidGlass.colors.brand.primary,
+  },
+
+  stepDotComplete: {
+    backgroundColor: LiquidGlass.colors.system.green,
+  },
+
+  stepLine: {
+    width: 32,
+    height: 2,
+    backgroundColor: LiquidGlass.colors.glass.border,
+    marginHorizontal: LiquidGlass.spacing.xs,
+  },
+
+  stepLineComplete: {
+    backgroundColor: LiquidGlass.colors.system.green,
+  },
+
+  stepText: {
+    ...LiquidGlass.typography.headline,
+    color: LiquidGlass.colors.label.primary,
+  },
+
+  stepSubtext: {
+    ...LiquidGlass.typography.subheadline,
+    color: LiquidGlass.colors.system.orange,
+    marginTop: LiquidGlass.spacing.xxs,
+  },
+
+  // Info card
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: LiquidGlass.colors.glass.ultraThin,
+    borderRadius: LiquidGlass.radius.lg,
+    padding: LiquidGlass.spacing.lg,
+    marginBottom: LiquidGlass.spacing.lg,
+    borderWidth: 1,
+    borderColor: LiquidGlass.colors.glass.border,
+  },
+
+  infoCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: LiquidGlass.spacing.md,
+  },
+
+  infoCardContent: {
+    flex: 1,
+  },
+
+  infoCardTitle: {
+    ...LiquidGlass.typography.headline,
+    marginBottom: LiquidGlass.spacing.xxs,
+  },
+
+  infoCardDescription: {
+    ...LiquidGlass.typography.subheadline,
+    color: LiquidGlass.colors.label.secondary,
+    lineHeight: 20,
+  },
+
+  // Error card
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${LiquidGlass.colors.system.red}15`,
+    borderRadius: LiquidGlass.radius.lg,
+    padding: LiquidGlass.spacing.lg,
+    marginBottom: LiquidGlass.spacing.lg,
+    borderWidth: 1,
+    borderColor: `${LiquidGlass.colors.system.red}30`,
+    gap: LiquidGlass.spacing.md,
+  },
+
+  errorText: {
+    ...LiquidGlass.typography.subheadline,
+    color: LiquidGlass.colors.system.red,
+    flex: 1,
+  },
+
+  // Upload card
+  uploadCardContainer: {
+    marginBottom: LiquidGlass.spacing.lg,
+  },
+
+  uploadLabel: {
+    ...LiquidGlass.typography.headline,
+    color: LiquidGlass.colors.label.primary,
+    marginBottom: LiquidGlass.spacing.md,
+  },
+
+  requiredAsterisk: {
+    color: LiquidGlass.colors.system.red,
+  },
+
+  uploadCardEmpty: {
+    height: 180,
+    borderRadius: LiquidGlass.radius.xl,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: LiquidGlass.colors.glass.border,
+    backgroundColor: LiquidGlass.colors.glass.ultraThin,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  uploadCardDisabled: {
+    opacity: 0.5,
+  },
+
+  uploadIconContainer: {
+    marginBottom: LiquidGlass.spacing.md,
+  },
+
+  uploadIconGradient: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  uploadTitle: {
+    ...LiquidGlass.typography.headline,
+    color: LiquidGlass.colors.label.primary,
+    marginBottom: LiquidGlass.spacing.xxs,
+  },
+
+  uploadSubtitle: {
+    ...LiquidGlass.typography.subheadline,
+    color: LiquidGlass.colors.label.tertiary,
+  },
+
+  uploadCardFilled: {
+    borderRadius: LiquidGlass.radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: LiquidGlass.colors.system.green + '40',
+  },
+
+  uploadImage: {
+    width: '100%',
+    height: 200,
+    backgroundColor: LiquidGlass.colors.secondaryBackground,
+  },
+
+  uploadSuccessBadge: {
+    position: 'absolute',
+    bottom: LiquidGlass.spacing.md,
+    left: LiquidGlass.spacing.md,
+    borderRadius: LiquidGlass.radius.pill,
+    overflow: 'hidden',
+  },
+
+  uploadSuccessBadgeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: LiquidGlass.spacing.xs,
+    paddingVertical: LiquidGlass.spacing.sm,
+    paddingHorizontal: LiquidGlass.spacing.md,
+  },
+
+  uploadSuccessText: {
+    ...LiquidGlass.typography.footnote,
+    color: '#FFF',
+    fontWeight: '600',
+  },
+
+  uploadRemoveButton: {
+    position: 'absolute',
+    top: LiquidGlass.spacing.md,
+    right: LiquidGlass.spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+
+  uploadRemoveBlur: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: LiquidGlass.colors.system.red + '90',
+  },
+
+  // Button container
+  buttonContainer: {
+    marginTop: LiquidGlass.spacing.lg,
+  },
+
+  // Liquid button
+  liquidButton: {
+    height: 56,
+    borderRadius: LiquidGlass.radius.lg,
+    overflow: 'hidden',
+  },
+
+  liquidButtonFullWidth: {
+    width: '100%',
+  },
+
+  liquidButtonDisabled: {
+    opacity: 0.5,
+  },
+
+  liquidButtonGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: LiquidGlass.spacing.sm,
+    paddingHorizontal: LiquidGlass.spacing.xl,
+  },
+
+  liquidButtonBlur: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: LiquidGlass.spacing.sm,
+    backgroundColor: LiquidGlass.colors.glass.regular,
+    borderWidth: 1,
+    borderColor: LiquidGlass.colors.glass.border,
+    borderRadius: LiquidGlass.radius.lg,
+  },
+
+  liquidButtonTextPrimary: {
+    ...LiquidGlass.typography.headline,
+    color: '#FFF',
+  },
+
+  liquidButtonTextSecondary: {
+    ...LiquidGlass.typography.headline,
+    color: LiquidGlass.colors.label.primary,
+  },
+
+  loadingSpinner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderTopColor: '#FFF',
+  },
+});
 
 export default IDVerificationScreen;

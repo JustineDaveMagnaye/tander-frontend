@@ -114,7 +114,7 @@ export const InputField = memo(
               accessibilityRole="button"
               accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             >
-              <Text style={styles.passwordToggleIcon}>
+              <Text style={styles.passwordToggleIcon} maxFontSizeMultiplier={FONT_SCALING.EMOJI}>
                 {showPassword ? '🙈' : '👁️'}
               </Text>
             </Pressable>

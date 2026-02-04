@@ -71,6 +71,8 @@ export const FONT_SCALING = {
   INPUT_MAX_MULTIPLIER: 1.4,
   // Caption elements can scale more
   CAPTION_MAX_MULTIPLIER: 1.6,
+  // Emoji/Icons - no scaling to prevent layout breakage
+  EMOJI: 1.0,
 } as const;
 
 // Validation constants

@@ -9,7 +9,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type AuthStackParamList = {
   Welcome: undefined;
   Login: { registrationComplete?: boolean } | undefined;
-  IDScanner: undefined;
+  IDScanner: { minimumAge?: number } | undefined;
   SignUp: undefined;
   ForgotPassword: undefined;
   Verification: { phoneOrEmail: string };
