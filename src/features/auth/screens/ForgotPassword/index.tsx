@@ -33,6 +33,7 @@ import {
   SuccessStep,
 } from './components';
 import { safeHaptic, HapticType } from './utils';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 // Error boundary fallback (simple version)
 interface ErrorBoundaryState {
@@ -457,10 +458,10 @@ function ForgotPasswordScreenContent({ navigation }: ForgotPasswordScreenProps) 
                 </View>
               </Pressable>
             )}
-            <Text style={styles.title}>
+            <Text style={styles.title} maxFontSizeMultiplier={FONT_SCALING.TITLE}>
               {state.step === 'success' ? 'Success!' : 'Reset Password'}
             </Text>
-            <Text style={styles.subtitle}>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>
               {state.step === 'method' && "We'll help you get back into your account"}
               {state.step === 'verify' && 'Enter the verification code'}
               {state.step === 'password' && 'Create a new password'}

@@ -13,6 +13,7 @@ import {
   PasswordRequirements as PasswordRequirementsType,
 } from '../types';
 import { iOS, A11Y_LABELS, VALIDATION } from '../constants';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 interface PasswordStepProps {
   state: ForgotPasswordState;
@@ -59,13 +60,13 @@ export const PasswordStep = memo(function PasswordStep({
       {state.error && (
         <View style={styles.errorCard}>
           <Feather name="alert-circle" size={20} color={iOS.colors.error} />
-          <Text style={styles.errorText}>{state.error}</Text>
+          <Text style={styles.errorText} maxFontSizeMultiplier={FONT_SCALING.BODY}>{state.error}</Text>
         </View>
       )}
 
       {/* Password Requirements Card */}
       <View style={styles.requirementsCard}>
-        <Text style={styles.requirementsTitle}>Password Requirements</Text>
+        <Text style={styles.requirementsTitle} maxFontSizeMultiplier={FONT_SCALING.BODY}>Password Requirements</Text>
         <View style={styles.requirementsList}>
           <View style={styles.requirementRow}>
             <Feather
@@ -76,7 +77,7 @@ export const PasswordStep = memo(function PasswordStep({
             <Text style={[
               styles.requirementText,
               passwordRequirements.hasMinLength && styles.requirementMet,
-            ]}>
+            ]} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>
               At least 8 characters
             </Text>
           </View>
@@ -89,7 +90,7 @@ export const PasswordStep = memo(function PasswordStep({
             <Text style={[
               styles.requirementText,
               passwordRequirements.hasUppercase && styles.requirementMet,
-            ]}>
+            ]} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>
               One uppercase letter
             </Text>
           </View>
@@ -102,7 +103,7 @@ export const PasswordStep = memo(function PasswordStep({
             <Text style={[
               styles.requirementText,
               passwordRequirements.hasNumber && styles.requirementMet,
-            ]}>
+            ]} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>
               One number
             </Text>
           </View>
@@ -120,8 +121,8 @@ export const PasswordStep = memo(function PasswordStep({
             />
           </View>
           <View style={styles.inputLabelContainer}>
-            <Text style={styles.inputLabel}>New Password</Text>
-            <Text style={styles.inputHint}>Create a strong password</Text>
+            <Text style={styles.inputLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>New Password</Text>
+            <Text style={styles.inputHint} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Create a strong password</Text>
           </View>
         </View>
         <View style={styles.inputWrapper}>
@@ -166,8 +167,8 @@ export const PasswordStep = memo(function PasswordStep({
             />
           </View>
           <View style={styles.inputLabelContainer}>
-            <Text style={styles.inputLabel}>Confirm Password</Text>
-            <Text style={styles.inputHint}>Re-enter to confirm</Text>
+            <Text style={styles.inputLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>Confirm Password</Text>
+            <Text style={styles.inputHint} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Re-enter to confirm</Text>
           </View>
         </View>
         <View style={styles.inputWrapper}>
@@ -211,7 +212,7 @@ export const PasswordStep = memo(function PasswordStep({
             <Text style={[
               styles.matchText,
               { color: state.newPassword === state.confirmPassword ? iOS.colors.teal : iOS.colors.error },
-            ]}>
+            ]} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>
               {state.newPassword === state.confirmPassword ? 'Passwords match' : 'Passwords do not match'}
             </Text>
           </View>
@@ -233,7 +234,7 @@ export const PasswordStep = memo(function PasswordStep({
           <ActivityIndicator color={iOS.colors.white} />
         ) : (
           <>
-            <Text style={[styles.continueText, !canSubmit && styles.continueTextDisabled]}>
+            <Text style={[styles.continueText, !canSubmit && styles.continueTextDisabled]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
               Reset Password
             </Text>
             <Feather

@@ -22,6 +22,8 @@ import {
   Animated,
   Image,
   Easing,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -31,6 +33,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@navigation/types';
 import { useResponsive } from '@shared/hooks/useResponsive';
 import { FONT_SCALING } from '@shared/styles/fontScaling';
+import { getVerificationConfig } from '@/services/api/authApi';
 
 const TanderLogo = require('../../../../assets/icons/tander-logo.png');
 
@@ -400,6 +403,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   // State
   const [reduceMotion, setReduceMotion] = useState(false);
   const [showContent, setShowContent] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const isNavigating = useRef(false);
 
   // Animation values
@@ -529,12 +533,49 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   }, [reduceMotion, pulseAnim]);
 
   // Navigation handlers
-  const handleGetStarted = useCallback(() => {
-    if (isNavigating.current || !showContent) return;
+  const handleGetStarted = useCallback(async () => {
+    if (isNavigating.current || !showContent || isConnecting) return;
     isNavigating.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('IDScanner');
-  }, [navigation, showContent]);
+
+    // Show connecting state while fetching verification config
+    setIsConnecting(true);
+
+    try {
+      const config = await getVerificationConfig();
+      const minimumAge = config.data?.minimumAge ?? 60;
+
+      console.log('[Welcome] Loaded verification config - Minimum age:', minimumAge);
+
+      // Navigate with config
+      navigation.navigate('IDScanner', { minimumAge });
+    } catch (error: any) {
+      console.error('[Welcome] Failed to load verification config:', error);
+
+      // Show error but still allow navigation with default
+      Alert.alert(
+        'Connection Issue',
+        'Could not connect to server. Using default settings.',
+        [
+          {
+            text: 'Continue',
+            onPress: () => navigation.navigate('IDScanner', { minimumAge: 60 }),
+          },
+          {
+            text: 'Retry',
+            onPress: () => {
+              isNavigating.current = false;
+              setIsConnecting(false);
+              handleGetStarted();
+            },
+          },
+        ]
+      );
+      return;
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [navigation, showContent, isConnecting]);
 
   const handleSignIn = useCallback(() => {
     if (isNavigating.current || !showContent) return;
@@ -921,6 +962,17 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 
       {/* Content */}
       {isLandscape ? renderLandscape() : renderPortrait()}
+
+      {/* Connecting Overlay */}
+      {isConnecting && (
+        <View style={styles.connectingOverlay}>
+          <View style={styles.connectingCard}>
+            <ActivityIndicator size="large" color="#FF7849" />
+            <Text style={styles.connectingText}>Connecting...</Text>
+            <Text style={styles.connectingSubtext}>Setting up your experience</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1186,6 +1238,39 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.15)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+
+  // Connecting overlay
+  connectingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  connectingCard: {
+    backgroundColor: iOS.glass.white,
+    borderRadius: iOS.radius.xl,
+    padding: 32,
+    alignItems: 'center',
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 30,
+  },
+  connectingText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: iOS.text.dark,
+    marginTop: 20,
+  },
+  connectingSubtext: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: iOS.text.darkMuted,
+    marginTop: 8,
   },
 });
 

@@ -33,6 +33,15 @@ yarn-error.*
 # local env files
 .env*.local
 
+# IDE/Editor
+.idea/
+.vscode/
+
+# Large build artifacts (use EAS for APK builds)
+android-release/
+*.apk
+*.aab
+
 # typescript
 *.tsbuildinfo
 

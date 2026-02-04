@@ -12,6 +12,7 @@ import {
   ResponsiveSizes,
 } from '../types';
 import { iOS, A11Y_LABELS, VALIDATION } from '../constants';
+import { FONT_SCALING } from '@shared/styles/fontScaling';
 
 interface MethodStepProps {
   state: ForgotPasswordState;
@@ -76,7 +77,7 @@ export const MethodStep = memo(function MethodStep({
       {state.error && (
         <View style={styles.errorCard}>
           <Feather name="alert-circle" size={20} color={iOS.colors.error} />
-          <Text style={styles.errorText}>{state.error}</Text>
+          <Text style={styles.errorText} maxFontSizeMultiplier={FONT_SCALING.BODY}>{state.error}</Text>
         </View>
       )}
 
@@ -87,8 +88,8 @@ export const MethodStep = memo(function MethodStep({
             <Feather name="unlock" size={20} color={iOS.colors.orange} />
           </View>
           <View style={styles.inputLabelContainer}>
-            <Text style={styles.inputLabel}>Reset Method</Text>
-            <Text style={styles.inputHint}>Choose how to verify your identity</Text>
+            <Text style={styles.inputLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>Reset Method</Text>
+            <Text style={styles.inputHint} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>Choose how to verify your identity</Text>
           </View>
         </View>
         <View style={styles.methodToggle}>
@@ -104,7 +105,7 @@ export const MethodStep = memo(function MethodStep({
               size={20}
               color={state.method === 'phone' ? iOS.colors.white : iOS.colors.tertiaryLabel}
             />
-            <Text style={[styles.methodText, state.method === 'phone' && styles.methodTextActive]}>
+            <Text style={[styles.methodText, state.method === 'phone' && styles.methodTextActive]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
               Phone
             </Text>
           </Pressable>
@@ -120,7 +121,7 @@ export const MethodStep = memo(function MethodStep({
               size={20}
               color={state.method === 'email' ? iOS.colors.white : iOS.colors.tertiaryLabel}
             />
-            <Text style={[styles.methodText, state.method === 'email' && styles.methodTextActive]}>
+            <Text style={[styles.methodText, state.method === 'email' && styles.methodTextActive]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
               Email
             </Text>
           </Pressable>
@@ -139,12 +140,12 @@ export const MethodStep = memo(function MethodStep({
               />
             </View>
             <View style={styles.inputLabelContainer}>
-              <Text style={styles.inputLabel}>Mobile Number</Text>
-              <Text style={styles.inputHint}>We'll send a verification code</Text>
+              <Text style={styles.inputLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>Mobile Number</Text>
+              <Text style={styles.inputHint} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>We'll send a verification code</Text>
             </View>
           </View>
           <View style={styles.inputWrapper}>
-            <Text style={styles.phonePrefix}>+63</Text>
+            <Text style={styles.phonePrefix} maxFontSizeMultiplier={FONT_SCALING.BODY}>+63</Text>
             <TextInput
               ref={phoneRef}
               style={[styles.textInput, styles.phoneInput]}
@@ -173,8 +174,8 @@ export const MethodStep = memo(function MethodStep({
               />
             </View>
             <View style={styles.inputLabelContainer}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <Text style={styles.inputHint}>We'll send a verification link</Text>
+              <Text style={styles.inputLabel} maxFontSizeMultiplier={FONT_SCALING.BODY}>Email Address</Text>
+              <Text style={styles.inputHint} maxFontSizeMultiplier={FONT_SCALING.CAPTION}>We'll send a verification link</Text>
             </View>
           </View>
           <View style={styles.inputWrapper}>
@@ -214,7 +215,7 @@ export const MethodStep = memo(function MethodStep({
           <ActivityIndicator color={iOS.colors.white} />
         ) : (
           <>
-            <Text style={[styles.continueText, !canProceed && styles.continueTextDisabled]}>
+            <Text style={[styles.continueText, !canProceed && styles.continueTextDisabled]} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>
               Send Code
             </Text>
             <Feather
@@ -228,9 +229,9 @@ export const MethodStep = memo(function MethodStep({
 
       {/* Back to Login */}
       <View style={styles.signInRow}>
-        <Text style={styles.signInText}>Remember your password?</Text>
+        <Text style={styles.signInText} maxFontSizeMultiplier={FONT_SCALING.BODY}>Remember your password?</Text>
         <Pressable onPress={onBackToLogin} style={styles.signInButton}>
-          <Text style={styles.signInLink}>Sign In</Text>
+          <Text style={styles.signInLink} maxFontSizeMultiplier={FONT_SCALING.BUTTON}>Sign In</Text>
         </Pressable>
       </View>
     </View>

@@ -2,6 +2,11 @@
  * Philippine ID OCR Service
  * Extracts date of birth from Philippine government IDs
  * and validates age requirement (60+)
+ *
+ * Enhanced with:
+ * - Text normalization for common OCR errors
+ * - Year-only fallback extraction
+ * - Multiple parsing strategies
  */
 
 import TextRecognition from '@react-native-ml-kit/text-recognition';
@@ -9,6 +14,20 @@ import type { FrontendOcrData } from '@/services/api/authApi';
 
 // Default minimum age requirement for TANDER (can be overridden by backend config)
 const DEFAULT_MINIMUM_AGE = 60;
+
+/**
+ * Common OCR character substitutions
+ * ML Kit often misreads these characters
+ */
+const OCR_CHAR_FIXES: Record<string, string> = {
+  'O': '0', 'o': '0',  // O → 0
+  'I': '1', 'l': '1', '|': '1',  // I, l, | → 1
+  'B': '8',  // B → 8 (in number context)
+  'S': '5', 's': '5',  // S → 5 (in number context)
+  'Z': '2', 'z': '2',  // Z → 2
+  'G': '6', 'g': '6',  // G → 6
+  'T': '7',  // T → 7 (sometimes)
+};
 
 // Philippine ID types
 type PhilippineIDType =
@@ -78,6 +97,23 @@ const DOB_PATTERNS = [
   // Dates with spaces instead of separators (OCR sometimes misses punctuation)
   /(\d{2})\s+(\d{2})\s+(\d{4})/,
   /(\d{2})\s+(\d{2})\s+(\d{2})(?:\s|$)/, // 2-digit year with spaces
+
+  // === ADDITIONAL PATTERNS for OCR noise ===
+
+  // Dates with mixed separators (common OCR error)
+  /(\d{1,2})[\/\-\.\s,]+(\d{1,2})[\/\-\.\s,]+(\d{4})/,
+  /(\d{1,2})[\/\-\.\s,]+(\d{1,2})[\/\-\.\s,]+(\d{2})(?:[\/\s]|$)/,
+
+  // Dates stuck together (no separators) - common when OCR misses punctuation
+  /(\d{2})(\d{2})(\d{4})/, // MMDDYYYY
+  /(\d{4})(\d{2})(\d{2})/, // YYYYMMDD
+
+  // Very permissive: any 6-8 digit sequence near DOB keywords
+  /(?:DATE\s*OF\s*BIRTH|DOB|BIRTH)[:\s]*(\d{1,2})\D*(\d{1,2})\D*(\d{2,4})/i,
+
+  // Filipino format variations
+  /PETSA[:\s]*(\d{1,2})[\/\-\.\s](\d{1,2})[\/\-\.\s](\d{2,4})/i,
+  /ARAW[:\s]*(\d{1,2})[\/\-\.\s](\d{1,2})[\/\-\.\s](\d{2,4})/i,
 ];
 
 // Expiration date patterns for Philippine IDs
@@ -141,8 +177,22 @@ export async function extractDOBFromID(
 
     // DEBUG: Log the extracted text so we can see what ML Kit found
     console.log('[OCR] ========== EXTRACTED TEXT ==========');
+    console.log('[OCR] Raw text length:', rawText.length);
     console.log('[OCR] Raw text:', rawText);
+    console.log('[OCR] Normalized:', normalizeOcrText(rawText.toUpperCase()));
     console.log('[OCR] =====================================');
+
+    // Log any date-like patterns found in the text for debugging
+    const dateMatches = rawText.match(/\d{1,2}[\/\-\.\s]\d{1,2}[\/\-\.\s]\d{2,4}/g);
+    if (dateMatches) {
+      console.log('[OCR] Date-like patterns found:', dateMatches);
+    }
+
+    // Log any 4-digit years found
+    const yearMatches = rawText.match(/\b(19\d{2}|20[0-2]\d)\b/g);
+    if (yearMatches) {
+      console.log('[OCR] 4-digit years found:', yearMatches);
+    }
 
     if (!rawText || rawText.trim().length === 0) {
       console.log('[OCR] No text found in image');
@@ -170,16 +220,18 @@ export async function extractDOBFromID(
       console.log('[OCR] Expiration date found:', expirationDate.toISOString(), 'Expired:', isExpired);
     }
 
-    // Senior Citizen ID holders are automatically 60+
+    // Senior Citizen ID holders are automatically 60+ (Philippine law requirement)
+    // If configured minimum age is <= 60, they automatically qualify
     if (idType === 'senior_citizen') {
+      const seniorCitizenMinAge = 60; // Philippine law: must be 60+ to get SC ID
       return {
         success: true,
         dateOfBirth: null,
         expirationDate,
-        age: 60, // Minimum age for senior citizen ID
+        age: seniorCitizenMinAge, // Minimum age for senior citizen ID
         idType,
         rawText,
-        meetsAgeRequirement: true,
+        meetsAgeRequirement: seniorCitizenMinAge >= minimumAge,
         isExpired,
       };
     }
@@ -188,6 +240,26 @@ export async function extractDOBFromID(
     const dob = parseDateOfBirth(rawText);
 
     if (!dob) {
+      // Provide more specific guidance based on what we found
+      let errorMessage = 'Could not find date of birth on ID.';
+
+      // Check if we found some text but no dates
+      if (rawText.length > 50) {
+        // We found text, but couldn't parse DOB - likely OCR quality issue
+        const hasDateKeywords = /DATE|BIRTH|DOB|KAPANGANAKAN|KAARAWAN/i.test(rawText);
+        if (hasDateKeywords) {
+          errorMessage = 'Found ID text but could not read the date clearly. Please ensure the date of birth is not obscured or blurry.';
+        } else {
+          errorMessage = 'Could not locate the date of birth field. Please ensure your ID shows a visible date of birth.';
+        }
+      } else if (rawText.length > 0) {
+        // Very little text extracted - image quality issue
+        errorMessage = 'Could not read ID text clearly. Please take a closer photo with better lighting.';
+      } else {
+        // No text at all
+        errorMessage = 'No text detected on image. Please ensure the ID is clearly visible and in focus.';
+      }
+
       return {
         success: false,
         dateOfBirth: null,
@@ -197,8 +269,7 @@ export async function extractDOBFromID(
         rawText,
         meetsAgeRequirement: false,
         isExpired,
-        errorMessage:
-          'Could not find date of birth on ID. Please try again with a clearer image.',
+        errorMessage,
       };
     }
 
@@ -268,15 +339,165 @@ const MONTH_NAMES: Record<string, number> = {
 };
 
 /**
+ * Normalize OCR text to fix common misreads in date contexts
+ * Only applies fixes to sequences that look like dates
+ */
+function normalizeOcrText(text: string): string {
+  // First, normalize whitespace
+  let normalized = text.replace(/\s+/g, ' ');
+
+  // Find date-like patterns and normalize them
+  // Pattern: sequences of numbers/letters with date separators
+  const datePatterns = [
+    // MM/DD/YYYY or DD/MM/YYYY or similar with various separators
+    /([A-Z0-9]{1,2})[\/\-\.\s]([A-Z0-9]{1,2})[\/\-\.\s]([A-Z0-9]{2,4})/gi,
+    // YYYY/MM/DD
+    /([A-Z0-9]{4})[\/\-\.\s]([A-Z0-9]{1,2})[\/\-\.\s]([A-Z0-9]{1,2})/gi,
+    // Standalone 2-digit or 4-digit years
+    /\b([A-Z0-9]{2})\b|\b([A-Z0-9]{4})\b/gi,
+  ];
+
+  datePatterns.forEach((pattern) => {
+    normalized = normalized.replace(pattern, (match) => {
+      let fixed = match;
+      // Apply character fixes only to the numeric portions
+      Object.entries(OCR_CHAR_FIXES).forEach(([from, to]) => {
+        // Only fix in sequences that have numbers
+        if (/\d/.test(fixed) || /BIRTH|DOB|DATE/i.test(text)) {
+          fixed = fixed.replace(new RegExp(from, 'g'), to);
+        }
+      });
+      return fixed;
+    });
+  });
+
+  return normalized;
+}
+
+/**
+ * Extract just a birth year from text when full date parsing fails
+ * Uses multiple strategies to find a plausible birth year
+ */
+function extractBirthYearOnly(text: string): number | null {
+  const currentYear = new Date().getFullYear();
+
+  // Strategy 1: Look for 4-digit years after DOB/BIRTH keywords
+  const dobYearPatterns = [
+    /(?:DATE\s*OF\s*BIRTH|DOB|BIRTH\s*DATE|BIRTHDAY|KAPANGANAKAN|KAARAWAN)[:\s]*.*?(\d{4})/i,
+    /(?:DATE\s*OF\s*BIRTH|DOB|BIRTH\s*DATE|BIRTHDAY)[:\s]*.*?[\/\-\s](\d{2})(?:[\/\s]|$)/i,  // 2-digit year
+  ];
+
+  for (const pattern of dobYearPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      let year = parseInt(match[1], 10);
+
+      // Handle 2-digit year
+      if (year < 100) {
+        year = year <= 30 ? 2000 + year : 1900 + year;
+      }
+
+      // Validate: person should be 18-120 years old
+      const age = currentYear - year;
+      if (age >= 18 && age <= 120) {
+        console.log(`[OCR] Extracted birth year from keyword context: ${year} (age: ${age})`);
+        return year;
+      }
+    }
+  }
+
+  // Strategy 2: Find all 4-digit years and pick the most likely birth year
+  const allYears = text.match(/\b(19\d{2}|20[0-2]\d)\b/g);
+  if (allYears) {
+    const validBirthYears = allYears
+      .map((y) => parseInt(y, 10))
+      .filter((y) => {
+        const age = currentYear - y;
+        return age >= 18 && age <= 120;  // Valid human age
+      })
+      .sort((a, b) => a - b);  // Sort oldest first
+
+    if (validBirthYears.length > 0) {
+      // Prefer the oldest year that makes sense (likely DOB, not expiry)
+      const year = validBirthYears[0];
+      console.log(`[OCR] Extracted birth year from all years: ${year} (age: ${currentYear - year})`);
+      return year;
+    }
+  }
+
+  // Strategy 3: Look for 2-digit years (YY format) after date separators
+  const twoDigitPattern = /[\/\-\s](\d{2})(?:[\/\s]|$)/g;
+  let match;
+  const twoDigitYears: number[] = [];
+
+  while ((match = twoDigitPattern.exec(text)) !== null) {
+    let shortYear = parseInt(match[1], 10);
+    // Convert: 00-30 = 2000-2030, 31-99 = 1931-1999
+    let fullYear = shortYear <= 30 ? 2000 + shortYear : 1900 + shortYear;
+    const age = currentYear - fullYear;
+
+    if (age >= 18 && age <= 120) {
+      twoDigitYears.push(fullYear);
+    }
+  }
+
+  if (twoDigitYears.length > 0) {
+    // Pick the most plausible (oldest that makes sense for seniors app)
+    const sorted = twoDigitYears.sort((a, b) => a - b);
+    const year = sorted[0];
+    console.log(`[OCR] Extracted birth year from 2-digit: ${year} (age: ${currentYear - year})`);
+    return year;
+  }
+
+  console.log('[OCR] Could not extract birth year');
+  return null;
+}
+
+/**
  * Parse date of birth from OCR text
+ * Tries multiple strategies: original text, normalized text, and year-only fallback
  */
 function parseDateOfBirth(text: string): Date | null {
   const upperText = text.toUpperCase();
   console.log('[OCR] Attempting to parse DOB from text...');
 
+  // Try with both original and normalized text
+  const textsToTry = [
+    { label: 'original', text: upperText },
+    { label: 'normalized', text: normalizeOcrText(upperText) },
+  ];
+
+  for (const { label, text: textToSearch } of textsToTry) {
+    console.log(`[OCR] Trying ${label} text parsing...`);
+    const result = tryParseDatePatterns(textToSearch);
+    if (result) {
+      console.log(`[OCR] Success with ${label} text`);
+      return result;
+    }
+  }
+
+  // Fallback: Try to extract just the year and estimate DOB
+  console.log('[OCR] Trying year-only fallback...');
+  const birthYear = extractBirthYearOnly(upperText);
+  if (birthYear) {
+    // Use January 1st as default for year-only extraction
+    const estimatedDob = new Date(birthYear, 0, 1);
+    console.log(`[OCR] Using year-only fallback: ${estimatedDob.toISOString()}`);
+    return estimatedDob;
+  }
+
+  console.log('[OCR] All parsing strategies failed');
+  return null;
+}
+
+/**
+ * Try to parse date using all DOB patterns
+ */
+function tryParseDatePatterns(text: string): Date | null {
+
   for (let i = 0; i < DOB_PATTERNS.length; i++) {
     const pattern = DOB_PATTERNS[i];
-    const match = upperText.match(pattern);
+    const match = text.match(pattern);
 
     if (match) {
       console.log(`[OCR] Pattern ${i} matched:`, match[0]);

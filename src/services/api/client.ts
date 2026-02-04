@@ -17,7 +17,7 @@ import {
 // ============================================================================
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.tanderconnect.com';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.tanderconnect.com';
 
 // ============================================================================
 // Interceptors
