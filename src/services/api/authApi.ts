@@ -159,6 +159,75 @@ export interface IdVerificationSubmitResponse {
   code?: string;
 }
 
+// Frontend OCR data to send to backend for comparison
+export interface FrontendOcrData {
+  extractedAge: number | null;
+  dateOfBirth: string | null;  // ISO date string
+  expirationDate: string | null;  // ISO date string - expiry date from ID
+  idType: string;
+  meetsAgeRequirement: boolean;
+  rawTextLength: number;
+  ocrEngine: 'ml_kit_text_recognition';
+  extractionTimestamp: string;  // ISO timestamp
+}
+
+// Comparison result from backend
+export interface OcrComparisonResult {
+  frontendAge: number | null;
+  backendAge: number;
+  agesMatch: boolean;
+  ageDifference: number;
+  bothPassAgeRequirement: boolean;
+  discrepancyLevel: 'NONE' | 'MINOR' | 'MAJOR';
+  discrepancyNote: string | null;
+}
+
+// Fraud analysis result from Cloudflare Workers AI
+export interface FraudAnalysisResult {
+  analyzed: boolean;
+  isAuthentic: boolean;
+  confidenceScore?: number;
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
+  flags?: string[];
+  reasoning?: string;
+  recommendation?: 'APPROVE' | 'REVIEW' | 'REJECT';
+  auditId?: string;
+  skipReason?: string;
+}
+
+// Verification configuration (fetched before ID scanning)
+export interface VerificationConfigResponse {
+  success: boolean;
+  data: {
+    minimumAge: number;
+    fraudDetectionEnabled: boolean;
+  };
+}
+
+// Pre-registration ID verification (no auth required) - Enhanced v3 with fraud detection
+export interface PreRegisterIdVerificationResponse {
+  success: boolean;
+  verified: boolean;
+  message: string;
+  code?: string;  // 'AGE_REQUIREMENT_NOT_MET' | 'FRAUD_DETECTED' | etc.
+  data?: {
+    extractedAge: number;
+    minimumAge: number;
+    meetsAgeRequirement: boolean;
+    idType?: string;
+    idTypeName?: string;
+    confidence?: number;
+    confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
+    comparison?: OcrComparisonResult;
+    recommendation?: 'RETAKE_PHOTO' | 'MANUAL_REVIEW' | null;
+    retakeGuidance?: string | null;
+    auditId?: string;
+    // Fraud detection result (v3)
+    fraudAnalysis?: FraudAnalysisResult;
+  };
+  error?: boolean;
+}
+
 export interface AuthApiService {
   login: (data: LoginRequest) => Promise<LoginResponse>;
   register: (data: RegisterRequest) => Promise<RegisterResponse>;
@@ -174,10 +243,13 @@ export interface AuthApiService {
   verifyEmail: (token: string) => Promise<VerifyEmailResponse>;
   resendVerification: (email: string) => Promise<ResendVerificationResponse>;
   loginWithEmailCheck: (data: LoginRequest) => Promise<LoginResponse>;
-  // ID Verification (authenticated)
+  // ID Verification (authenticated) - front of ID only
   getIdVerificationStatus: () => Promise<IdVerificationStatusResponse>;
-  submitIdVerification: (idFront: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
-  resubmitIdVerification: (idFront: File | Blob, idBack?: File | Blob) => Promise<IdVerificationSubmitResponse>;
+  submitIdVerification: (idFront: File | Blob) => Promise<IdVerificationSubmitResponse>;
+  resubmitIdVerification: (idFront: File | Blob) => Promise<IdVerificationSubmitResponse>;
+  // Pre-registration ID verification (no auth required)
+  getVerificationConfig: () => Promise<VerificationConfigResponse>;
+  verifyIdPreRegister: (idFront: File | Blob, frontendOcrData?: FrontendOcrData) => Promise<PreRegisterIdVerificationResponse>;
 }
 
 // ============================================================================
@@ -201,6 +273,8 @@ const AUTH_ENDPOINTS = {
   AUTH_LOGIN: '/auth/login',
   AUTH_CHECK_EMAIL: '/auth/check-email',
   AUTH_CHECK_USERNAME: '/auth/check-username',
+  AUTH_VERIFICATION_CONFIG: '/auth/verification-config',
+  AUTH_VERIFY_ID_PREREGISTER: '/auth/verify-id-preregister',
   // ID Verification (authenticated)
   IDV_STATUS: '/idv/status',
   IDV_SUBMIT: '/idv/submit',
@@ -208,7 +282,7 @@ const AUTH_ENDPOINTS = {
 } as const;
 
 // Get base URL from environment or default
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.tanderconnect.com';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.tanderconnect.com';
 
 // ============================================================================
 // Phase 1: Registration
@@ -787,23 +861,18 @@ const getIdVerificationStatus = async (): Promise<IdVerificationStatusResponse> 
 };
 
 /**
- * Submit ID verification documents
- * @param idFront - Front photo of ID
- * @param idBack - Optional back photo of ID
+ * Submit ID verification document
+ * @param idFront - Front photo of ID (only front required)
  * @returns Promise resolving to submission response
  * Note: Selfie/liveness check is done on frontend only - not sent to backend
  */
 const submitIdVerification = async (
-  idFront: File | Blob,
-  idBack?: File | Blob
+  idFront: File | Blob
 ): Promise<IdVerificationSubmitResponse> => {
   try {
     const token = await getToken();
     const formData = new FormData();
     formData.append('idFront', idFront as any);
-    if (idBack) {
-      formData.append('idBack', idBack as any);
-    }
 
     const response = await fetch(`${BASE_URL}${AUTH_ENDPOINTS.IDV_SUBMIT}`, {
       method: 'POST',
@@ -832,23 +901,18 @@ const submitIdVerification = async (
 };
 
 /**
- * Resubmit ID verification documents after rejection
- * @param idFront - Front photo of ID
- * @param idBack - Optional back photo of ID
+ * Resubmit ID verification document after rejection
+ * @param idFront - Front photo of ID (only front required)
  * @returns Promise resolving to submission response
  * Note: Selfie/liveness check is done on frontend only - not sent to backend
  */
 const resubmitIdVerification = async (
-  idFront: File | Blob,
-  idBack?: File | Blob
+  idFront: File | Blob
 ): Promise<IdVerificationSubmitResponse> => {
   try {
     const token = await getToken();
     const formData = new FormData();
     formData.append('idFront', idFront as any);
-    if (idBack) {
-      formData.append('idBack', idBack as any);
-    }
 
     const response = await fetch(`${BASE_URL}${AUTH_ENDPOINTS.IDV_RESUBMIT}`, {
       method: 'POST',
@@ -876,6 +940,94 @@ const resubmitIdVerification = async (
   }
 };
 
+/**
+ * Get verification configuration from backend.
+ * Returns minimum age requirement and other settings.
+ * Called before ID scanning to configure frontend validation.
+ *
+ * @returns Promise resolving to verification config
+ */
+const getVerificationConfig = async (): Promise<VerificationConfigResponse> => {
+  try {
+    const response = await fetch(`${BASE_URL}${AUTH_ENDPOINTS.AUTH_VERIFICATION_CONFIG}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw {
+        message: result.message || 'Failed to get verification config',
+        code: result.code || 'CONFIG_ERROR',
+        statusCode: response.status,
+      };
+    }
+
+    return result;
+  } catch (error) {
+    console.warn('Get verification config error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pre-registration ID verification (no auth required)
+ * Validates ID and age requirement BEFORE user registration.
+ *
+ * Enhanced v2: Now sends frontend OCR data for comparison with backend.
+ * Backend returns confidence levels, comparison results, and recommendations.
+ *
+ * @param idFront - Front photo of ID
+ * @param frontendOcrData - Optional frontend OCR results for backend comparison
+ * @returns Promise resolving to verification result with comparison data
+ */
+const verifyIdPreRegister = async (
+  idFront: File | Blob,
+  frontendOcrData?: FrontendOcrData
+): Promise<PreRegisterIdVerificationResponse> => {
+  try {
+    const formData = new FormData();
+    formData.append('idFront', idFront as any);
+
+    // Send frontend OCR data for comparison if available
+    if (frontendOcrData) {
+      formData.append('frontendOcrData', JSON.stringify(frontendOcrData));
+    }
+
+    const response = await fetch(`${BASE_URL}${AUTH_ENDPOINTS.AUTH_VERIFY_ID_PREREGISTER}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        // No Authorization header - this is pre-registration
+      },
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      // Return the result even on error so we can show age/fraud info
+      if (result.code === 'AGE_REQUIREMENT_NOT_MET' || result.code === 'FRAUD_DETECTED') {
+        return result;
+      }
+      throw {
+        message: result.message || 'ID verification failed',
+        code: result.code || 'VERIFICATION_ERROR',
+        statusCode: response.status,
+        data: result.data,
+      };
+    }
+
+    return result;
+  } catch (error) {
+    console.warn('Pre-registration ID verification error:', error);
+    throw error;
+  }
+};
+
 // ============================================================================
 // Export API Service
 // ============================================================================
@@ -899,6 +1051,9 @@ export const authApi: AuthApiService = {
   getIdVerificationStatus,
   submitIdVerification,
   resubmitIdVerification,
+  // Pre-registration ID verification
+  getVerificationConfig,
+  verifyIdPreRegister,
 };
 
 // Export individual functions for direct import
@@ -919,4 +1074,6 @@ export {
   getIdVerificationStatus,
   submitIdVerification,
   resubmitIdVerification,
+  getVerificationConfig,
+  verifyIdPreRegister,
 };
