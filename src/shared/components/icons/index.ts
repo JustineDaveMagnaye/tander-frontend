@@ -1,1 +1,0 @@
-export { TanderLogoIcon } from './TanderLogoIcon';
